@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /payment.html
+Disallow: /success.html
+
+Sitemap: https://tlangau.com/sitemap.xml
+
+
