@@ -11,9 +11,9 @@
     <section class="success-section">
         <div class="container">
             <div class="success-container">
-                <div class="success-icon">✅</div>
-                <h1>Payment Successful!</h1>
-                <p class="success-message">Your access code has been sent to your email address.</p>
+                <div class="success-icon" id="statusIcon">⏳</div>
+                <h1 id="statusTitle">Verifying Payment...</h1>
+                <p class="success-message" id="statusMessage">Please wait while we verify your payment.</p>
                 
                 <div class="success-info">
                     <div class="info-card">
@@ -35,13 +35,104 @@
                     <a href="payment.html" class="btn btn-secondary">Purchase Another Code</a>
                 </div>
 
-                <div class="help-box">
+                <div class="help-box" id="helpBox" style="display: none;">
                     <h4>Need Help?</h4>
-                    <p>If you didn't receive the email, please check your spam folder. For support, contact us at <a href="mailto:support@tlangau.com">support@tlangau.com</a></p>
+                    <p>If you didn't receive the email, please check your spam folder. For support, contact us at <a href="mailto:chhakchhuakr59@gmail.com">chhakchhuakr59@gmail.com</a></p>
                 </div>
             </div>
         </div>
     </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>🚀 Tlangau</h3>
+                    <p>Secure server access code purchase platform.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="privacy-policy.html">Privacy Policy</a></li>
+                        <li><a href="terms-conditions.html">Terms & Conditions</a></li>
+                        <li><a href="refund-policy.html">Refund Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="contact.html">Contact Us</a></li>
+                        <li><a href="index.html#faq">FAQ</a></li>
+                        <li><a href="index.html">Home</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Tlangau. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Verify payment on page load
+        (async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('order_id');
+            
+            if (!orderId) {
+                // No order ID, show error
+                document.getElementById('statusIcon').textContent = '❌';
+                document.getElementById('statusTitle').textContent = 'Payment Verification Failed';
+                document.getElementById('statusMessage').textContent = 'No order ID found. Please contact support if you completed the payment.';
+                document.getElementById('helpBox').style.display = 'block';
+                return;
+            }
+            
+            // Get backend URL
+            const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+            
+            try {
+                // Verify payment
+                const response = await fetch(`${backendUrl}/api/verify-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        orderId: orderId,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.paymentStatus === 'SUCCESS') {
+                    // Payment successful
+                    document.getElementById('statusIcon').textContent = '✅';
+                    document.getElementById('statusTitle').textContent = 'Payment Successful!';
+                    document.getElementById('statusMessage').textContent = 'Your access code has been sent to your email address.';
+                    document.getElementById('helpBox').style.display = 'block';
+                } else {
+                    // Payment pending or failed
+                    document.getElementById('statusIcon').textContent = '⏳';
+                    document.getElementById('statusTitle').textContent = 'Payment Pending';
+                    document.getElementById('statusMessage').textContent = 'Your payment is being processed. You will receive an email once it is confirmed.';
+                    document.getElementById('helpBox').style.display = 'block';
+                    
+                    // Retry verification after 5 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                document.getElementById('statusIcon').textContent = '⚠️';
+                document.getElementById('statusTitle').textContent = 'Verification Error';
+                document.getElementById('statusMessage').textContent = 'Unable to verify payment status. Please check your email or contact support.';
+                document.getElementById('helpBox').style.display = 'block';
+            }
+        })();
+    </script>
 </body>
 </html>
 
