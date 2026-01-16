@@ -15,7 +15,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 // Payment form handling
 const paymentForm = document.getElementById('paymentForm');
 if (paymentForm) {
-    paymentForm.addEventListener('submit', function(e) {
+    paymentForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const email = document.getElementById('email').value;
@@ -27,19 +27,58 @@ if (paymentForm) {
             return;
         }
         
-        // TODO: Integrate with payment gateway
-        // For now, show success message
-        console.log('Payment initiated:', {
-            email: email,
-            paymentMethod: paymentMethod,
-            amount: 1.00
-        });
+        // Disable submit button
+        const submitButton = paymentForm.querySelector('button[type="submit"]');
+        const originalText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span>Processing...</span>';
         
-        // Redirect to success page (this will be replaced with actual payment gateway integration)
-        // window.location.href = 'success.html';
-        
-        // For now, show alert
-        alert('Payment gateway integration pending. This is a UI preview.\n\nEmail: ' + email + '\nPayment Method: ' + paymentMethod);
+        try {
+            // Get backend URL (use environment variable or default)
+            const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+            
+            // Create payment order
+            const response = await fetch(`${backendUrl}/api/create-payment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    amount: 100, // ₹1 in paise
+                }),
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to create payment order');
+            }
+            
+            console.log('Payment order created:', data);
+            
+            // Redirect to Cashfree payment page
+            // Cashfree will handle the payment and redirect back to success.html
+            if (data.paymentUrl) {
+                // Use the payment URL provided by backend
+                window.location.href = data.paymentUrl;
+            } else if (data.paymentSessionId) {
+                // Fallback: construct payment URL from session ID
+                const cashfreeBase = window.CASHFREE_ENV === 'production' 
+                    ? 'https://payments.cashfree.com' 
+                    : 'https://sandbox.cashfree.com';
+                window.location.href = `${cashfreeBase}/pg/checkout/${data.paymentSessionId}`;
+            } else {
+                // Fallback: redirect to success page (for testing)
+                window.location.href = `success.html?order_id=${data.orderId}`;
+            }
+            
+        } catch (error) {
+            console.error('Payment error:', error);
+            alert('Payment failed: ' + error.message + '\n\nPlease try again or contact support.');
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+        }
     });
 }
 
