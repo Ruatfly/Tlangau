@@ -171,7 +171,7 @@ app.post(
       }
 
       const { email, upiId } = req.body;
-      const amount = 1; // ₹1
+      const amount = 10; // ₹10
       const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const emailLower = email.toLowerCase().trim();
 
@@ -256,13 +256,36 @@ app.post(
         // Update order status to failed
         await db.updateOrder(orderId, { status: 'FAILED' });
         
-        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to create payment link';
-        const errorDetails = error.response?.data || {};
+        // Extract error message from Instamojo response
+        let errorMessage = 'Failed to create payment link';
+        const instamojoError = error.response?.data;
+        
+        if (instamojoError) {
+          // Instamojo returns errors in different formats
+          if (instamojoError.message && typeof instamojoError.message === 'object') {
+            // Error is an object with field-specific errors (e.g., {amount: ["Amount cannot be less than INR 9.00."]})
+            const errorFields = Object.keys(instamojoError.message);
+            const firstError = instamojoError.message[errorFields[0]];
+            errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
+          } else if (instamojoError.message && typeof instamojoError.message === 'string') {
+            errorMessage = instamojoError.message;
+          } else if (instamojoError.error) {
+            errorMessage = typeof instamojoError.error === 'string' 
+              ? instamojoError.error 
+              : JSON.stringify(instamojoError.error);
+          } else if (instamojoError.success === false && instamojoError.message) {
+            errorMessage = typeof instamojoError.message === 'string'
+              ? instamojoError.message
+              : JSON.stringify(instamojoError.message);
+          }
+        } else {
+          errorMessage = error.message || 'Failed to create payment link';
+        }
         
         res.status(error.response?.status || 500).json({
           success: false,
           error: errorMessage,
-          details: errorDetails,
+          details: instamojoError || {},
           message: `Payment gateway error: ${errorMessage}`,
         });
       }

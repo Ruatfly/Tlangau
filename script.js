@@ -104,7 +104,7 @@ if (paymentForm) {
             // Build request body - only include upiId if it's provided
             const requestBody = {
                 email: email,
-                amount: 1, // ₹1
+                amount: 10, // ₹10
             };
             
             // Only add upiId if UPI ID method is selected and value is provided
