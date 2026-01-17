@@ -73,25 +73,56 @@
                                 <label>Payment Method</label>
                                 <div class="payment-methods">
                                     <div class="payment-method-card">
-                                        <input type="radio" id="upi" name="paymentMethod" value="upi" checked>
-                                        <label for="upi">
+                                        <input type="radio" id="upi-qr" name="paymentMethod" value="upi-qr" checked>
+                                        <label for="upi-qr">
                                             <span class="method-icon">📱</span>
-                                            <span>UPI</span>
+                                            <span>Scan QR Code</span>
                                         </label>
                                     </div>
                                     <div class="payment-method-card">
-                                        <input type="radio" id="card" name="paymentMethod" value="card">
-                                        <label for="card">
+                                        <input type="radio" id="upi-id" name="paymentMethod" value="upi-id">
+                                        <label for="upi-id">
                                             <span class="method-icon">💳</span>
-                                            <span>Card</span>
+                                            <span>Enter UPI ID</span>
                                         </label>
                                     </div>
-                                    <div class="payment-method-card">
-                                        <input type="radio" id="netbanking" name="paymentMethod" value="netbanking">
-                                        <label for="netbanking">
-                                            <span class="method-icon">🏦</span>
-                                            <span>Net Banking</span>
-                                        </label>
+                                </div>
+                            </div>
+
+                            <!-- UPI ID Input (shown when UPI ID method is selected) -->
+                            <div class="form-group" id="upiIdGroup" style="display: none;">
+                                <label for="upiId">UPI ID *</label>
+                                <input 
+                                    type="text" 
+                                    id="upiId" 
+                                    name="upiId" 
+                                    placeholder="yourname@paytm or yourname@phonepe"
+                                    pattern="[a-zA-Z0-9._-]+@[a-zA-Z0-9]+"
+                                    autocomplete="off"
+                                >
+                                <small class="form-help">Enter your UPI ID (e.g., yourname@paytm, yourname@phonepe, yourname@ybl)</small>
+                                <div id="upiIdValidation" class="validation-message" style="display: none;"></div>
+                            </div>
+
+                            <!-- QR Code Display (shown after payment link creation) -->
+                            <div id="qrCodeContainer" class="qr-code-container" style="display: none;">
+                                <div class="qr-code-wrapper">
+                                    <h3>Scan QR Code to Pay</h3>
+                                    <div class="qr-code-image">
+                                        <img id="qrCodeImage" src="" alt="Payment QR Code">
+                                    </div>
+                                    <p class="qr-instructions">
+                                        <strong>Instructions:</strong><br>
+                                        1. Open any UPI app (PhonePe, Google Pay, Paytm, etc.)<br>
+                                        2. Scan this QR code<br>
+                                        3. Complete the payment<br>
+                                        4. You'll receive your access code via email
+                                    </p>
+                                    <div class="payment-link-section">
+                                        <p>Or pay directly using this link:</p>
+                                        <a id="paymentLink" href="#" target="_blank" class="btn btn-secondary">
+                                            Open Payment Link
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -154,6 +185,7 @@
         </div>
     </footer>
 
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

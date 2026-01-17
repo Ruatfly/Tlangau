@@ -6,13 +6,15 @@ EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
 # For Gmail, use App Password: https://support.google.com/accounts/answer/185833
 
-# Cashfree Payment Gateway Configuration
-CASHFREE_APP_ID=your_cashfree_app_id
-CASHFREE_SECRET_KEY=your_cashfree_secret_key
-CASHFREE_ENV=sandbox
-# Options: sandbox (for testing) or production (for live payments)
+# Instamojo Payment Gateway Configuration
+INSTAMOJO_API_KEY=your_instamojo_api_key
+INSTAMOJO_AUTH_TOKEN=your_instamojo_auth_token
+INSTAMOJO_ENV=test
+# Options: test (for testing) or production (for live payments)
+# Get your API credentials from: https://www.instamojo.com/developers/
 
 # Frontend and Backend URLs
 FRONTEND_URL=https://ruatfly.github.io/Tlangau
 BACKEND_URL=https://your-backend-url.com
 # For local development, use: http://localhost:3001
+# IMPORTANT: For webhooks to work, BACKEND_URL must be publicly accessible (use ngrok for local testing)

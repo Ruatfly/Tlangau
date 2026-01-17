@@ -5,6 +5,8 @@ const { body, validationResult } = require('express-validator');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const path = require('path');
+const axios = require('axios');
+const qrcode = require('qrcode');
 const Database = require('./database');
 
 require('dotenv').config();
@@ -106,12 +108,12 @@ async function sendAccessCodeEmail(email, code) {
   }
 }
 
-// Cashfree API configuration
-const CASHFREE_API_BASE = process.env.CASHFREE_ENV === 'production' 
-  ? 'https://api.cashfree.com' 
-  : 'https://sandbox.cashfree.com';
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
+// Instamojo API configuration
+const INSTAMOJO_API_BASE = process.env.INSTAMOJO_ENV === 'production'
+  ? 'https://www.instamojo.com/api/1.1'
+  : 'https://test.instamojo.com/api/1.1';
+const INSTAMOJO_API_KEY = process.env.INSTAMOJO_API_KEY;
+const INSTAMOJO_AUTH_TOKEN = process.env.INSTAMOJO_AUTH_TOKEN;
 
 // API Routes
 
@@ -120,11 +122,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Tlangau Server Access Portal API is running' });
 });
 
-// Create payment order (Cashfree)
+// Create payment link (Instamojo)
 app.post(
   '/api/create-payment',
   [
     body('email').isEmail().normalizeEmail(),
+    body('upiId').optional().isString().trim(),
     body('amount').optional().isNumeric(),
   ],
   async (req, res) => {
@@ -134,79 +137,93 @@ app.post(
         return res.status(400).json({ success: false, errors: errors.array() });
       }
 
-      const { email } = req.body;
-      const amount = 100; // ₹1 in paise
+      const { email, upiId } = req.body;
+      const amount = 1; // ₹1
       const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const emailLower = email.toLowerCase().trim();
 
-      console.log('📝 Create payment request received:', { email: emailLower, amount, orderId });
+      console.log('📝 Create payment request received:', { email: emailLower, amount, orderId, upiId });
 
-      // Create order in database
+      // Create order in database (will update with payment_request_id after creation)
       await db.createOrder({
         orderId,
         email: emailLower,
-        amount,
+        amount: amount * 100, // Store in paise
         status: 'PENDING',
       });
 
-      // Create payment order with Cashfree
+      // Create payment link with Instamojo
       try {
         const frontendUrl = process.env.FRONTEND_URL || 'https://ruatfly.github.io/Tlangau';
         const backendUrl = process.env.BACKEND_URL || `http://localhost:${PORT}`;
-        
-        const cashfreeResponse = await fetch(`${CASHFREE_API_BASE}/pg/orders`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-client-id': CASHFREE_APP_ID,
-            'x-client-secret': CASHFREE_SECRET_KEY,
-            'x-api-version': '2023-08-01',
-          },
-          body: JSON.stringify({
-            order_id: orderId,
-            order_amount: amount,
-            order_currency: 'INR',
-            customer_details: {
-              customer_id: emailLower,
-              customer_email: emailLower,
-              customer_name: emailLower.split('@')[0],
-            },
-            order_meta: {
-              return_url: `${frontendUrl}/success.html?order_id={order_id}`,
-              notify_url: `${backendUrl}/api/payment-webhook`,
-            },
-          }),
-        });
 
-        if (!cashfreeResponse.ok) {
-          const errorData = await cashfreeResponse.json();
-          console.error('❌ Cashfree API error:', errorData);
-          throw new Error(errorData.message || 'Failed to create payment order');
-        }
-
-        const cashfreeData = await cashfreeResponse.json();
-        console.log('✅ Cashfree payment order created:', cashfreeData);
-
-        // Construct payment URL
-        const paymentUrl = process.env.CASHFREE_ENV === 'production'
-          ? `https://payments.cashfree.com/forms/${cashfreeData.payment_session_id}`
-          : `https://sandbox.cashfree.com/pg/checkout/${cashfreeData.payment_session_id}`;
-
-        res.json({
-          success: true,
-          orderId: orderId,
-          paymentSessionId: cashfreeData.payment_session_id,
-          paymentUrl: paymentUrl,
+        // Prepare Instamojo payment link data
+        const paymentData = {
+          purpose: 'Tlangau Server Access Code',
           amount: amount,
           currency: 'INR',
-        });
+          buyer_name: emailLower.split('@')[0],
+          email: emailLower,
+          phone: '', // Optional
+          redirect_url: `${frontendUrl}/success.html?order_id=${orderId}`,
+          webhook: `${backendUrl}/api/payment-webhook`,
+          allow_repeated_payments: false,
+        };
+
+        // Add UPI ID if provided
+        if (upiId && upiId.trim()) {
+          paymentData.phone = upiId.trim(); // Instamojo uses phone field for UPI ID
+        }
+
+        // Create payment link via Instamojo API
+        const instamojoResponse = await axios.post(
+          `${INSTAMOJO_API_BASE}/payment-requests/`,
+          paymentData,
+          {
+            headers: {
+              'X-Api-Key': INSTAMOJO_API_KEY,
+              'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+            },
+          }
+        );
+
+        if (instamojoResponse.data.success) {
+          const paymentLink = instamojoResponse.data.payment_request;
+          console.log('✅ Instamojo payment link created:', paymentLink);
+
+          // Update order with payment_request_id
+          await db.updateOrder(orderId, {
+            payment_request_id: paymentLink.id,
+          });
+
+          // Generate QR code from payment URL
+          let qrCodeDataUrl = null;
+          try {
+            qrCodeDataUrl = await qrcode.toDataURL(paymentLink.longurl);
+          } catch (qrError) {
+            console.error('⚠️ Error generating QR code:', qrError);
+          }
+
+          res.json({
+            success: true,
+            orderId: orderId,
+            paymentId: paymentLink.id,
+            paymentUrl: paymentLink.longurl,
+            qrCode: qrCodeDataUrl,
+            amount: amount,
+            currency: 'INR',
+            upiId: upiId || null,
+          });
+        } else {
+          throw new Error(instamojoResponse.data.message || 'Failed to create payment link');
+        }
       } catch (error) {
-        console.error('❌ Error creating Cashfree payment:', error);
+        console.error('❌ Error creating Instamojo payment:', error.response?.data || error.message);
         // Update order status to failed
         await db.updateOrder(orderId, { status: 'FAILED' });
         res.status(500).json({
           success: false,
-          error: error.message || 'Failed to create payment order',
+          error: error.response?.data?.message || error.message || 'Failed to create payment link',
         });
       }
     } catch (error) {
@@ -216,67 +233,112 @@ app.post(
   }
 );
 
-// Payment webhook (Cashfree)
+// Payment webhook (Instamojo)
 app.post('/api/payment-webhook', async (req, res) => {
   try {
     const webhookData = req.body;
     console.log('📥 Payment webhook received:', webhookData);
 
-    // Verify webhook signature (Cashfree sends signature in headers)
-    const signature = req.headers['x-cashfree-signature'];
-    if (signature) {
-      // Verify signature if needed (implement based on Cashfree docs)
-      // For now, we'll process the webhook
+    // Instamojo sends payment_request_id and payment_id
+    const { payment_request_id, payment_id } = webhookData;
+
+    if (!payment_request_id) {
+      console.error('❌ Webhook missing payment_request_id');
+      return res.status(400).json({ success: false, message: 'Missing payment_request_id' });
     }
 
-    const { order_id, order_amount, payment_status, payment_message, cf_payment_id } = webhookData;
+    // Find order by payment_request_id
+    let order = await db.getOrderByPaymentRequestId(payment_request_id);
 
-    if (!order_id) {
-      console.error('❌ Webhook missing order_id');
-      return res.status(400).json({ success: false, message: 'Missing order_id' });
+    // If not found, try to get payment details and find by email
+    if (!order && payment_id) {
+      try {
+        const paymentResponse = await axios.get(
+          `${INSTAMOJO_API_BASE}/payments/${payment_id}/`,
+          {
+            headers: {
+              'X-Api-Key': INSTAMOJO_API_KEY,
+              'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+            },
+          }
+        );
+
+        if (paymentResponse.data.success) {
+          const payment = paymentResponse.data.payment;
+          const buyerEmail = payment.buyer_email || payment.email || payment.buyer;
+
+          if (buyerEmail) {
+            // Find order by email (most recent pending order)
+            order = await db.getOrderByEmail(buyerEmail);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error fetching payment details:', error.response?.data || error.message);
+      }
     }
 
-    // Get order from database
-    const order = await db.getOrder(order_id);
     if (!order) {
-      console.error('❌ Order not found:', order_id);
+      console.error('❌ Order not found for payment_request_id:', payment_request_id);
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Update order status
-    await db.updateOrder(order_id, {
-      status: payment_status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
-      payment_id: cf_payment_id || webhookData.payment_id,
-    });
+    // Check payment status with Instamojo API
+    try {
+      if (payment_id) {
+        const paymentResponse = await axios.get(
+          `${INSTAMOJO_API_BASE}/payments/${payment_id}/`,
+          {
+            headers: {
+              'X-Api-Key': INSTAMOJO_API_KEY,
+              'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+            },
+          }
+        );
 
-    // If payment successful, generate and send access code
-    if (payment_status === 'SUCCESS') {
-      console.log('✅ Payment successful, generating access code for order:', order_id);
+        if (paymentResponse.data.success) {
+          const payment = paymentResponse.data.payment;
 
-      // Check if access code already exists for this order
-      const existingCode = await db.getCodeByCode(order_id);
-      if (!existingCode) {
-        // Generate access code
-        const accessCode = generateAccessCode();
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+          if (payment.status === 'Credit') {
+            // Payment successful
+            await db.updateOrder(order.order_id, {
+              status: 'SUCCESS',
+              payment_id: payment_id,
+            });
 
-        // Create access code in database
-        await db.createAccessCode({
-          code: accessCode,
-          email: order.email,
-          orderId: order_id,
-          paymentId: cf_payment_id || webhookData.payment_id || 'webhook_payment',
-          used: false,
-          expiresAt: expiresAt,
-        });
+            // Check if access code already exists for this order
+            const existingCode = await db.getCodeByOrderId(order.order_id);
+            if (!existingCode) {
+              // Generate access code
+              const accessCode = generateAccessCode();
+              const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
 
-        console.log('✅ Access code created:', accessCode);
+              // Create access code in database
+              await db.createAccessCode({
+                code: accessCode,
+                email: order.email,
+                orderId: order.order_id,
+                paymentId: payment_id,
+                used: false,
+                expiresAt: expiresAt,
+              });
 
-        // Send email with access code
-        await sendAccessCodeEmail(order.email, accessCode);
-      } else {
-        console.log('ℹ️ Access code already exists for this order');
+              console.log('✅ Access code created:', accessCode);
+
+              // Send email with access code
+              await sendAccessCodeEmail(order.email, accessCode);
+            } else {
+              console.log('ℹ️ Access code already exists for this order');
+            }
+          } else if (payment.status === 'Failed') {
+            await db.updateOrder(order.order_id, {
+              status: 'FAILED',
+              payment_id: payment_id,
+            });
+          }
+        }
       }
+    } catch (error) {
+      console.error('❌ Error checking Instamojo payment status:', error.response?.data || error.message);
     }
 
     res.json({ success: true, message: 'Webhook processed' });
@@ -308,55 +370,66 @@ app.post(
         return res.json({ success: false, message: 'Order not found' });
       }
 
-      // Check payment status with Cashfree
-      try {
-        const cashfreeResponse = await fetch(`${CASHFREE_API_BASE}/pg/orders/${orderId}/payments`, {
-          method: 'GET',
-          headers: {
-            'x-client-id': CASHFREE_APP_ID,
-            'x-client-secret': CASHFREE_SECRET_KEY,
-            'x-api-version': '2023-08-01',
-          },
+      // If order is already successful, return immediately
+      if (order.status === 'SUCCESS') {
+        return res.json({
+          success: true,
+          paymentStatus: 'SUCCESS',
+          message: 'Payment verified successfully',
         });
+      }
 
-        if (cashfreeResponse.ok) {
-          const paymentData = await cashfreeResponse.json();
-          const payment = paymentData[0]; // Get first payment
+      // Check payment status with Instamojo using payment_id if available
+      if (order.payment_id) {
+        try {
+          const paymentResponse = await axios.get(
+            `${INSTAMOJO_API_BASE}/payments/${order.payment_id}/`,
+            {
+              headers: {
+                'X-Api-Key': INSTAMOJO_API_KEY,
+                'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+              },
+            }
+          );
 
-          if (payment && payment.payment_status === 'SUCCESS') {
-            // Update order status
-            await db.updateOrder(orderId, {
-              status: 'SUCCESS',
-              payment_id: payment.cf_payment_id,
-            });
+          if (paymentResponse.data.success) {
+            const payment = paymentResponse.data.payment;
 
-            // Check if access code exists, if not generate one
-            const accessCode = await db.getCodeByEmail(order.email);
-            if (!accessCode || accessCode.order_id !== orderId) {
-              const newAccessCode = generateAccessCode();
-              const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-              await db.createAccessCode({
-                code: newAccessCode,
-                email: order.email,
-                orderId: orderId,
-                paymentId: payment.cf_payment_id,
-                used: false,
-                expiresAt: expiresAt,
+            if (payment.status === 'Credit') {
+              // Update order status
+              await db.updateOrder(orderId, {
+                status: 'SUCCESS',
+                payment_id: payment.id,
               });
 
-              await sendAccessCodeEmail(order.email, newAccessCode);
-            }
+              // Check if access code exists, if not generate one
+              const accessCode = await db.getCodeByOrderId(orderId);
+              if (!accessCode) {
+                const newAccessCode = generateAccessCode();
+                const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-            return res.json({
-              success: true,
-              paymentStatus: 'SUCCESS',
-              message: 'Payment verified successfully',
-            });
+                await db.createAccessCode({
+                  code: newAccessCode,
+                  email: order.email,
+                  orderId: orderId,
+                  paymentId: payment.id,
+                  used: false,
+                  expiresAt: expiresAt,
+                });
+
+                await sendAccessCodeEmail(order.email, newAccessCode);
+              }
+
+              return res.json({
+                success: true,
+                paymentStatus: 'SUCCESS',
+                message: 'Payment verified successfully',
+              });
+            }
           }
+        } catch (error) {
+          console.error('❌ Error checking Instamojo payment status:', error.response?.data || error.message);
         }
-      } catch (error) {
-        console.error('❌ Error checking Cashfree payment status:', error);
       }
 
       // Return current order status
@@ -539,5 +612,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Tlangau Server Access Portal API running on port ${PORT}`);
   console.log(`🌐 Frontend available at http://localhost:${PORT}`);
   console.log(`📧 Email service: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
-  console.log(`💳 Payment gateway: ${CASHFREE_APP_ID ? 'Configured (Cashfree)' : 'Not configured'}`);
+  console.log(`💳 Payment gateway: ${INSTAMOJO_API_KEY ? 'Configured (Instamojo)' : 'Not configured'}`);
 });

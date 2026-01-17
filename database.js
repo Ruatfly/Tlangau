@@ -44,6 +44,7 @@ class Database {
         amount INTEGER NOT NULL,
         status TEXT NOT NULL,
         payment_id TEXT,
+        payment_request_id TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`)
@@ -87,10 +88,10 @@ class Database {
   // Order methods
   createOrder(orderData) {
     return new Promise((resolve, reject) => {
-      const { orderId, email, amount, status } = orderData;
+      const { orderId, email, amount, status, paymentId, paymentRequestId } = orderData;
       this.db.run(
-        `INSERT INTO orders (order_id, email, amount, status) VALUES (?, ?, ?, ?)`,
-        [orderId, email, amount, status],
+        `INSERT INTO orders (order_id, email, amount, status, payment_id, payment_request_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        [orderId, email, amount, status, paymentId || null, paymentRequestId || null],
         function (err) {
           if (err) {
             reject(err);
@@ -224,6 +225,57 @@ class Database {
             reject(err);
           } else {
             resolve(!!row);
+          }
+        }
+      );
+    });
+  }
+
+  // Get order by email (most recent pending order)
+  getOrderByEmail(email) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT * FROM orders WHERE email = ? ORDER BY created_at DESC LIMIT 1`,
+        [email],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  // Get code by order ID
+  getCodeByOrderId(orderId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT * FROM access_codes WHERE order_id = ? LIMIT 1`,
+        [orderId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  // Get order by payment request ID
+  getOrderByPaymentRequestId(paymentRequestId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT * FROM orders WHERE payment_request_id = ? LIMIT 1`,
+        [paymentRequestId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
           }
         }
       );
