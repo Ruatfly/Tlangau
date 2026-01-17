@@ -101,29 +101,24 @@ if (paymentForm) {
                 return;
             }
             
+            // Build request body - only include upiId if it's provided
+            const requestBody = {
+                email: email,
+                amount: 1, // ₹1
+            };
+            
+            // Only add upiId if UPI ID method is selected and value is provided
+            if (paymentMethod === 'upi-id' && upiId && upiId.trim()) {
+                requestBody.upiId = upiId.trim();
+            }
+            
             // Create payment link
             const response = await fetch(`${backendUrl}/api/create-payment`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                // Build request body - only include upiId if it's provided
-                const requestBody = {
-                    email: email,
-                    amount: 1, // ₹1
-                };
-                
-                // Only add upiId if UPI ID method is selected and value is provided
-                if (paymentMethod === 'upi-id' && upiId && upiId.trim()) {
-                    requestBody.upiId = upiId.trim();
-                }
-                
-                const response = await fetch(`${backendUrl}/api/create-payment`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestBody),
+                body: JSON.stringify(requestBody),
             });
             
             if (!response.ok) {
