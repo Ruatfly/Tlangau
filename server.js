@@ -24,7 +24,10 @@ app.use(express.static(path.join(__dirname)));
 
 // Initialize database
 const db = new Database();
-db.init();
+db.init().catch(err => {
+  console.error('❌ Database initialization failed:', err);
+  process.exit(1);
+});
 
 // Initialize email transporter
 const transporter = nodemailer.createTransport({
@@ -109,11 +112,23 @@ async function sendAccessCodeEmail(email, code) {
 }
 
 // Instamojo API configuration
-const INSTAMOJO_API_BASE = process.env.INSTAMOJO_ENV === 'production'
+const INSTAMOJO_ENV = process.env.INSTAMOJO_ENV || 'test';
+const INSTAMOJO_API_BASE = INSTAMOJO_ENV === 'production'
   ? 'https://www.instamojo.com/api/1.1'
   : 'https://test.instamojo.com/api/1.1';
 const INSTAMOJO_API_KEY = process.env.INSTAMOJO_API_KEY;
 const INSTAMOJO_AUTH_TOKEN = process.env.INSTAMOJO_AUTH_TOKEN;
+
+// Log configuration on startup
+console.log('🔧 Configuration:');
+console.log('  PORT:', PORT);
+console.log('  INSTAMOJO_ENV:', INSTAMOJO_ENV);
+console.log('  INSTAMOJO_API_BASE:', INSTAMOJO_API_BASE);
+console.log('  INSTAMOJO_API_KEY:', INSTAMOJO_API_KEY ? 'Set' : 'Not set');
+console.log('  INSTAMOJO_AUTH_TOKEN:', INSTAMOJO_AUTH_TOKEN ? 'Set' : 'Not set');
+console.log('  EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'Not set');
+console.log('  FRONTEND_URL:', process.env.FRONTEND_URL || 'Not set');
+console.log('  BACKEND_URL:', process.env.BACKEND_URL || 'Not set');
 
 // API Routes
 
@@ -134,12 +149,14 @@ app.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        console.error('❌ Validation errors:', errors.array());
+        console.error('❌ Validation errors:', JSON.stringify(errors.array(), null, 2));
+        console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
         return res.status(400).json({ 
           success: false, 
           error: 'Validation failed',
           errors: errors.array(),
-          message: errors.array()[0]?.msg || 'Invalid request data'
+          message: errors.array()[0]?.msg || 'Invalid request data',
+          received: req.body
         });
       }
 
@@ -629,10 +646,32 @@ app.post(
   }
 );
 
+// Error handling middleware (must be last)
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled error:', err);
+  res.status(500).json({
+    success: false,
+    error: err.message || 'Internal server error',
+    message: 'An unexpected error occurred',
+  });
+});
+
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Tlangau Server Access Portal API running on port ${PORT}`);
   console.log(`🌐 Frontend available at http://localhost:${PORT}`);
   console.log(`📧 Email service: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
   console.log(`💳 Payment gateway: ${INSTAMOJO_API_KEY ? 'Configured (Instamojo)' : 'Not configured'}`);
+});
+
+// Handle uncaught errors
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
