@@ -6,7 +6,6 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const path = require('path');
 const axios = require('axios');
-const qrcode = require('qrcode');
 const Database = require('./database');
 
 require('dotenv').config();
@@ -143,7 +142,6 @@ app.post(
   '/api/create-payment',
   [
     body('email').isEmail().normalizeEmail(),
-    body('upiId').optional({ nullable: true, checkFalsy: true }).isString().trim(),
     body('amount').optional().isNumeric(),
   ],
   async (req, res) => {
@@ -170,12 +168,12 @@ app.post(
         });
       }
 
-      const { email, upiId } = req.body;
+      const { email } = req.body;
       const amount = 10; // ₹10
       const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const emailLower = email.toLowerCase().trim();
 
-      console.log('📝 Create payment request received:', { email: emailLower, amount, orderId, upiId });
+      console.log('📝 Create payment request received:', { email: emailLower, amount, orderId });
 
       // Create order in database (will update with payment_request_id after creation)
       await db.createOrder({
@@ -197,16 +195,10 @@ app.post(
           currency: 'INR',
           buyer_name: emailLower.split('@')[0],
           email: emailLower,
-          phone: '', // Optional
           redirect_url: `${frontendUrl}/success.html?order_id=${orderId}`,
           webhook: `${backendUrl}/api/payment-webhook`,
           allow_repeated_payments: false,
         };
-
-        // Add UPI ID if provided
-        if (upiId && upiId.trim()) {
-          paymentData.phone = upiId.trim(); // Instamojo uses phone field for UPI ID
-        }
 
         // Create payment link via Instamojo API
         const instamojoResponse = await axios.post(
@@ -229,23 +221,13 @@ app.post(
             payment_request_id: paymentLink.id,
           });
 
-          // Generate QR code from payment URL
-          let qrCodeDataUrl = null;
-          try {
-            qrCodeDataUrl = await qrcode.toDataURL(paymentLink.longurl);
-          } catch (qrError) {
-            console.error('⚠️ Error generating QR code:', qrError);
-          }
-
           res.json({
             success: true,
             orderId: orderId,
             paymentId: paymentLink.id,
             paymentUrl: paymentLink.longurl,
-            qrCode: qrCodeDataUrl,
             amount: amount,
             currency: 'INR',
-            upiId: upiId || null,
           });
         } else {
           throw new Error(instamojoResponse.data.message || 'Failed to create payment link');
@@ -361,42 +343,87 @@ app.post('/api/payment-webhook', async (req, res) => {
         if (paymentResponse.data.success) {
           const payment = paymentResponse.data.payment;
 
-          if (payment.status === 'Credit') {
-            // Payment successful
-            await db.updateOrder(order.order_id, {
-              status: 'SUCCESS',
-              payment_id: payment_id,
-            });
+          // CRITICAL VERIFICATION: Verify payment status, amount, and payment_request_id
+          const expectedAmount = order.amount / 100; // Convert from paise to rupees
+          const paymentAmount = parseFloat(payment.amount);
+          const paymentStatus = payment.status;
+          const paymentRequestId = payment.payment_request?.id || payment.payment_request_id;
 
-            // Check if access code already exists for this order
-            const existingCode = await db.getCodeByOrderId(order.order_id);
-            if (!existingCode) {
-              // Generate access code
-              const accessCode = generateAccessCode();
-              const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+          console.log('🔍 Payment verification:', {
+            paymentStatus,
+            expectedAmount,
+            paymentAmount,
+            paymentRequestId,
+            orderPaymentRequestId: order.payment_request_id,
+          });
 
-              // Create access code in database
-              await db.createAccessCode({
-                code: accessCode,
-                email: order.email,
-                orderId: order.order_id,
-                paymentId: payment_id,
-                used: false,
-                expiresAt: expiresAt,
+          // Verify payment status is 'Credit'
+          if (paymentStatus !== 'Credit') {
+            console.log('⚠️ Payment status is not Credit:', paymentStatus);
+            if (paymentStatus === 'Failed') {
+              await db.updateOrder(order.order_id, {
+                status: 'FAILED',
+                payment_id: payment_id,
               });
-
-              console.log('✅ Access code created:', accessCode);
-
-              // Send email with access code
-              await sendAccessCodeEmail(order.email, accessCode);
-            } else {
-              console.log('ℹ️ Access code already exists for this order');
             }
-          } else if (payment.status === 'Failed') {
-            await db.updateOrder(order.order_id, {
-              status: 'FAILED',
-              payment_id: payment_id,
+            return res.json({ success: true, message: 'Webhook processed - payment not successful' });
+          }
+
+          // Verify amount matches
+          if (Math.abs(paymentAmount - expectedAmount) > 0.01) {
+            console.error('❌ Amount mismatch:', {
+              expected: expectedAmount,
+              received: paymentAmount,
             });
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Payment amount mismatch' 
+            });
+          }
+
+          // Verify payment_request_id matches
+          if (paymentRequestId && order.payment_request_id && paymentRequestId !== order.payment_request_id) {
+            console.error('❌ Payment request ID mismatch:', {
+              expected: order.payment_request_id,
+              received: paymentRequestId,
+            });
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Payment request ID mismatch' 
+            });
+          }
+
+          // All verifications passed - Payment is successful
+          console.log('✅ Payment verification passed - all checks successful');
+          
+          await db.updateOrder(order.order_id, {
+            status: 'SUCCESS',
+            payment_id: payment_id,
+          });
+
+          // Check if access code already exists for this order
+          const existingCode = await db.getCodeByOrderId(order.order_id);
+          if (!existingCode) {
+            // Generate access code
+            const accessCode = generateAccessCode();
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+
+            // Create access code in database
+            await db.createAccessCode({
+              code: accessCode,
+              email: order.email,
+              orderId: order.order_id,
+              paymentId: payment_id,
+              used: false,
+              expiresAt: expiresAt,
+            });
+
+            console.log('✅ Access code created:', accessCode);
+
+            // Send email with access code
+            await sendAccessCodeEmail(order.email, accessCode);
+          } else {
+            console.log('ℹ️ Access code already exists for this order');
           }
         }
       }
@@ -458,7 +485,51 @@ app.post(
           if (paymentResponse.data.success) {
             const payment = paymentResponse.data.payment;
 
-            if (payment.status === 'Credit') {
+            // CRITICAL VERIFICATION: Verify payment status, amount, and payment_request_id
+            const expectedAmount = order.amount / 100; // Convert from paise to rupees
+            const paymentAmount = parseFloat(payment.amount);
+            const paymentStatus = payment.status;
+            const paymentRequestId = payment.payment_request?.id || payment.payment_request_id;
+
+            console.log('🔍 Payment verification (redirect):', {
+              paymentStatus,
+              expectedAmount,
+              paymentAmount,
+              paymentRequestId,
+              orderPaymentRequestId: order.payment_request_id,
+            });
+
+            // Verify payment status is 'Credit'
+            if (paymentStatus === 'Credit') {
+              // Verify amount matches
+              if (Math.abs(paymentAmount - expectedAmount) > 0.01) {
+                console.error('❌ Amount mismatch:', {
+                  expected: expectedAmount,
+                  received: paymentAmount,
+                });
+                return res.json({
+                  success: false,
+                  paymentStatus: 'FAILED',
+                  message: 'Payment amount mismatch',
+                });
+              }
+
+              // Verify payment_request_id matches
+              if (paymentRequestId && order.payment_request_id && paymentRequestId !== order.payment_request_id) {
+                console.error('❌ Payment request ID mismatch:', {
+                  expected: order.payment_request_id,
+                  received: paymentRequestId,
+                });
+                return res.json({
+                  success: false,
+                  paymentStatus: 'FAILED',
+                  message: 'Payment request ID mismatch',
+                });
+              }
+
+              // All verifications passed - Payment is successful
+              console.log('✅ Payment verification passed - all checks successful');
+              
               // Update order status
               await db.updateOrder(orderId, {
                 status: 'SUCCESS',
@@ -487,6 +558,16 @@ app.post(
                 success: true,
                 paymentStatus: 'SUCCESS',
                 message: 'Payment verified successfully',
+              });
+            } else if (paymentStatus === 'Failed') {
+              await db.updateOrder(orderId, {
+                status: 'FAILED',
+                payment_id: payment.id,
+              });
+              return res.json({
+                success: true,
+                paymentStatus: 'FAILED',
+                message: 'Payment failed',
               });
             }
           }
