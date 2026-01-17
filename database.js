@@ -49,7 +49,26 @@ class Database {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`)
         .then(() => {
-          return       runQuery(`CREATE TABLE IF NOT EXISTS access_codes (
+          // Add payment_request_id column if it doesn't exist (migration for existing databases)
+          return new Promise((resolve) => {
+            this.db.run(`ALTER TABLE orders ADD COLUMN payment_request_id TEXT`, (err) => {
+              if (err) {
+                // Column already exists or other error - that's okay
+                if (err.message && err.message.includes('duplicate column')) {
+                  console.log('ℹ️ payment_request_id column already exists');
+                } else {
+                  console.log('ℹ️ Could not add payment_request_id column (may already exist):', err.message);
+                }
+                resolve(); // Continue anyway
+              } else {
+                console.log('✅ Added payment_request_id column to orders table');
+                resolve();
+              }
+            });
+          });
+        })
+        .then(() => {
+          return runQuery(`CREATE TABLE IF NOT EXISTS access_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT UNIQUE NOT NULL,
         email TEXT NOT NULL,
@@ -124,12 +143,20 @@ class Database {
       const fields = [];
       const values = [];
 
+      // Only include fields that exist and are not null/undefined
       Object.keys(updates).forEach((key) => {
-        fields.push(`${key} = ?`);
-        values.push(updates[key]);
+        if (updates[key] !== undefined && updates[key] !== null) {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
       });
 
-      fields.push('updated_at = CURRENT_TIMESTAMP');
+      if (fields.length === 0) {
+        // No fields to update, just update timestamp
+        fields.push('updated_at = CURRENT_TIMESTAMP');
+      } else {
+        fields.push('updated_at = CURRENT_TIMESTAMP');
+      }
       values.push(orderId);
 
       this.db.run(
