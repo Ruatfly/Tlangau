@@ -142,7 +142,7 @@ app.post(
   '/api/create-payment',
   [
     body('email').isEmail().normalizeEmail(),
-    body('upiId').optional().isString().trim(),
+    body('upiId').optional({ nullable: true, checkFalsy: true }).isString().trim(),
     body('amount').optional().isNumeric(),
   ],
   async (req, res) => {
