@@ -113,9 +113,10 @@ async function sendAccessCodeEmail(email, code) {
 
 // Instamojo API configuration
 const INSTAMOJO_ENV = process.env.INSTAMOJO_ENV || 'test';
-const INSTAMOJO_API_BASE = INSTAMOJO_ENV === 'production'
-  ? 'https://www.instamojo.com/api/1.1'
-  : 'https://test.instamojo.com/api/1.1';
+// Instamojo uses the same API URL for both test and production
+// Test/production is determined by the API keys you use
+// Using API v1.1 which is the stable version
+const INSTAMOJO_API_BASE = 'https://www.instamojo.com/api/1.1';
 const INSTAMOJO_API_KEY = process.env.INSTAMOJO_API_KEY;
 const INSTAMOJO_AUTH_TOKEN = process.env.INSTAMOJO_AUTH_TOKEN;
 
