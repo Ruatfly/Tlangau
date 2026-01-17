@@ -134,7 +134,22 @@ app.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ success: false, errors: errors.array() });
+        console.error('❌ Validation errors:', errors.array());
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Validation failed',
+          errors: errors.array(),
+          message: errors.array()[0]?.msg || 'Invalid request data'
+        });
+      }
+
+      // Check if Instamojo credentials are configured
+      if (!INSTAMOJO_API_KEY || !INSTAMOJO_AUTH_TOKEN) {
+        console.error('❌ Instamojo credentials not configured');
+        return res.status(500).json({
+          success: false,
+          error: 'Payment gateway not configured. Please set INSTAMOJO_API_KEY and INSTAMOJO_AUTH_TOKEN environment variables.',
+        });
       }
 
       const { email, upiId } = req.body;
@@ -219,11 +234,18 @@ app.post(
         }
       } catch (error) {
         console.error('❌ Error creating Instamojo payment:', error.response?.data || error.message);
+        console.error('❌ Full error:', JSON.stringify(error.response?.data || error.message, null, 2));
         // Update order status to failed
         await db.updateOrder(orderId, { status: 'FAILED' });
-        res.status(500).json({
+        
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to create payment link';
+        const errorDetails = error.response?.data || {};
+        
+        res.status(error.response?.status || 500).json({
           success: false,
-          error: error.response?.data?.message || error.message || 'Failed to create payment link',
+          error: errorMessage,
+          details: errorDetails,
+          message: `Payment gateway error: ${errorMessage}`,
         });
       }
     } catch (error) {

@@ -115,9 +115,19 @@ if (paymentForm) {
             });
             
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error', message: 'Failed to parse error response' }));
                 console.error('Backend error:', errorData);
-                throw new Error(errorData.error || errorData.message || `Server error: ${response.status}`);
+                console.error('Error details:', JSON.stringify(errorData, null, 2));
+                
+                // Show detailed error message
+                let errorMessage = errorData.message || errorData.error || `Server error: ${response.status}`;
+                
+                // If validation errors, show first error
+                if (errorData.errors && errorData.errors.length > 0) {
+                    errorMessage = errorData.errors[0].msg || errorData.errors[0].message || errorMessage;
+                }
+                
+                throw new Error(errorMessage);
             }
             
             const data = await response.json();
