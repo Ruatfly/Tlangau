@@ -370,6 +370,7 @@
                 <button class="tab active" onclick="switchTab('orders')">Orders</button>
                 <button class="tab" onclick="switchTab('codes')">Access Codes</button>
                 <button class="tab" onclick="switchTab('users')">Users</button>
+                <button class="tab" onclick="switchTab('bundles')">Bundles & Topics</button>
             </div>
 
             <!-- Orders Tab -->
@@ -438,6 +439,17 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Bundles & Topics Tab -->
+            <div id="bundlesTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="bundlesSearch" placeholder="Search bundles or topics..." onkeyup="filterBundlesTable()">
+                    <div id="bundlesLoading" class="loading">Loading bundles and topics...</div>
+                    <div id="bundlesContainer" style="display: none;">
+                        <div id="bundlesList"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -491,6 +503,7 @@
                 loadOrders(),
                 loadAccessCodes(),
                 loadUsers(),
+                loadBundles(),
             ]);
         }
 
@@ -749,6 +762,9 @@
                 document.getElementById('codesTab').classList.add('active');
             } else if (tab === 'users') {
                 document.getElementById('usersTab').classList.add('active');
+            } else if (tab === 'bundles') {
+                document.getElementById('bundlesTab').classList.add('active');
+                loadBundles(); // Load bundles when tab is opened
             }
         }
 
@@ -773,6 +789,145 @@
                 }
                 tr[i].style.display = found ? '' : 'none';
             }
+        }
+
+        // Load bundles and topics
+        async function loadBundles() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/bundles`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('bundlesList');
+                    container.innerHTML = '';
+
+                    if (data.bundles.length === 0) {
+                        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><p>No bundles found</p></div>';
+                    } else {
+                        data.bundles.forEach(bundle => {
+                            const bundleCard = document.createElement('div');
+                            bundleCard.style.cssText = 'background: #f9f9f9; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #e0e0e0;';
+                            
+                            let topicsHtml = '';
+                            if (bundle.topics.length === 0) {
+                                topicsHtml = '<p style="color: #666; font-style: italic;">No topics in this bundle</p>';
+                            } else {
+                                topicsHtml = '<table style="width: 100%; margin-top: 10px;"><thead><tr><th>Topic Name</th><th>FCM Topic</th><th>Subscribers</th><th>Action</th></tr></thead><tbody>';
+                                bundle.topics.forEach(topic => {
+                                    topicsHtml += `
+                                        <tr>
+                                            <td><strong>${topic.name}</strong></td>
+                                            <td><code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${topic.fcmTopicName}</code></td>
+                                            <td>${topic.subscribers}</td>
+                                            <td>
+                                                <button class="btn-danger" onclick="deleteTopic('${bundle.id}', '${topic.id}', '${topic.name.replace(/'/g, "\\'")}')">Delete Topic</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                });
+                                topicsHtml += '</tbody></table>';
+                            }
+
+                            bundleCard.innerHTML = `
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                    <div>
+                                        <h3 style="margin: 0; color: #667eea; font-size: 20px;">${bundle.name}</h3>
+                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
+                                            Bundle ID: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${bundle.id}</code>
+                                            | ${bundle.topicsCount} topic${bundle.topicsCount !== 1 ? 's' : ''}
+                                        </p>
+                                    </div>
+                                    <button class="btn-danger" onclick="deleteBundle('${bundle.id}', '${bundle.name.replace(/'/g, "\\'")}')" style="padding: 10px 20px; font-size: 14px;">
+                                        Delete Bundle
+                                    </button>
+                                </div>
+                                ${topicsHtml}
+                            `;
+                            container.appendChild(bundleCard);
+                        });
+                    }
+
+                    document.getElementById('bundlesLoading').style.display = 'none';
+                    document.getElementById('bundlesContainer').style.display = 'block';
+                } else {
+                    if (data.error && data.error.includes('Firebase Admin not initialized')) {
+                        document.getElementById('bundlesLoading').innerHTML = `
+                            <div class="error">
+                                <strong>Firebase Admin not configured</strong><br>
+                                Bundle/topic management requires Firebase Admin SDK setup.<br>
+                                Please configure FIREBASE_SERVICE_ACCOUNT_JSON or place service-account-key.json in the server directory.
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('bundlesLoading').textContent = 'Error loading bundles: ' + (data.message || data.error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading bundles:', error);
+                document.getElementById('bundlesLoading').textContent = 'Error loading bundles: ' + error.message;
+            }
+        }
+
+        // Delete bundle
+        async function deleteBundle(bundleId, bundleName) {
+            if (!confirm(`⚠️ Are you sure you want to delete bundle "${bundleName}"?\n\nThis will delete ALL topics in this bundle.\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Bundle deleted successfully');
+                    loadBundles();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete bundle'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting bundle: ' + error.message);
+            }
+        }
+
+        // Delete topic
+        async function deleteTopic(bundleId, topicId, topicName) {
+            if (!confirm(`Are you sure you want to delete topic "${topicName}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}/topics/${topicId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Topic deleted successfully');
+                    loadBundles();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete topic'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting topic: ' + error.message);
+            }
+        }
+
+        // Filter bundles table
+        function filterBundlesTable() {
+            const input = document.getElementById('bundlesSearch');
+            const filter = input.value.toLowerCase();
+            const bundles = document.querySelectorAll('#bundlesList > div');
+
+            bundles.forEach(bundleCard => {
+                const text = bundleCard.textContent || bundleCard.innerText;
+                bundleCard.style.display = text.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+            });
         }
 
         // Logout
