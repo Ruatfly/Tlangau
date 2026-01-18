@@ -309,6 +309,235 @@ class Database {
     });
   }
 
+  // ==================== ADMIN METHODS ====================
+  
+  // Get all orders
+  getAllOrders() {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM orders ORDER BY created_at DESC`,
+        [],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows || []);
+          }
+        }
+      );
+    });
+  }
+
+  // Get all access codes with order details
+  getAllAccessCodes() {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT ac.*, o.email as order_email, o.amount, o.status as order_status 
+         FROM access_codes ac 
+         LEFT JOIN orders o ON ac.order_id = o.order_id 
+         ORDER BY ac.created_at DESC`,
+        [],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows || []);
+          }
+        }
+      );
+    });
+  }
+
+  // Delete access code
+  deleteAccessCode(code) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `DELETE FROM access_codes WHERE code = ?`,
+        [code],
+        function (err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({ deleted: this.changes > 0, changes: this.changes });
+          }
+        }
+      );
+    });
+  }
+
+  // Delete order and associated access codes
+  deleteOrder(orderId) {
+    return new Promise((resolve, reject) => {
+      // First delete associated access codes
+      this.db.run(
+        `DELETE FROM access_codes WHERE order_id = ?`,
+        [orderId],
+        (err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          // Then delete the order
+          this.db.run(
+            `DELETE FROM orders WHERE order_id = ?`,
+            [orderId],
+            function (err) {
+              if (err) {
+                reject(err);
+              } else {
+                resolve({ deleted: this.changes > 0, changes: this.changes });
+              }
+            }
+          );
+        }
+      );
+    });
+  }
+
+  // Delete all data for a specific email (orders and access codes)
+  deleteUserByEmail(email) {
+    return new Promise((resolve, reject) => {
+      const emailLower = email.toLowerCase().trim();
+      
+      // Get all order IDs for this email
+      this.db.all(
+        `SELECT order_id FROM orders WHERE email = ?`,
+        [emailLower],
+        (err, orders) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const orderIds = orders.map(o => o.order_id);
+          let deletedCodes = 0;
+          let deletedOrders = 0;
+
+          if (orderIds.length === 0) {
+            return resolve({ deleted: true, deletedCodes: 0, deletedOrders: 0 });
+          }
+
+          // Delete access codes for these orders
+          const placeholders = orderIds.map(() => '?').join(',');
+          this.db.run(
+            `DELETE FROM access_codes WHERE order_id IN (${placeholders})`,
+            orderIds,
+            function (err) {
+              if (err) {
+                reject(err);
+                return;
+              }
+              deletedCodes = this.changes;
+
+              // Delete orders
+              this.db.run(
+                `DELETE FROM orders WHERE email = ?`,
+                [emailLower],
+                function (err) {
+                  if (err) {
+                    reject(err);
+                  } else {
+                    deletedOrders = this.changes;
+                    resolve({ 
+                      deleted: true, 
+                      deletedCodes, 
+                      deletedOrders 
+                    });
+                  }
+                }
+              );
+            }
+          );
+        }
+      );
+    });
+  }
+
+  // Get statistics
+  getStatistics() {
+    return new Promise((resolve, reject) => {
+      Promise.all([
+        // Total orders
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM orders`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Successful orders
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM orders WHERE status = 'SUCCESS'`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Pending orders
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM orders WHERE status = 'PENDING'`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Failed orders
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM orders WHERE status = 'FAILED'`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Total revenue (in rupees)
+        new Promise((res, rej) => {
+          this.db.get(`SELECT SUM(amount) as total FROM orders WHERE status = 'SUCCESS'`, [], (err, row) => {
+            if (err) rej(err);
+            else res((row?.total || 0) / 100); // Convert from paise to rupees
+          });
+        }),
+        // Total access codes
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM access_codes`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Used codes
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM access_codes WHERE used = 1`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Unused codes
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(*) as total FROM access_codes WHERE used = 0`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+        // Unique users (emails)
+        new Promise((res, rej) => {
+          this.db.get(`SELECT COUNT(DISTINCT email) as total FROM orders`, [], (err, row) => {
+            if (err) rej(err);
+            else res(row?.total || 0);
+          });
+        }),
+      ])
+        .then(([totalOrders, successfulOrders, pendingOrders, failedOrders, totalRevenue, totalCodes, usedCodes, unusedCodes, uniqueUsers]) => {
+          resolve({
+            totalOrders,
+            successfulOrders,
+            pendingOrders,
+            failedOrders,
+            totalRevenue,
+            totalCodes,
+            usedCodes,
+            unusedCodes,
+            uniqueUsers,
+          });
+        })
+        .catch(reject);
+    });
+  }
+
   close() {
     return new Promise((resolve, reject) => {
       if (this.db) {

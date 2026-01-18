@@ -751,6 +751,251 @@ app.post(
   }
 );
 
+// ==================== ADMIN ROUTES ====================
+// Secure password-based admin authentication
+// Password: RUATfela44..
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'RUATfela44..';
+
+// Hash password for secure comparison (using SHA-256)
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// Store hashed password (hash once at startup)
+const ADMIN_PASSWORD_HASH = hashPassword(ADMIN_PASSWORD);
+
+// Middleware to check admin password
+const checkAdminAuth = (req, res, next) => {
+  const providedPassword = req.headers['x-admin-password'] || req.body.password || req.query.password;
+  
+  if (!providedPassword) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Admin password required',
+    });
+  }
+
+  // Hash provided password and compare
+  const providedHash = hashPassword(providedPassword);
+  
+  // Use constant-time comparison to prevent timing attacks
+  if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
+    next();
+  } else {
+    // Log failed attempt (for security monitoring)
+    console.warn('⚠️ Failed admin login attempt from:', req.ip);
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Invalid admin password',
+    });
+  }
+};
+
+// Admin login (returns success if password is correct)
+app.post('/api/admin/login', [
+  body('password').notEmpty().withMessage('Password is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { password } = req.body;
+    const providedHash = hashPassword(password);
+    
+    // Constant-time comparison
+    if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
+      console.log('✅ Admin login successful from:', req.ip);
+      res.json({
+        success: true,
+        message: 'Login successful',
+      });
+    } else {
+      console.warn('⚠️ Failed admin login attempt from:', req.ip);
+      res.status(401).json({
+        success: false,
+        error: 'Invalid password',
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error in admin login:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all orders (admin only)
+app.get('/api/admin/orders', checkAdminAuth, async (req, res) => {
+  try {
+    const orders = await db.getAllOrders();
+    res.json({
+      success: true,
+      orders: orders,
+      count: orders.length,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching orders:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all access codes (admin only)
+app.get('/api/admin/access-codes', checkAdminAuth, async (req, res) => {
+  try {
+    const codes = await db.getAllAccessCodes();
+    res.json({
+      success: true,
+      codes: codes,
+      count: codes.length,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching access codes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete access code (admin only)
+app.delete('/api/admin/access-codes/:code', checkAdminAuth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const codeUpper = code.toUpperCase();
+    const result = await db.deleteAccessCode(codeUpper);
+    
+    if (result.deleted) {
+      console.log(`✅ Admin deleted access code: ${codeUpper} from IP: ${req.ip}`);
+      res.json({
+        success: true,
+        message: 'Access code deleted successfully',
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'Access code not found',
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error deleting access code:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete order and associated access codes (admin only)
+app.delete('/api/admin/orders/:orderId', checkAdminAuth, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const result = await db.deleteOrder(orderId);
+    
+    if (result.deleted) {
+      console.log(`✅ Admin deleted order: ${orderId} from IP: ${req.ip}`);
+      res.json({
+        success: true,
+        message: 'Order and associated access codes deleted successfully',
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error deleting order:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete user by email (all orders and access codes) (admin only)
+app.delete('/api/admin/users/:email', checkAdminAuth, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const emailLower = email.toLowerCase().trim();
+    const result = await db.deleteUserByEmail(emailLower);
+    
+    if (result.deleted) {
+      console.log(`✅ Admin deleted user data for: ${emailLower} from IP: ${req.ip}`);
+      res.json({
+        success: true,
+        message: 'User data deleted successfully',
+        deletedOrders: result.deletedOrders,
+        deletedCodes: result.deletedCodes,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error deleting user:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get statistics (admin only)
+app.get('/api/admin/statistics', checkAdminAuth, async (req, res) => {
+  try {
+    const stats = await db.getStatistics();
+    res.json({
+      success: true,
+      statistics: stats,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching statistics:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all unique users/emails (admin only)
+app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
+  try {
+    const orders = await db.getAllOrders();
+    // Get unique emails with their order counts
+    const userMap = new Map();
+    orders.forEach(order => {
+      const email = order.email.toLowerCase().trim();
+      if (!userMap.has(email)) {
+        userMap.set(email, {
+          email: email,
+          totalOrders: 0,
+          successfulOrders: 0,
+          totalSpent: 0,
+          firstOrder: order.created_at,
+          lastOrder: order.created_at,
+        });
+      }
+      const user = userMap.get(email);
+      user.totalOrders++;
+      if (order.status === 'SUCCESS') {
+        user.successfulOrders++;
+        user.totalSpent += order.amount / 100; // Convert from paise to rupees
+      }
+      if (new Date(order.created_at) < new Date(user.firstOrder)) {
+        user.firstOrder = order.created_at;
+      }
+      if (new Date(order.created_at) > new Date(user.lastOrder)) {
+        user.lastOrder = order.created_at;
+      }
+    });
+
+    const users = Array.from(userMap.values()).sort((a, b) => 
+      new Date(b.lastOrder) - new Date(a.lastOrder)
+    );
+
+    res.json({
+      success: true,
+      users: users,
+      count: users.length,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching users:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Note: Bundles and topics deletion endpoints can be added here when Firebase integration is available
+// For now, these would require Firebase Admin SDK to delete from Firebase Realtime Database
+
 // Error handling middleware (must be last)
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);

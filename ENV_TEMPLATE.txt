@@ -18,3 +18,8 @@ FRONTEND_URL=https://ruatfly.github.io/Tlangau
 BACKEND_URL=https://your-backend-url.com
 # For local development, use: http://localhost:3001
 # IMPORTANT: For webhooks to work, BACKEND_URL must be publicly accessible (use ngrok for local testing)
+
+# Admin Dashboard Configuration
+ADMIN_PASSWORD=your_secure_admin_password
+# This password is used to access the admin dashboard at /admin.html
+# IMPORTANT: Use a strong, unique password for production
