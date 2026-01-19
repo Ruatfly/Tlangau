@@ -37,6 +37,38 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Verify email configuration on startup
+async function verifyEmailConfig() {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error('❌ EMAIL CONFIGURATION MISSING!');
+    console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
+    console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
+    console.error('   ⚠️  Emails will NOT be sent until configured!');
+    console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
+    return false;
+  }
+
+  try {
+    // Test email connection
+    await transporter.verify();
+    console.log('✅ Email service verified and ready');
+    return true;
+  } catch (error) {
+    console.error('❌ EMAIL SERVICE VERIFICATION FAILED!');
+    console.error('   Error:', error.message);
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  Authentication failed - check EMAIL_USER and EMAIL_PASS');
+      console.error('   For Gmail: Use App Password, not regular password');
+    }
+    return false;
+  }
+}
+
+// Verify email on startup (non-blocking)
+verifyEmailConfig().catch(err => {
+  console.error('Error during email verification:', err);
+});
+
 // Firebase Admin SDK for managing bundles/topics
 let admin = null;
 let firebaseInitialized = false;
@@ -95,6 +127,15 @@ function generateAccessCode() {
 
 // Send email with access code
 async function sendAccessCodeEmail(email, code) {
+  // Check if email is configured
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error('❌ EMAIL ERROR: Email service not configured!');
+    console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'MISSING');
+    console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'MISSING');
+    console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
+    return false;
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -147,11 +188,42 @@ async function sendAccessCodeEmail(email, code) {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ Access code email sent to ${email}`);
+    console.log(`📧 Attempting to send access code email to: ${email}`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Access code email sent successfully to ${email}`);
+    console.log(`   Message ID: ${info.messageId}`);
     return true;
   } catch (error) {
-    console.error('❌ Error sending email:', error);
+    console.error('❌ EMAIL SENDING FAILED!');
+    console.error('   To:', email);
+    console.error('   Error Code:', error.code || 'N/A');
+    console.error('   Error Message:', error.message || 'Unknown error');
+    
+    // Provide specific error messages for common issues
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED!');
+      console.error('   This usually means:');
+      console.error('   1. Wrong email or password in EMAIL_USER/EMAIL_PASS');
+      console.error('   2. For Gmail: You need to use an App Password, not your regular password');
+      console.error('   3. 2-Step Verification must be enabled on Gmail to generate App Password');
+      console.error('   How to fix:');
+      console.error('   - Go to Google Account > Security > 2-Step Verification');
+      console.error('   - Generate an App Password for "Mail"');
+      console.error('   - Use that App Password in EMAIL_PASS');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED!');
+      console.error('   This usually means:');
+      console.error('   1. No internet connection');
+      console.error('   2. Firewall blocking SMTP connection');
+      console.error('   3. Gmail servers are unreachable');
+    } else if (error.response) {
+      console.error('   Response Code:', error.responseCode);
+      console.error('   Response:', error.response);
+    } else if (error.command) {
+      console.error('   Failed Command:', error.command);
+    }
+    
+    console.error('   Full Error:', JSON.stringify(error, null, 2));
     return false;
   }
 }
@@ -467,9 +539,21 @@ app.post('/api/payment-webhook', async (req, res) => {
             console.log('✅ Access code created:', accessCode);
 
             // Send email with access code
-            await sendAccessCodeEmail(order.email, accessCode);
+            const emailSent = await sendAccessCodeEmail(order.email, accessCode);
+            if (!emailSent) {
+              console.error('❌ CRITICAL: Failed to send access code email!');
+              console.error('   Order ID:', order.order_id);
+              console.error('   User Email:', order.email);
+              console.error('   Access Code:', accessCode);
+              console.error('   ⚠️  User will NOT receive email - manual intervention required!');
+            }
           } else {
-            console.log('ℹ️ Access code already exists for this order');
+            console.log('ℹ️ Access code already exists for this order:', existingCode.code);
+            // Try to resend email if code exists
+            const emailSent = await sendAccessCodeEmail(order.email, existingCode.code);
+            if (!emailSent) {
+              console.error('❌ Failed to resend access code email to:', order.email);
+            }
           }
         }
       }
@@ -597,7 +681,14 @@ app.post(
                   expiresAt: expiresAt,
                 });
 
-                await sendAccessCodeEmail(order.email, newAccessCode);
+                const emailSent = await sendAccessCodeEmail(order.email, newAccessCode);
+                if (!emailSent) {
+                  console.error('❌ CRITICAL: Failed to send access code email!');
+                  console.error('   Order ID:', orderId);
+                  console.error('   User Email:', order.email);
+                  console.error('   Access Code:', newAccessCode);
+                  console.error('   ⚠️  User will NOT receive email - manual intervention required!');
+                }
               }
 
               return res.json({
@@ -743,6 +834,51 @@ app.post(
     } catch (error) {
       console.error('❌ Error validating code:', error);
       res.status(500).json({ success: false, message: 'Failed to validate code: ' + error.message });
+    }
+  }
+);
+
+// Test email endpoint (for debugging)
+app.post(
+  '/api/test-email',
+  [
+    body('email').isEmail().normalizeEmail(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const { email } = req.body;
+      console.log('🧪 Testing email to:', email);
+
+      // Check configuration
+      if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        return res.status(500).json({
+          success: false,
+          message: 'Email service not configured. EMAIL_USER or EMAIL_PASS missing.',
+        });
+      }
+
+      // Test email sending
+      const testResult = await sendAccessCodeEmail(email, 'TEST123456');
+      
+      if (testResult) {
+        res.json({
+          success: true,
+          message: 'Test email sent successfully! Check your inbox.',
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to send test email. Check server logs for details.',
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error in test email:', error);
+      res.status(500).json({ success: false, message: 'Error: ' + error.message });
     }
   }
 );
@@ -901,6 +1037,60 @@ app.get('/api/admin/access-codes', checkAdminAuth, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Resend access code email (admin only)
+app.post(
+  '/api/admin/resend-email',
+  checkAdminAuth,
+  [
+    body('email').isEmail().normalizeEmail(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const { email } = req.body;
+      const emailLower = email.toLowerCase().trim();
+
+      console.log(`📧 Admin resending access code email to: ${emailLower} from IP: ${req.ip}`);
+
+      // Get the most recent access code for this email
+      const accessCode = await db.getCodeByEmail(emailLower);
+
+      if (!accessCode) {
+        return res.status(404).json({
+          success: false,
+          message: 'No access code found for this email',
+        });
+      }
+
+      // Resend email
+      const emailSent = await sendAccessCodeEmail(emailLower, accessCode.code);
+      
+      if (emailSent) {
+        res.json({
+          success: true,
+          message: 'Access code email resent successfully',
+          code: accessCode.code,
+          email: emailLower,
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to send email. Check server logs for details.',
+          code: accessCode.code, // Return code as backup
+          email: emailLower,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error resending email:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
 
 // Delete access code (admin only)
 app.delete('/api/admin/access-codes/:code', checkAdminAuth, async (req, res) => {
