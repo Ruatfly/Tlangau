@@ -648,6 +648,7 @@ app.post(
 
           if (paymentResponse.data.success) {
             payment = paymentResponse.data.payment;
+            paymentId = payment.id || payment.payment_id || paymentId; // Update paymentId from payment object
 
             // CRITICAL VERIFICATION: Verify payment status, amount, and payment_request_id
             const expectedAmount = order.amount / 100; // Convert from paise to rupees
@@ -697,7 +698,7 @@ app.post(
               // Update order status
               await db.updateOrder(orderId, {
                 status: 'SUCCESS',
-                payment_id: payment.id,
+                payment_id: paymentId,
               });
 
               // Check if access code exists, if not generate one
@@ -798,6 +799,120 @@ app.post(
 
       // If we found a payment, verify and process it
       if (payment) {
+        try {
+          // CRITICAL VERIFICATION: Verify payment status, amount, and payment_request_id
+          const expectedAmount = order.amount / 100; // Convert from paise to rupees
+          const paymentAmount = parseFloat(payment.amount);
+          const paymentStatus = payment.status;
+          const paymentRequestId = payment.payment_request?.id || payment.payment_request_id;
+
+          console.log('🔍 Payment verification (via payment_request_id):', {
+            paymentStatus,
+            expectedAmount,
+            paymentAmount,
+            paymentRequestId,
+            orderPaymentRequestId: order.payment_request_id,
+          });
+
+          // Verify payment status is 'Credit'
+          if (paymentStatus === 'Credit') {
+            // Verify amount matches
+            if (Math.abs(paymentAmount - expectedAmount) > 0.01) {
+              console.error('❌ Amount mismatch:', {
+                expected: expectedAmount,
+                received: paymentAmount,
+              });
+              return res.json({
+                success: false,
+                paymentStatus: 'FAILED',
+                message: 'Payment amount mismatch',
+              });
+            }
+
+            // Verify payment_request_id matches
+            if (paymentRequestId && order.payment_request_id && paymentRequestId !== order.payment_request_id) {
+              console.error('❌ Payment request ID mismatch:', {
+                expected: order.payment_request_id,
+                received: paymentRequestId,
+              });
+              return res.json({
+                success: false,
+                paymentStatus: 'FAILED',
+                message: 'Payment request ID mismatch',
+              });
+            }
+
+            // All verifications passed - Payment is successful
+            console.log('✅ Payment verification passed - all checks successful');
+            
+            // Update order status
+            await db.updateOrder(orderId, {
+              status: 'SUCCESS',
+              payment_id: paymentId,
+            });
+
+            // Check if access code exists, if not generate one
+            const existingCode = await db.getCodeByOrderId(orderId);
+            let accessCodeToSend = null;
+            
+            if (!existingCode) {
+              const newAccessCode = generateAccessCode();
+              const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+              await db.createAccessCode({
+                code: newAccessCode,
+                email: order.email,
+                orderId: orderId,
+                paymentId: paymentId,
+                used: false,
+                expiresAt: expiresAt,
+              });
+
+              console.log('✅ Access code created:', newAccessCode);
+              accessCodeToSend = newAccessCode;
+            } else {
+              console.log('ℹ️ Access code already exists for this order:', existingCode.code);
+              accessCodeToSend = existingCode.code;
+            }
+
+            // ALWAYS send email with access code (critical step)
+            if (accessCodeToSend) {
+              console.log('📧 Sending access code email to:', order.email);
+              const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend);
+              if (emailSent) {
+                console.log('✅ Access code email sent successfully to:', order.email);
+              } else {
+                console.error('❌ CRITICAL: Failed to send access code email after all retries!');
+                console.error('   Order ID:', orderId);
+                console.error('   User Email:', order.email);
+                console.error('   Access Code:', accessCodeToSend);
+                console.error('   ⚠️  User will NOT receive email - manual intervention required!');
+                console.error('   ⚠️  Please check EMAIL_USER and EMAIL_PASS configuration!');
+              }
+            } else {
+              console.error('❌ CRITICAL: No access code to send!');
+            }
+
+            return res.json({
+              success: true,
+              paymentStatus: 'SUCCESS',
+              message: 'Payment verified successfully',
+            });
+          } else if (paymentStatus === 'Failed') {
+            await db.updateOrder(orderId, {
+              status: 'FAILED',
+              payment_id: paymentId,
+            });
+            return res.json({
+              success: true,
+              paymentStatus: 'FAILED',
+              message: 'Payment failed',
+            });
+          }
+        } catch (error) {
+          console.error('❌ Error processing payment:', error.response?.data || error.message);
+        }
+      }
 
       // Return current order status
       res.json({
