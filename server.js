@@ -28,16 +28,26 @@ db.init().catch(err => {
   process.exit(1);
 });
 
-// Initialize email transporter
+// Initialize email transporter with timeout and connection options
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  // Add connection timeout and retry options
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000, // 10 seconds
+  socketTimeout: 10000, // 10 seconds
+  // Use secure connection
+  secure: true,
+  // Pool connections for better performance
+  pool: true,
+  maxConnections: 1,
+  maxMessages: 3,
 });
 
-// Verify email configuration on startup
+// Verify email configuration on startup (non-blocking, with timeout)
 async function verifyEmailConfig() {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error('❌ EMAIL CONFIGURATION MISSING!');
@@ -49,24 +59,37 @@ async function verifyEmailConfig() {
   }
 
   try {
-    // Test email connection
-    await transporter.verify();
+    // Test email connection with timeout
+    console.log('📧 Verifying email service connection...');
+    await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Verification timeout after 8 seconds')), 8000)
+      )
+    ]);
     console.log('✅ Email service verified and ready');
     return true;
   } catch (error) {
-    console.error('❌ EMAIL SERVICE VERIFICATION FAILED!');
+    console.error('⚠️ EMAIL SERVICE VERIFICATION FAILED (non-critical)!');
     console.error('   Error:', error.message);
+    console.error('   ⚠️  This is often due to network/firewall restrictions in server environments');
+    console.error('   ⚠️  Emails will still be sent when needed, but verification failed');
     if (error.code === 'EAUTH') {
       console.error('   ⚠️  Authentication failed - check EMAIL_USER and EMAIL_PASS');
       console.error('   For Gmail: Use App Password, not regular password');
+    } else if (error.message.includes('timeout')) {
+      console.error('   ⚠️  Connection timeout - this is common in server environments');
+      console.error('   ⚠️  Emails will still attempt to send when payment is successful');
     }
-    return false;
+    // Don't return false - allow emails to still be sent
+    return true; // Return true so server continues
   }
 }
 
-// Verify email on startup (non-blocking)
+// Verify email on startup (non-blocking, don't fail if it times out)
 verifyEmailConfig().catch(err => {
-  console.error('Error during email verification:', err);
+  console.error('⚠️ Email verification error (non-critical):', err.message);
+  console.error('   Server will continue - emails will be sent when needed');
 });
 
 // Firebase Admin SDK for managing bundles/topics
@@ -191,7 +214,13 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`📧 Attempting to send access code email to: ${email} (Attempt ${attempt}/${retries})`);
-      const info = await transporter.sendMail(mailOptions);
+      // Add timeout to email sending (30 seconds per attempt)
+      const info = await Promise.race([
+        transporter.sendMail(mailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
+        )
+      ]);
       console.log(`✅ Access code email sent successfully to ${email}`);
       console.log(`   Message ID: ${info.messageId}`);
       return true;
@@ -214,12 +243,13 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
         console.error('   - Use that App Password in EMAIL_PASS');
         // Don't retry on auth errors
         return false;
-      } else if (error.code === 'ECONNECTION') {
-        console.error('   ⚠️  CONNECTION FAILED!');
+      } else if (error.code === 'ECONNECTION' || error.message.includes('timeout')) {
+        console.error('   ⚠️  CONNECTION FAILED OR TIMEOUT!');
         console.error('   This usually means:');
-        console.error('   1. No internet connection');
-        console.error('   2. Firewall blocking SMTP connection');
-        console.error('   3. Gmail servers are unreachable');
+        console.error('   1. Network/firewall blocking SMTP connection (common in server environments)');
+        console.error('   2. Gmail servers are temporarily unreachable');
+        console.error('   3. Connection timeout due to network restrictions');
+        console.error('   ⚠️  Will retry...');
       } else if (error.response) {
         console.error('   Response Code:', error.responseCode);
         console.error('   Response:', error.response);
