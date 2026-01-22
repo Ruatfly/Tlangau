@@ -125,8 +125,8 @@ function generateAccessCode() {
   return code;
 }
 
-// Send email with access code
-async function sendAccessCodeEmail(email, code) {
+// Send email with access code (with retry logic)
+async function sendAccessCodeEmail(email, code, retries = 3) {
   // Check if email is configured
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error('❌ EMAIL ERROR: Email service not configured!');
@@ -187,45 +187,60 @@ async function sendAccessCodeEmail(email, code) {
     `,
   };
 
-  try {
-    console.log(`📧 Attempting to send access code email to: ${email}`);
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Access code email sent successfully to ${email}`);
-    console.log(`   Message ID: ${info.messageId}`);
-    return true;
-  } catch (error) {
-    console.error('❌ EMAIL SENDING FAILED!');
-    console.error('   To:', email);
-    console.error('   Error Code:', error.code || 'N/A');
-    console.error('   Error Message:', error.message || 'Unknown error');
-    
-    // Provide specific error messages for common issues
-    if (error.code === 'EAUTH') {
-      console.error('   ⚠️  AUTHENTICATION FAILED!');
-      console.error('   This usually means:');
-      console.error('   1. Wrong email or password in EMAIL_USER/EMAIL_PASS');
-      console.error('   2. For Gmail: You need to use an App Password, not your regular password');
-      console.error('   3. 2-Step Verification must be enabled on Gmail to generate App Password');
-      console.error('   How to fix:');
-      console.error('   - Go to Google Account > Security > 2-Step Verification');
-      console.error('   - Generate an App Password for "Mail"');
-      console.error('   - Use that App Password in EMAIL_PASS');
-    } else if (error.code === 'ECONNECTION') {
-      console.error('   ⚠️  CONNECTION FAILED!');
-      console.error('   This usually means:');
-      console.error('   1. No internet connection');
-      console.error('   2. Firewall blocking SMTP connection');
-      console.error('   3. Gmail servers are unreachable');
-    } else if (error.response) {
-      console.error('   Response Code:', error.responseCode);
-      console.error('   Response:', error.response);
-    } else if (error.command) {
-      console.error('   Failed Command:', error.command);
+  // Retry logic
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`📧 Attempting to send access code email to: ${email} (Attempt ${attempt}/${retries})`);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`✅ Access code email sent successfully to ${email}`);
+      console.log(`   Message ID: ${info.messageId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ EMAIL SENDING FAILED (Attempt ${attempt}/${retries})!`);
+      console.error('   To:', email);
+      console.error('   Error Code:', error.code || 'N/A');
+      console.error('   Error Message:', error.message || 'Unknown error');
+      
+      // Provide specific error messages for common issues
+      if (error.code === 'EAUTH') {
+        console.error('   ⚠️  AUTHENTICATION FAILED!');
+        console.error('   This usually means:');
+        console.error('   1. Wrong email or password in EMAIL_USER/EMAIL_PASS');
+        console.error('   2. For Gmail: You need to use an App Password, not your regular password');
+        console.error('   3. 2-Step Verification must be enabled on Gmail to generate App Password');
+        console.error('   How to fix:');
+        console.error('   - Go to Google Account > Security > 2-Step Verification');
+        console.error('   - Generate an App Password for "Mail"');
+        console.error('   - Use that App Password in EMAIL_PASS');
+        // Don't retry on auth errors
+        return false;
+      } else if (error.code === 'ECONNECTION') {
+        console.error('   ⚠️  CONNECTION FAILED!');
+        console.error('   This usually means:');
+        console.error('   1. No internet connection');
+        console.error('   2. Firewall blocking SMTP connection');
+        console.error('   3. Gmail servers are unreachable');
+      } else if (error.response) {
+        console.error('   Response Code:', error.responseCode);
+        console.error('   Response:', error.response);
+      } else if (error.command) {
+        console.error('   Failed Command:', error.command);
+      }
+      
+      // If this is not the last attempt, wait before retrying
+      if (attempt < retries) {
+        const waitTime = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
+        console.log(`   ⏳ Waiting ${waitTime/1000}s before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        // Last attempt failed
+        console.error('   Full Error:', JSON.stringify(error, null, 2));
+        console.error('   ❌ All retry attempts failed. Email was NOT sent.');
+      }
     }
-    
-    console.error('   Full Error:', JSON.stringify(error, null, 2));
-    return false;
   }
+  
+  return false;
 }
 
 // Instamojo API configuration
@@ -521,6 +536,8 @@ app.post('/api/payment-webhook', async (req, res) => {
 
           // Check if access code already exists for this order
           const existingCode = await db.getCodeByOrderId(order.order_id);
+          let accessCodeToSend = null;
+          
           if (!existingCode) {
             // Generate access code
             const accessCode = generateAccessCode();
@@ -537,23 +554,28 @@ app.post('/api/payment-webhook', async (req, res) => {
             });
 
             console.log('✅ Access code created:', accessCode);
-
-            // Send email with access code
-            const emailSent = await sendAccessCodeEmail(order.email, accessCode);
-            if (!emailSent) {
-              console.error('❌ CRITICAL: Failed to send access code email!');
-              console.error('   Order ID:', order.order_id);
-              console.error('   User Email:', order.email);
-              console.error('   Access Code:', accessCode);
-              console.error('   ⚠️  User will NOT receive email - manual intervention required!');
-            }
+            accessCodeToSend = accessCode;
           } else {
             console.log('ℹ️ Access code already exists for this order:', existingCode.code);
-            // Try to resend email if code exists
-            const emailSent = await sendAccessCodeEmail(order.email, existingCode.code);
-            if (!emailSent) {
-              console.error('❌ Failed to resend access code email to:', order.email);
+            accessCodeToSend = existingCode.code;
+          }
+
+          // ALWAYS send email with access code (critical step)
+          if (accessCodeToSend) {
+            console.log('📧 Sending access code email to:', order.email);
+            const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend);
+            if (emailSent) {
+              console.log('✅ Access code email sent successfully to:', order.email);
+            } else {
+              console.error('❌ CRITICAL: Failed to send access code email after all retries!');
+              console.error('   Order ID:', order.order_id);
+              console.error('   User Email:', order.email);
+              console.error('   Access Code:', accessCodeToSend);
+              console.error('   ⚠️  User will NOT receive email - manual intervention required!');
+              console.error('   ⚠️  Please check EMAIL_USER and EMAIL_PASS configuration!');
             }
+          } else {
+            console.error('❌ CRITICAL: No access code to send!');
           }
         }
       }
@@ -592,6 +614,13 @@ app.post(
 
       // If order is already successful, return immediately
       if (order.status === 'SUCCESS') {
+        // But still check if email needs to be sent (in case it failed before)
+        const existingCode = await db.getCodeByOrderId(orderId);
+        if (existingCode) {
+          // Try to resend email if code exists but email might have failed
+          console.log('ℹ️ Order already successful, checking if email needs to be resent...');
+          // Note: We don't resend automatically here to avoid spam, but the code exists
+        }
         return res.json({
           success: true,
           paymentStatus: 'SUCCESS',
@@ -599,11 +628,16 @@ app.post(
         });
       }
 
-      // Check payment status with Instamojo using payment_id if available
-      if (order.payment_id) {
+      // Check payment status with Instamojo
+      // First try using payment_id if available
+      // Otherwise, try using payment_request_id to find payments
+      let payment = null;
+      let paymentId = order.payment_id;
+
+      if (paymentId) {
         try {
           const paymentResponse = await axios.get(
-            `${INSTAMOJO_API_BASE}/payments/${order.payment_id}/`,
+            `${INSTAMOJO_API_BASE}/payments/${paymentId}/`,
             {
               headers: {
                 'X-Api-Key': INSTAMOJO_API_KEY,
@@ -613,7 +647,7 @@ app.post(
           );
 
           if (paymentResponse.data.success) {
-            const payment = paymentResponse.data.payment;
+            payment = paymentResponse.data.payment;
 
             // CRITICAL VERIFICATION: Verify payment status, amount, and payment_request_id
             const expectedAmount = order.amount / 100; // Convert from paise to rupees
@@ -667,8 +701,10 @@ app.post(
               });
 
               // Check if access code exists, if not generate one
-              const accessCode = await db.getCodeByOrderId(orderId);
-              if (!accessCode) {
+              const existingCode = await db.getCodeByOrderId(orderId);
+              let accessCodeToSend = null;
+              
+              if (!existingCode) {
                 const newAccessCode = generateAccessCode();
                 const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -676,19 +712,34 @@ app.post(
                   code: newAccessCode,
                   email: order.email,
                   orderId: orderId,
-                  paymentId: payment.id,
+                  paymentId: paymentId,
                   used: false,
                   expiresAt: expiresAt,
                 });
 
-                const emailSent = await sendAccessCodeEmail(order.email, newAccessCode);
-                if (!emailSent) {
-                  console.error('❌ CRITICAL: Failed to send access code email!');
+                console.log('✅ Access code created:', newAccessCode);
+                accessCodeToSend = newAccessCode;
+              } else {
+                console.log('ℹ️ Access code already exists for this order:', existingCode.code);
+                accessCodeToSend = existingCode.code;
+              }
+
+              // ALWAYS send email with access code (critical step)
+              if (accessCodeToSend) {
+                console.log('📧 Sending access code email to:', order.email);
+                const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend);
+                if (emailSent) {
+                  console.log('✅ Access code email sent successfully to:', order.email);
+                } else {
+                  console.error('❌ CRITICAL: Failed to send access code email after all retries!');
                   console.error('   Order ID:', orderId);
                   console.error('   User Email:', order.email);
-                  console.error('   Access Code:', newAccessCode);
+                  console.error('   Access Code:', accessCodeToSend);
                   console.error('   ⚠️  User will NOT receive email - manual intervention required!');
+                  console.error('   ⚠️  Please check EMAIL_USER and EMAIL_PASS configuration!');
                 }
+              } else {
+                console.error('❌ CRITICAL: No access code to send!');
               }
 
               return res.json({
@@ -699,7 +750,7 @@ app.post(
             } else if (paymentStatus === 'Failed') {
               await db.updateOrder(orderId, {
                 status: 'FAILED',
-                payment_id: payment.id,
+                payment_id: paymentId,
               });
               return res.json({
                 success: true,
@@ -709,9 +760,44 @@ app.post(
             }
           }
         } catch (error) {
-          console.error('❌ Error checking Instamojo payment status:', error.response?.data || error.message);
+          console.error('❌ Error checking Instamojo payment by payment_id:', error.response?.data || error.message);
         }
       }
+
+      // If payment not found by payment_id, try to find it using payment_request_id
+      if (!payment && order.payment_request_id) {
+        try {
+          console.log('🔍 Payment not found by payment_id, trying payment_request_id:', order.payment_request_id);
+          const paymentRequestResponse = await axios.get(
+            `${INSTAMOJO_API_BASE}/payment-requests/${order.payment_request_id}/`,
+            {
+              headers: {
+                'X-Api-Key': INSTAMOJO_API_KEY,
+                'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+              },
+            }
+          );
+
+          if (paymentRequestResponse.data.success) {
+            const paymentRequest = paymentRequestResponse.data.payment_request;
+            // Check if there are any successful payments
+            if (paymentRequest.payments && paymentRequest.payments.length > 0) {
+              // Find the first successful payment
+              const successfulPayment = paymentRequest.payments.find(p => p.status === 'Credit');
+              if (successfulPayment) {
+                payment = successfulPayment;
+                paymentId = successfulPayment.payment_id || successfulPayment.id;
+                console.log('✅ Found successful payment via payment_request_id:', paymentId);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error checking Instamojo payment_request:', error.response?.data || error.message);
+        }
+      }
+
+      // If we found a payment, verify and process it
+      if (payment) {
 
       // Return current order status
       res.json({
