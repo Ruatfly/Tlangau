@@ -28,61 +28,106 @@ db.init().catch(err => {
   process.exit(1);
 });
 
-// Initialize email transporter with timeout and connection options
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  // Add connection timeout and retry options
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000, // 10 seconds
-  socketTimeout: 10000, // 10 seconds
-  // Use secure connection
-  secure: true,
-  // Pool connections for better performance
-  pool: true,
-  maxConnections: 1,
-  maxMessages: 3,
-});
+// Email service configuration
+// Supports Gmail SMTP, SendGrid API, and Brevo SMTP
+const EMAIL_SERVICE = process.env.EMAIL_SERVICE || 'gmail'; // 'gmail', 'sendgrid', or 'brevo'
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+
+// Initialize email transporter
+let transporter = null;
+
+if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
+  // Use SendGrid (API)
+  const sgMail = require('@sendgrid/mail');
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  transporter = {
+    type: 'sendgrid',
+    client: sgMail,
+  };
+  console.log('📧 Using SendGrid for email delivery');
+} else if (EMAIL_SERVICE === 'brevo') {
+  // Use Brevo (SMTP)
+  // Host: smtp-relay.brevo.com
+  // Port: 587
+  transporter = nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER, // Brevo login email
+      pass: process.env.EMAIL_PASS, // Brevo SMTP Key (NOT login password)
+    },
+  });
+  console.log('📧 Using Brevo (Sendinblue) for email delivery');
+} else {
+  // Use Gmail SMTP (fallback)
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    // Add connection timeout and retry options
+    connectionTimeout: 10000, 
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    secure: true,
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3,
+  });
+  console.log('📧 Using Gmail SMTP for email delivery');
+}
 
 // Verify email configuration on startup (non-blocking, with timeout)
 async function verifyEmailConfig() {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error('❌ EMAIL CONFIGURATION MISSING!');
-    console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
-    console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
-    console.error('   ⚠️  Emails will NOT be sent until configured!');
-    console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
-    return false;
-  }
-
-  try {
-    // Test email connection with timeout
-    console.log('📧 Verifying email service connection...');
-    await Promise.race([
-      transporter.verify(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Verification timeout after 8 seconds')), 8000)
-      )
-    ]);
-    console.log('✅ Email service verified and ready');
-    return true;
-  } catch (error) {
-    console.error('⚠️ EMAIL SERVICE VERIFICATION FAILED (non-critical)!');
-    console.error('   Error:', error.message);
-    console.error('   ⚠️  This is often due to network/firewall restrictions in server environments');
-    console.error('   ⚠️  Emails will still be sent when needed, but verification failed');
-    if (error.code === 'EAUTH') {
-      console.error('   ⚠️  Authentication failed - check EMAIL_USER and EMAIL_PASS');
-      console.error('   For Gmail: Use App Password, not regular password');
-    } else if (error.message.includes('timeout')) {
-      console.error('   ⚠️  Connection timeout - this is common in server environments');
-      console.error('   ⚠️  Emails will still attempt to send when payment is successful');
+  if (EMAIL_SERVICE === 'sendgrid') {
+    if (!SENDGRID_API_KEY) {
+      console.error('❌ EMAIL CONFIGURATION MISSING!');
+      console.error('   SENDGRID_API_KEY:', SENDGRID_API_KEY ? 'Set' : 'NOT SET');
+      console.error('   ⚠️  Emails will NOT be sent until configured!');
+      console.error('   Please set SENDGRID_API_KEY in your environment variables');
+      return false;
     }
-    // Don't return false - allow emails to still be sent
-    return true; // Return true so server continues
+    console.log('✅ SendGrid email service configured (no verification needed)');
+    return true;
+  } else {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('❌ EMAIL CONFIGURATION MISSING!');
+      console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
+      console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
+      console.error('   ⚠️  Emails will NOT be sent until configured!');
+      console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
+      return false;
+    }
+
+    try {
+      // Test email connection with timeout (only for Gmail)
+      console.log('📧 Verifying Gmail SMTP connection...');
+      await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Verification timeout after 8 seconds')), 8000)
+        )
+      ]);
+      console.log('✅ Email service verified and ready');
+      return true;
+    } catch (error) {
+      console.error('⚠️ EMAIL SERVICE VERIFICATION FAILED (non-critical)!');
+      console.error('   Error:', error.message);
+      console.error('   ⚠️  This is often due to network/firewall restrictions in server environments');
+      console.error('   ⚠️  Consider switching to SendGrid (EMAIL_SERVICE=sendgrid) for better reliability');
+      console.error('   ⚠️  Emails will still be sent when needed, but verification failed');
+      if (error.code === 'EAUTH') {
+        console.error('   ⚠️  Authentication failed - check EMAIL_USER and EMAIL_PASS');
+        console.error('   For Gmail: Use App Password, not regular password');
+      } else if (error.message.includes('timeout')) {
+        console.error('   ⚠️  Connection timeout - this is common in server environments');
+        console.error('   ⚠️  Recommendation: Use SendGrid instead (set EMAIL_SERVICE=sendgrid)');
+      }
+      // Don't return false - allow emails to still be sent
+      return true; // Return true so server continues
+    }
   }
 }
 
@@ -151,12 +196,21 @@ function generateAccessCode() {
 // Send email with access code (with retry logic)
 async function sendAccessCodeEmail(email, code, retries = 3) {
   // Check if email is configured
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error('❌ EMAIL ERROR: Email service not configured!');
-    console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'MISSING');
-    console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'MISSING');
-    console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
-    return false;
+  if (EMAIL_SERVICE === 'sendgrid') {
+    if (!SENDGRID_API_KEY) {
+      console.error('❌ EMAIL ERROR: SendGrid API key not configured!');
+      console.error('   SENDGRID_API_KEY:', SENDGRID_API_KEY ? 'Set' : 'MISSING');
+      console.error('   Please set SENDGRID_API_KEY in your environment variables');
+      return false;
+    }
+  } else {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('❌ EMAIL ERROR: Email service not configured!');
+      console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'MISSING');
+      console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'MISSING');
+      console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
+      return false;
+    }
   }
 
   const mailOptions = {
@@ -214,16 +268,38 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`📧 Attempting to send access code email to: ${email} (Attempt ${attempt}/${retries})`);
-      // Add timeout to email sending (30 seconds per attempt)
-      const info = await Promise.race([
-        transporter.sendMail(mailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
-        )
-      ]);
-      console.log(`✅ Access code email sent successfully to ${email}`);
-      console.log(`   Message ID: ${info.messageId}`);
-      return true;
+      
+      let result;
+      if (EMAIL_SERVICE === 'sendgrid' && transporter && transporter.type === 'sendgrid') {
+        // Use SendGrid API
+        const msg = {
+          to: email,
+          from: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@tlangau.com',
+          subject: 'Your Tlangau Server Access Code',
+          html: mailOptions.html,
+        };
+        
+        result = await Promise.race([
+          transporter.client.send(msg),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
+          )
+        ]);
+        console.log(`✅ Access code email sent successfully to ${email} via SendGrid`);
+        console.log(`   Status Code: ${result[0]?.statusCode || 'N/A'}`);
+        return true;
+      } else {
+        // Use Gmail SMTP
+        const info = await Promise.race([
+          transporter.sendMail(mailOptions),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
+          )
+        ]);
+        console.log(`✅ Access code email sent successfully to ${email}`);
+        console.log(`   Message ID: ${info.messageId}`);
+        return true;
+      }
     } catch (error) {
       console.error(`❌ EMAIL SENDING FAILED (Attempt ${attempt}/${retries})!`);
       console.error('   To:', email);

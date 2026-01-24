@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: tlangau-server-portal
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: EMAIL_SERVICE
+        value: brevo
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: INSTAMOJO_API_KEY
+        sync: false
+      - key: INSTAMOJO_AUTH_TOKEN
+        sync: false
+      - key: INSTAMOJO_ENV
+        value: test
