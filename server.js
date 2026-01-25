@@ -163,6 +163,13 @@ async function verifyEmailConfig() {
   }
 }
 
+// Check Firebase on startup
+setTimeout(() => {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH && !require('fs').existsSync(path.join(__dirname, 'service-account-key.json'))) {
+    console.warn('⚠️  FIREBASE WARNING: No service account found. Database will NOT work!');
+  }
+}, 3000);
+
 // Verify email on startup (non-blocking, don't fail if it times out)
 verifyEmailConfig().catch(err => {
   console.error('⚠️ Email verification error (non-critical):', err.message);
@@ -173,47 +180,19 @@ verifyEmailConfig().catch(err => {
 let admin = null;
 let firebaseInitialized = false;
 
-try {
-  admin = require('firebase-admin');
-
-  // Try to initialize Firebase Admin
-  // Option 1: Service account file path from environment
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'service-account-key.json');
-
-  // Option 2: Service account JSON from environment variable
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (serviceAccountJson) {
-    // Parse JSON from environment variable
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://tlangau-123-default-rtdb.asia-southeast1.firebasedatabase.app',
-    });
+// Helper to check if Firebase is ready (initialized by db.init())
+function checkFirebaseReady() {
+  if (db.admin) {
+    admin = db.admin;
     firebaseInitialized = true;
-    console.log('✅ Firebase Admin initialized from environment variable');
-  } else {
-    // Try to load from file
-    const fs = require('fs');
-    if (fs.existsSync(serviceAccountPath)) {
-      const serviceAccount = require(serviceAccountPath);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://tlangau-123-default-rtdb.asia-southeast1.firebasedatabase.app',
-      });
-      firebaseInitialized = true;
-      console.log('✅ Firebase Admin initialized from file');
-    } else {
-      console.log('⚠️ Firebase Admin not initialized: Service account file not found');
-      console.log('   Expected path:', serviceAccountPath);
-      console.log('   Bundle/topic management will not be available');
-      console.log('   To enable: Set FIREBASE_SERVICE_ACCOUNT_JSON or place service-account-key.json in tlangau-web directory');
-    }
+    // console.log('✅ Firebase Admin usage confirmed via Database class');
+    return true;
   }
-} catch (error) {
-  console.error('❌ Firebase Admin initialization failed:', error.message);
-  console.log('⚠️ Bundle/topic management will not be available');
+  return false;
 }
+
+// Check immediately (DB init runs async but fast typically)
+setTimeout(checkFirebaseReady, 2000);
 
 // Generate random access code
 function generateAccessCode() {
@@ -1582,6 +1561,7 @@ app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
 // Get all bundles and topics from Firebase
 app.get('/api/admin/bundles', checkAdminAuth, async (req, res) => {
   try {
+    checkFirebaseReady();
     if (!firebaseInitialized || !admin) {
       return res.status(503).json({
         success: false,
