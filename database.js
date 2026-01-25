@@ -85,7 +85,11 @@ class Database {
 
   async getOrder(order_id) {
     const snapshot = await this.db.ref(`orders/${order_id}`).once('value');
-    return snapshot.val();
+    const order = snapshot.val();
+    if (order && !order.order_id && order.orderId) {
+      order.order_id = order.orderId;
+    }
+    return order;
   }
 
   async updateOrder(order_id, updates) {
@@ -110,7 +114,11 @@ class Database {
 
     const data = snapshot.val();
     if (!data) return null;
-    return Object.values(data)[0];
+    const order = Object.values(data)[0];
+    if (order && !order.order_id && order.orderId) {
+      order.order_id = order.orderId;
+    }
+    return order;
   }
 
   async getOrderByEmail(email) {
@@ -124,7 +132,11 @@ class Database {
 
     const orders = Object.values(data);
     orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    return orders[0];
+    const order = orders[0];
+    if (order && !order.order_id && order.orderId) {
+      order.order_id = order.orderId;
+    }
+    return order;
   }
 
   // ==================== ACCESS CODE METHODS ====================

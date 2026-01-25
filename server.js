@@ -134,8 +134,8 @@ async function verifyEmailConfig() {
     }
 
     try {
-      // Test email connection with timeout (only for Gmail)
-      console.log('📧 Verifying Gmail SMTP connection...');
+      // Test email connection with timeout
+      console.log(`📧 Verifying ${EMAIL_SERVICE} SMTP connection...`);
       await Promise.race([
         transporter.verify(),
         new Promise((_, reject) =>
