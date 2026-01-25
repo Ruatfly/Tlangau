@@ -133,6 +133,13 @@ async function verifyEmailConfig() {
       return false;
     }
 
+    // DIAGNOSTIC LOG (Masked)
+    console.log('--- EMAIL DIAGNOSTIC ---');
+    console.log('User:', process.env.EMAIL_USER);
+    console.log('Pass Prefix:', process.env.EMAIL_PASS.substring(0, 12) + '...');
+    console.log('Service:', EMAIL_SERVICE);
+    console.log('------------------------');
+
     try {
       // Test email connection with timeout
       console.log(`📧 Verifying ${EMAIL_SERVICE} SMTP connection...`);
