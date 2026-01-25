@@ -14,7 +14,39 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+// Define allowed origins
+const allowedOrigins = [
+  'https://ruatfly.github.io',
+  'https://tlangau-server-portal.onrender.com',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
+// Configure CORS
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Check if origin is allowed
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.github.io') || origin.includes('railway.app')) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true,
+  optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -68,7 +100,7 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
       pass: process.env.EMAIL_PASS,
     },
     // Add connection timeout and retry options
-    connectionTimeout: 10000, 
+    connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 10000,
     secure: true,
@@ -106,7 +138,7 @@ async function verifyEmailConfig() {
       console.log('📧 Verifying Gmail SMTP connection...');
       await Promise.race([
         transporter.verify(),
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Verification timeout after 8 seconds')), 8000)
         )
       ]);
@@ -143,14 +175,14 @@ let firebaseInitialized = false;
 
 try {
   admin = require('firebase-admin');
-  
+
   // Try to initialize Firebase Admin
   // Option 1: Service account file path from environment
   const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'service-account-key.json');
-  
+
   // Option 2: Service account JSON from environment variable
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  
+
   if (serviceAccountJson) {
     // Parse JSON from environment variable
     const serviceAccount = JSON.parse(serviceAccountJson);
@@ -268,7 +300,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`📧 Attempting to send access code email to: ${email} (Attempt ${attempt}/${retries})`);
-      
+
       let result;
       if (EMAIL_SERVICE === 'sendgrid' && transporter && transporter.type === 'sendgrid') {
         // Use SendGrid API
@@ -278,10 +310,10 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
           subject: 'Your Tlangau Server Access Code',
           html: mailOptions.html,
         };
-        
+
         result = await Promise.race([
           transporter.client.send(msg),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
           )
         ]);
@@ -292,7 +324,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
         // Use Gmail SMTP
         const info = await Promise.race([
           transporter.sendMail(mailOptions),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
           )
         ]);
@@ -305,7 +337,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
       console.error('   To:', email);
       console.error('   Error Code:', error.code || 'N/A');
       console.error('   Error Message:', error.message || 'Unknown error');
-      
+
       // Provide specific error messages for common issues
       if (error.code === 'EAUTH') {
         console.error('   ⚠️  AUTHENTICATION FAILED!');
@@ -332,11 +364,11 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
       } else if (error.command) {
         console.error('   Failed Command:', error.command);
       }
-      
+
       // If this is not the last attempt, wait before retrying
       if (attempt < retries) {
         const waitTime = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
-        console.log(`   ⏳ Waiting ${waitTime/1000}s before retry...`);
+        console.log(`   ⏳ Waiting ${waitTime / 1000}s before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
         // Last attempt failed
@@ -345,7 +377,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
       }
     }
   }
-  
+
   return false;
 }
 
@@ -389,8 +421,8 @@ app.post(
       if (!errors.isEmpty()) {
         console.error('❌ Validation errors:', JSON.stringify(errors.array(), null, 2));
         console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           error: 'Validation failed',
           errors: errors.array(),
           message: errors.array()[0]?.msg || 'Invalid request data',
@@ -476,11 +508,11 @@ app.post(
         console.error('❌ Full error:', JSON.stringify(error.response?.data || error.message, null, 2));
         // Update order status to failed
         await db.updateOrder(orderId, { status: 'FAILED' });
-        
+
         // Extract error message from Instamojo response
         let errorMessage = 'Failed to create payment link';
         const instamojoError = error.response?.data;
-        
+
         if (instamojoError) {
           // Instamojo returns errors in different formats
           if (instamojoError.message && typeof instamojoError.message === 'object') {
@@ -491,8 +523,8 @@ app.post(
           } else if (instamojoError.message && typeof instamojoError.message === 'string') {
             errorMessage = instamojoError.message;
           } else if (instamojoError.error) {
-            errorMessage = typeof instamojoError.error === 'string' 
-              ? instamojoError.error 
+            errorMessage = typeof instamojoError.error === 'string'
+              ? instamojoError.error
               : JSON.stringify(instamojoError.error);
           } else if (instamojoError.success === false && instamojoError.message) {
             errorMessage = typeof instamojoError.message === 'string'
@@ -502,7 +534,7 @@ app.post(
         } else {
           errorMessage = error.message || 'Failed to create payment link';
         }
-        
+
         res.status(error.response?.status || 500).json({
           success: false,
           error: errorMessage,
@@ -614,9 +646,9 @@ app.post('/api/payment-webhook', async (req, res) => {
               expected: expectedAmount,
               received: paymentAmount,
             });
-            return res.status(400).json({ 
-              success: false, 
-              message: 'Payment amount mismatch' 
+            return res.status(400).json({
+              success: false,
+              message: 'Payment amount mismatch'
             });
           }
 
@@ -626,15 +658,15 @@ app.post('/api/payment-webhook', async (req, res) => {
               expected: order.payment_request_id,
               received: paymentRequestId,
             });
-            return res.status(400).json({ 
-              success: false, 
-              message: 'Payment request ID mismatch' 
+            return res.status(400).json({
+              success: false,
+              message: 'Payment request ID mismatch'
             });
           }
 
           // All verifications passed - Payment is successful
           console.log('✅ Payment verification passed - all checks successful');
-          
+
           await db.updateOrder(order.order_id, {
             status: 'SUCCESS',
             payment_id: payment_id,
@@ -643,7 +675,7 @@ app.post('/api/payment-webhook', async (req, res) => {
           // Check if access code already exists for this order
           const existingCode = await db.getCodeByOrderId(order.order_id);
           let accessCodeToSend = null;
-          
+
           if (!existingCode) {
             // Generate access code
             const accessCode = generateAccessCode();
@@ -800,7 +832,7 @@ app.post(
 
               // All verifications passed - Payment is successful
               console.log('✅ Payment verification passed - all checks successful');
-              
+
               // Update order status
               await db.updateOrder(orderId, {
                 status: 'SUCCESS',
@@ -810,7 +842,7 @@ app.post(
               // Check if access code exists, if not generate one
               const existingCode = await db.getCodeByOrderId(orderId);
               let accessCodeToSend = null;
-              
+
               if (!existingCode) {
                 const newAccessCode = generateAccessCode();
                 const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -950,7 +982,7 @@ app.post(
 
             // All verifications passed - Payment is successful
             console.log('✅ Payment verification passed - all checks successful');
-            
+
             // Update order status
             await db.updateOrder(orderId, {
               status: 'SUCCESS',
@@ -960,7 +992,7 @@ app.post(
             // Check if access code exists, if not generate one
             const existingCode = await db.getCodeByOrderId(orderId);
             let accessCodeToSend = null;
-            
+
             if (!existingCode) {
               const newAccessCode = generateAccessCode();
               const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -1086,10 +1118,10 @@ app.post(
           expiresAt: expiresAt.toISOString(),
           now: now.toISOString(),
         });
-        return res.json({ 
-          success: false, 
-          valid: false, 
-          message: 'This access code has expired. Please purchase a new code.' 
+        return res.json({
+          success: false,
+          valid: false,
+          message: 'This access code has expired. Please purchase a new code.'
         });
       }
 
@@ -1106,10 +1138,10 @@ app.post(
       const accountHasUsedCode = await db.hasAccountUsedCode(userAccountId);
       if (accountHasUsedCode) {
         console.log('❌ Account has already used a code:', userAccountId);
-        return res.json({ 
-          success: false, 
-          valid: false, 
-          message: 'This account has already used an access code. Each account can only use one code.' 
+        return res.json({
+          success: false,
+          valid: false,
+          message: 'This account has already used an access code. Each account can only use one code.'
         });
       }
 
@@ -1171,7 +1203,7 @@ app.post(
 
       // Test email sending
       const testResult = await sendAccessCodeEmail(email, 'TEST123456');
-      
+
       if (testResult) {
         res.json({
           success: true,
@@ -1256,7 +1288,7 @@ const ADMIN_PASSWORD_HASH = hashPassword(ADMIN_PASSWORD);
 // Middleware to check admin password
 const checkAdminAuth = (req, res, next) => {
   const providedPassword = req.headers['x-admin-password'] || req.body.password || req.query.password;
-  
+
   if (!providedPassword) {
     return res.status(401).json({
       success: false,
@@ -1267,7 +1299,7 @@ const checkAdminAuth = (req, res, next) => {
 
   // Hash provided password and compare
   const providedHash = hashPassword(providedPassword);
-  
+
   // Use constant-time comparison to prevent timing attacks
   if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
     next();
@@ -1294,7 +1326,7 @@ app.post('/api/admin/login', [
 
     const { password } = req.body;
     const providedHash = hashPassword(password);
-    
+
     // Constant-time comparison
     if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
       console.log('✅ Admin login successful from:', req.ip);
@@ -1376,7 +1408,7 @@ app.post(
 
       // Resend email
       const emailSent = await sendAccessCodeEmail(emailLower, accessCode.code);
-      
+
       if (emailSent) {
         res.json({
           success: true,
@@ -1405,7 +1437,7 @@ app.delete('/api/admin/access-codes/:code', checkAdminAuth, async (req, res) => 
     const { code } = req.params;
     const codeUpper = code.toUpperCase();
     const result = await db.deleteAccessCode(codeUpper);
-    
+
     if (result.deleted) {
       console.log(`✅ Admin deleted access code: ${codeUpper} from IP: ${req.ip}`);
       res.json({
@@ -1429,7 +1461,7 @@ app.delete('/api/admin/orders/:orderId', checkAdminAuth, async (req, res) => {
   try {
     const { orderId } = req.params;
     const result = await db.deleteOrder(orderId);
-    
+
     if (result.deleted) {
       console.log(`✅ Admin deleted order: ${orderId} from IP: ${req.ip}`);
       res.json({
@@ -1454,7 +1486,7 @@ app.delete('/api/admin/users/:email', checkAdminAuth, async (req, res) => {
     const { email } = req.params;
     const emailLower = email.toLowerCase().trim();
     const result = await db.deleteUserByEmail(emailLower);
-    
+
     if (result.deleted) {
       console.log(`✅ Admin deleted user data for: ${emailLower} from IP: ${req.ip}`);
       res.json({
@@ -1521,7 +1553,7 @@ app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
       }
     });
 
-    const users = Array.from(userMap.values()).sort((a, b) => 
+    const users = Array.from(userMap.values()).sort((a, b) =>
       new Date(b.lastOrder) - new Date(a.lastOrder)
     );
 
@@ -1552,7 +1584,7 @@ app.get('/api/admin/bundles', checkAdminAuth, async (req, res) => {
     const db = admin.database();
     const bundlesRef = db.ref('bundles');
     const snapshot = await bundlesRef.once('value');
-    
+
     if (!snapshot.exists()) {
       return res.json({
         success: true,
@@ -1611,9 +1643,9 @@ app.delete('/api/admin/bundles/:bundleId', checkAdminAuth, async (req, res) => {
     const { bundleId } = req.params;
     const db = admin.database();
     const bundleRef = db.ref(`bundles/${bundleId}`);
-    
+
     await bundleRef.remove();
-    
+
     console.log(`✅ Admin deleted bundle: ${bundleId} from IP: ${req.ip}`);
     res.json({
       success: true,
@@ -1639,9 +1671,9 @@ app.delete('/api/admin/bundles/:bundleId/topics/:topicId', checkAdminAuth, async
     const { bundleId, topicId } = req.params;
     const db = admin.database();
     const topicRef = db.ref(`bundles/${bundleId}/topics/${topicId}`);
-    
+
     await topicRef.remove();
-    
+
     console.log(`✅ Admin deleted topic: ${topicId} from bundle: ${bundleId} from IP: ${req.ip}`);
     res.json({
       success: true,
