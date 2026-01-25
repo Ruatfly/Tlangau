@@ -13,8 +13,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-// Request Logging (Global)
+// Define allowed origins
+const allowedOrigins = [
+  'https://ruatfly.github.io',
+  'https://tlangau.onrender.com',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Origin: ${req.headers.origin || 'None'}`);
   next();

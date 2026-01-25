@@ -3,7 +3,7 @@
 // For local development: http://localhost:3001
 // For production: https://your-backend-url.railway.app (or your hosting service)
 
-window.BACKEND_URL = 'https://tlangau-server-portal.onrender.com';
+window.BACKEND_URL = 'https://tlangau.onrender.com';
 // Replace 'your-backend-url.railway.app' with your actual backend URL after deployment
 
 // Auto-detect backend URL based on current hostname
@@ -13,7 +13,7 @@ window.BACKEND_URL = 'https://tlangau-server-portal.onrender.com';
     // If running on GitHub Pages
     if (hostname.includes('github.io')) {
         // Set your production backend URL here
-        window.BACKEND_URL = 'https://tlangau-server-portal.onrender.com';
+        window.BACKEND_URL = 'https://tlangau.onrender.com';
     }
     // If running locally
     else if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -21,6 +21,6 @@ window.BACKEND_URL = 'https://tlangau-server-portal.onrender.com';
     }
     // For other domains, set your backend URL
     else {
-        window.BACKEND_URL = 'https://tlangau-server-portal.onrender.com';
+        window.BACKEND_URL = 'https://tlangau.onrender.com';
     }
 })();
