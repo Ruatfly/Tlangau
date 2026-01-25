@@ -20,20 +20,15 @@ class Database {
         }
 
         // Try to initialize Firebase Admin
-        // Option 1: Service account JSON from environment variable (Best for Render)
         const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-        // Option 2: Service account file path from environment or default
         const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || path.join(__dirname, 'service-account-key.json');
 
         if (serviceAccountJson) {
-          // Parse JSON from environment variable
           let serviceAccount;
           try {
             serviceAccount = typeof serviceAccountJson === 'string' ? JSON.parse(serviceAccountJson) : serviceAccountJson;
           } catch (e) {
             console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:', e.message);
-            // Fallback to empty object which might fail but handles the parsing error
             serviceAccount = {};
           }
 
@@ -43,7 +38,6 @@ class Database {
           });
           console.log('✅ Firebase Admin initialized from environment variable');
         } else {
-          // Try to load from file
           const fs = require('fs');
           if (fs.existsSync(serviceAccountPath)) {
             const serviceAccount = require(serviceAccountPath);
@@ -54,7 +48,6 @@ class Database {
             console.log('✅ Firebase Admin initialized from file');
           } else {
             console.warn('⚠️ Firebase settings not found. Database features will fail.');
-            // Don't reject, just let it be null so server can start (but DB calls will fail)
           }
         }
 
@@ -73,36 +66,39 @@ class Database {
     });
   }
 
-  // Helper to sanitize email for use as a key (replace . with ,)
-  sanitizeEmail(email) {
-    return email.toLowerCase().trim().replace(/\./g, ',');
-  }
-
   // ==================== ORDER METHODS ====================
 
   async createOrder(orderData) {
-    const { orderId } = orderData;
+    // Normalize property names (use order_id specifically)
+    const order_id = orderData.order_id || orderData.orderId;
     const order = {
       ...orderData,
+      order_id: order_id, // Ensure consistent underscore name
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+    if (order.orderId) delete order.orderId;
 
-    await this.db.ref(`orders/${orderId}`).set(order);
-    return orderId; // Return ID/key
+    await this.db.ref(`orders/${order_id}`).set(order);
+    return order_id;
   }
 
-  async getOrder(orderId) {
-    const snapshot = await this.db.ref(`orders/${orderId}`).once('value');
+  async getOrder(order_id) {
+    const snapshot = await this.db.ref(`orders/${order_id}`).once('value');
     return snapshot.val();
   }
 
-  async updateOrder(orderId, updates) {
+  async updateOrder(order_id, updates) {
     const updateData = {
       ...updates,
       updated_at: new Date().toISOString()
     };
-    await this.db.ref(`orders/${orderId}`).update(updateData);
+    // Normalize in updates too if present
+    if (updateData.orderId) {
+      updateData.order_id = updateData.orderId;
+      delete updateData.orderId;
+    }
+    await this.db.ref(`orders/${order_id}`).update(updateData);
   }
 
   async getOrderByPaymentRequestId(paymentRequestId) {
@@ -118,20 +114,15 @@ class Database {
   }
 
   async getOrderByEmail(email) {
-    // Note: RTDB querying string fields might require simpler queries or client-side filtering if index not set
-    // For now, we assume volume is low or we index 'email'
     const snapshot = await this.db.ref('orders')
       .orderByChild('email')
       .equalTo(email.toLowerCase().trim())
-      // RTDB doesn't robustly support "sort by created desc limit 1" easily with non-numeric keys combined with filtering
-      // So we fetch all for this email and sort in memory
       .once('value');
 
     const data = snapshot.val();
     if (!data) return null;
 
     const orders = Object.values(data);
-    // Sort by created_at descending
     orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return orders[0];
   }
@@ -142,10 +133,12 @@ class Database {
     const { code } = codeData;
     const data = {
       ...codeData,
+      order_id: codeData.order_id || codeData.orderId, // Normalize
       created_at: new Date().toISOString(),
-      used: codeData.used ? true : false // Ensure boolean
+      used: codeData.used ? true : false
     };
-    // Store by code for easy lookup: /access_codes/CODE123
+    if (data.orderId) delete data.orderId;
+
     await this.db.ref(`access_codes/${code}`).set(data);
     return code;
   }
@@ -155,11 +148,14 @@ class Database {
     return snapshot.val();
   }
 
-  async getCodeByOrderId(orderId) {
+  async getCodeByOrderId(order_id) {
+    if (!order_id) {
+      console.warn('⚠️ getCodeByOrderId called with undefined order_id');
+      return null;
+    }
     const snapshot = await this.db.ref('access_codes')
-      .orderByChild('orderId') // Note: In createAccessCode we used 'orderId', check consistency with SQL which used 'order_id'
-      // The calling code passes 'orderId' in object, so we save it as 'orderId'.
-      .equalTo(orderId)
+      .orderByChild('order_id')
+      .equalTo(order_id)
       .limitToFirst(1)
       .once('value');
 
@@ -178,7 +174,6 @@ class Database {
     if (!data) return null;
 
     const codes = Object.values(data);
-    // Sort by created_at desc
     codes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return codes[0];
   }
@@ -198,11 +193,8 @@ class Database {
       .equalTo(accountId)
       .once('value');
 
-    // Check if any results have used=true (though query implies it if we trust the logic)
     const data = snapshot.val();
     if (!data) return false;
-
-    // Safety check
     return Object.values(data).some(c => c.used === true);
   }
 
@@ -214,7 +206,6 @@ class Database {
     if (!data) return [];
 
     const orders = Object.values(data);
-    // Sort desc
     orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return orders;
   }
@@ -234,11 +225,10 @@ class Database {
     return { deleted: true };
   }
 
-  async deleteOrder(orderId) {
-    // 1. Find and delete access codes for this order
+  async deleteOrder(order_id) {
     const codeSnapshot = await this.db.ref('access_codes')
-      .orderByChild('orderId')
-      .equalTo(orderId)
+      .orderByChild('order_id')
+      .equalTo(order_id)
       .once('value');
 
     const codes = codeSnapshot.val();
@@ -250,15 +240,13 @@ class Database {
       await this.db.ref().update(updates);
     }
 
-    // 2. Delete order
-    await this.db.ref(`orders/${orderId}`).remove();
+    await this.db.ref(`orders/${order_id}`).remove();
     return { deleted: true };
   }
 
   async deleteUserByEmail(email) {
     const emailLower = email.toLowerCase().trim();
 
-    // Find all orders by email
     const ordersSnapshot = await this.db.ref('orders')
       .orderByChild('email')
       .equalTo(emailLower)
@@ -269,19 +257,15 @@ class Database {
 
     const updates = {};
     let deletedOrders = 0;
-    const orderIds = [];
 
-    // Queue order deletions
     Object.keys(ordersData).forEach(key => {
       updates[`orders/${key}`] = null;
-      orderIds.push(ordersData[key].order_id);
       deletedOrders++;
     });
 
-    // Find all access codes by email (faster than by order ID one by one)
     const codesSnapshot = await this.db.ref('access_codes')
       .orderByChild('email')
-      .equalTo(emailLower) // Assuming codes also have the email field
+      .equalTo(emailLower)
       .once('value');
 
     const codesData = codesSnapshot.val();
@@ -294,14 +278,11 @@ class Database {
       });
     }
 
-    // Execute atomic multi-path update
     await this.db.ref().update(updates);
-
     return { deleted: true, deletedCodes, deletedOrders };
   }
 
   async getStatistics() {
-    // Fetch all needed data (simple approach for low volume)
     const [ordersRes, codesRes] = await Promise.all([
       this.getAllOrders(),
       this.getAllAccessCodes()
@@ -345,9 +326,6 @@ class Database {
   }
 
   close() {
-    // Firebase Admin SDK doesn't strictly require 'closing' like SQLite, 
-    // but we can implement it for compatibility if needed.
-    // Usually we leave the connection open.
     return Promise.resolve();
   }
 }
