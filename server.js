@@ -14,34 +14,19 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-// Define allowed origins
-const allowedOrigins = [
-  'https://ruatfly.github.io',
-  'https://tlangau-server-portal.onrender.com',
-  'http://localhost:5500',
-  'http://127.0.0.1:5500',
-  'http://localhost:3000',
-  'http://localhost:3001'
-];
+// Request Logging (Global)
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Origin: ${req.headers.origin || 'None'}`);
+  next();
+});
 
-// Configure CORS
+// Configure CORS (Permissive for Debugging)
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    // Check if origin is allowed
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.github.io') || origin.includes('railway.app')) {
-      callback(null, true);
-    } else {
-      console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Reflects the request origin, effectively allowing all
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS middleware
@@ -56,8 +41,9 @@ app.use(express.static(path.join(__dirname)));
 // Initialize database
 const db = new Database();
 db.init().catch(err => {
-  console.error('❌ Database initialization failed:', err);
-  process.exit(1);
+  console.error('❌ Database initialization failed (Using Fallback/No-DB mode):', err.message);
+  // Do NOT exit process, allowing server to start for dubugging
+  // process.exit(1); 
 });
 
 // Email service configuration
@@ -404,8 +390,12 @@ console.log('  BACKEND_URL:', process.env.BACKEND_URL || 'Not set');
 // API Routes
 
 // Health check
+app.get('/', (req, res) => {
+  res.send('Tlangau Server Portal API is running');
+});
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Tlangau Server Access Portal API is running' });
+  res.json({ status: 'ok', message: 'Tlangau Server Access Portal API is running', timestamp: new Date() });
 });
 
 // Create payment link (Instamojo)
