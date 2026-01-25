@@ -32,7 +32,7 @@ app.use((req, res, next) => {
 const corsOptions = {
   origin: true, // Reflects the request origin, effectively allowing all
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-password'],
   credentials: true,
   optionsSuccessStatus: 200
 };
