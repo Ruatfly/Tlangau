@@ -455,7 +455,7 @@ app.post(
       // Create payment link with Instamojo
       try {
         const frontendUrl = process.env.FRONTEND_URL || 'https://ruatfly.github.io/Tlangau';
-        const backendUrl = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+        const backendUrl = process.env.BACKEND_URL || 'https://tlangau.onrender.com';
 
         // Prepare Instamojo payment link data
         const paymentData = {
