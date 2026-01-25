@@ -74,17 +74,20 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
 } else if (EMAIL_SERVICE === 'brevo') {
   // Use Brevo (SMTP)
   // Host: smtp-relay.brevo.com
-  // Port: 587
+  // Port: 587 (or 2525 if 587 is blocked)
+  const BREVO_PORT = parseInt(process.env.EMAIL_PORT) || 587;
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
-    port: 587,
+    port: BREVO_PORT,
     secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER, // Brevo login email
       pass: process.env.EMAIL_PASS, // Brevo SMTP Key (NOT login password)
     },
+    // Add connection timeout
+    connectionTimeout: 10000,
   });
-  console.log('📧 Using Brevo (Sendinblue) for email delivery');
+  console.log(`📧 Using Brevo (Sendinblue) for email delivery on port ${BREVO_PORT}`);
 } else {
   // Use Gmail SMTP (fallback)
   transporter = nodemailer.createTransport({
@@ -103,6 +106,9 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
     maxMessages: 3,
   });
   console.log('📧 Using Gmail SMTP for email delivery');
+  if (!process.env.EMAIL_USER) {
+    console.log('   ⚠️  Note: EMAIL_USER is not set. Emails will fail.');
+  }
 }
 
 // Verify email configuration on startup (non-blocking, with timeout)
@@ -329,6 +335,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
     } catch (error) {
       console.error(`❌ EMAIL SENDING FAILED (Attempt ${attempt}/${retries})!`);
       console.error('   To:', email);
+      console.error('   Service:', EMAIL_SERVICE);
       console.error('   Error Code:', error.code || 'N/A');
       console.error('   Error Message:', error.message || 'Unknown error');
 
@@ -337,20 +344,24 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
         console.error('   ⚠️  AUTHENTICATION FAILED!');
         console.error('   This usually means:');
         console.error('   1. Wrong email or password in EMAIL_USER/EMAIL_PASS');
-        console.error('   2. For Gmail: You need to use an App Password, not your regular password');
-        console.error('   3. 2-Step Verification must be enabled on Gmail to generate App Password');
-        console.error('   How to fix:');
-        console.error('   - Go to Google Account > Security > 2-Step Verification');
-        console.error('   - Generate an App Password for "Mail"');
-        console.error('   - Use that App Password in EMAIL_PASS');
+        if (EMAIL_SERVICE === 'gmail') {
+          console.error('   2. For Gmail: You need to use an App Password, not your regular password');
+          console.error('   3. 2-Step Verification must be enabled on Gmail to generate App Password');
+        } else if (EMAIL_SERVICE === 'brevo') {
+          console.error('   2. For Brevo: Use the SMTP Key, not your login password');
+        }
+        console.error('   How to fix: Check your environment variables');
         // Don't retry on auth errors
         return false;
       } else if (error.code === 'ECONNECTION' || error.message.includes('timeout')) {
         console.error('   ⚠️  CONNECTION FAILED OR TIMEOUT!');
         console.error('   This usually means:');
-        console.error('   1. Network/firewall blocking SMTP connection (common in server environments)');
-        console.error('   2. Gmail servers are temporarily unreachable');
-        console.error('   3. Connection timeout due to network restrictions');
+        console.error('   1. Network/firewall blocking SMTP connection');
+        if (EMAIL_SERVICE === 'brevo') {
+          console.error('   2. Port 587 might be blocked. Try setting EMAIL_PORT=2525 in .env');
+        } else if (EMAIL_SERVICE === 'gmail') {
+          console.error('   2. Gmail servers are temporarily unreachable or blocking this IP');
+        }
         console.error('   ⚠️  Will retry...');
       } else if (error.response) {
         console.error('   Response Code:', error.responseCode);

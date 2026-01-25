@@ -35,9 +35,18 @@ Add these Environment Variables in your Render Dashboard:
 - `EMAIL_SERVICE`: `brevo`
 - `EMAIL_USER`: (Your Brevo login email)
 - `EMAIL_PASS`: (Your generated SMTP Key)
+- `EMAIL_PORT`: `587` (Default) or `2525` (Try this if 587 fails)
 
 ## Verified Sender (Optional but Recommended)
 To prevent your emails from going to Spam:
 1. Go to **Senders & IP** in Brevo settings.
 2. Add the email address you want to appear as the "Sender" (e.g., `admin@tlangau.com` or your personal Gmail).
 3. Verify it by clicking the link sent to that email.
+
+## Troubleshooting
+### "Connection timeout" or "Email sending failed"
+If you see timeout errors in your logs:
+1. **Try Port 2525**: Many cloud providers (like Render) or ISPs block the default email port (587).
+   - Add `EMAIL_PORT=2525` to your environment variables.
+2. **Check Credentials**: Ensure you are using the **SMTP Key** (starts with `xsmtp...`), NOT your Brevo login password.
+3. **Check Quota**: Brevo free plan allows 300 emails/day. Check if you exceeded it.
