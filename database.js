@@ -1,3 +1,4 @@
+// Force update for Render deployment - Switching to Firebase
 const admin = require('firebase-admin');
 const path = require('path');
 
