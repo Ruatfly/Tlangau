@@ -81,8 +81,8 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
     port: BREVO_PORT,
     secure: false, // true for 465, false for other ports
     auth: {
-      user: process.env.EMAIL_USER, // Brevo login email
-      pass: process.env.EMAIL_PASS, // Brevo SMTP Key (NOT login password)
+      user: (process.env.EMAIL_USER || '').trim(), // Brevo login email
+      pass: (process.env.EMAIL_PASS || '').trim(), // Brevo SMTP Key (NOT login password)
     },
     // Add connection timeout
     connectionTimeout: 10000,
@@ -93,8 +93,8 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
   transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: (process.env.EMAIL_USER || '').trim(),
+      pass: (process.env.EMAIL_PASS || '').trim(),
     },
     // Add connection timeout and retry options
     connectionTimeout: 10000,
@@ -218,6 +218,9 @@ function generateAccessCode() {
 
 // Send email with access code (with retry logic)
 async function sendAccessCodeEmail(email, code, retries = 3) {
+  const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').trim();
+  const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').trim();
+
   // Check if email is configured
   if (EMAIL_SERVICE === 'sendgrid') {
     if (!SENDGRID_API_KEY) {
@@ -227,17 +230,17 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
       return false;
     }
   } else {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    if (!EMAIL_USER_CLEAN || !EMAIL_PASS_CLEAN) {
       console.error('❌ EMAIL ERROR: Email service not configured!');
-      console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'MISSING');
-      console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'MISSING');
+      console.error('   EMAIL_USER:', EMAIL_USER_CLEAN ? 'Set' : 'MISSING');
+      console.error('   EMAIL_PASS:', EMAIL_PASS_CLEAN ? 'Set' : 'MISSING');
       console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
       return false;
     }
   }
 
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: EMAIL_USER_CLEAN,
     to: email,
     subject: 'Your Tlangau Server Access Code',
     html: `
