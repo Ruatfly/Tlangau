@@ -77,13 +77,17 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
   // Port: 2525 (highly recommended for Render as 587/465 are often throttled)
   const BREVO_PORT = parseInt(process.env.EMAIL_PORT) || 2525;
   transporter = nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
+    host: 'smtp-relay.sendinblue.com',
     port: BREVO_PORT,
-    secure: false, // true for 465, false for other ports
+    secure: false, // false for 2525/587
+    requireTLS: true, // Force starttls
     auth: {
       user: (process.env.EMAIL_USER || '').trim(), // Brevo login email
       pass: (process.env.EMAIL_PASS || '').trim(), // Brevo SMTP Key (NOT login password)
     },
+    // Enable full protocol logging for debugging
+    logger: true,
+    debug: true,
     // Add connection timeout
     connectionTimeout: 10000,
   });
