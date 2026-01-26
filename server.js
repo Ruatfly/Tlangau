@@ -74,8 +74,8 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
 } else if (EMAIL_SERVICE === 'brevo') {
   // Use Brevo (SMTP)
   // Host: smtp-relay.brevo.com
-  // Port: 587 (or 2525 if 587 is blocked)
-  const BREVO_PORT = parseInt(process.env.EMAIL_PORT) || 587;
+  // Port: 2525 (highly recommended for Render as 587/465 are often throttled)
+  const BREVO_PORT = parseInt(process.env.EMAIL_PORT) || 2525;
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: BREVO_PORT,
@@ -141,12 +141,12 @@ async function verifyEmailConfig() {
     console.log('------------------------');
 
     try {
-      // Test email connection with timeout
-      console.log(`📧 Verifying ${EMAIL_SERVICE} SMTP connection...`);
+      // Test email connection with a longer timeout for Render
+      console.log(`📧 Verifying ${EMAIL_SERVICE} SMTP connection... (Port: ${transporter.options.port})`);
       await Promise.race([
         transporter.verify(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Verification timeout after 8 seconds')), 8000)
+          setTimeout(() => reject(new Error('Connection/Verification took too long (>15s)')), 15000)
         )
       ]);
       console.log('✅ Email service verified and ready');
