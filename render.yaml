@@ -10,6 +10,8 @@ services:
         value: 10000
       - key: EMAIL_SERVICE
         value: brevo
+      - key: EMAIL_PORT
+        value: 2525
       - key: EMAIL_USER
         sync: false
       - key: EMAIL_PASS
