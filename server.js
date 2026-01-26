@@ -1249,6 +1249,7 @@ app.post(
         console.log('❌ No code found for email:', emailLower);
         return res.json({
           success: false,
+          valid: false,
           message: 'No access code found for this email',
         });
       }
