@@ -12,6 +12,8 @@ services:
         value: brevo
       - key: EMAIL_PORT
         value: 2525
+      - key: EMAIL_FROM
+        value: ruatfelachhakchhuak243@gmail.com
       - key: EMAIL_USER
         sync: false
       - key: EMAIL_PASS

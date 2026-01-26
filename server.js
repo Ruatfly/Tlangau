@@ -147,8 +147,10 @@ async function verifyEmailConfig() {
     }
 
     // DIAGNOSTIC LOG (Masked)
+    const EMAIL_FROM_CLEAN = (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim();
     console.log('--- EMAIL DIAGNOSTIC ---');
-    console.log('User:', EMAIL_USER_CLEAN);
+    console.log('Login User (Auth):', EMAIL_USER_CLEAN);
+    console.log('Sender Email (From):', EMAIL_FROM_CLEAN);
     console.log('Pass Prefix:', EMAIL_PASS_CLEAN.substring(0, 12) + '...');
     console.log('Pass Length:', EMAIL_PASS_CLEAN.length);
     console.log('Service:', EMAIL_SERVICE);
@@ -169,18 +171,16 @@ async function verifyEmailConfig() {
     } catch (error) {
       console.error('⚠️ EMAIL SERVICE VERIFICATION FAILED (non-critical)!');
       console.error('   Error:', error.message);
-      console.error('   ⚠️  This is often due to network/firewall restrictions in server environments');
-      console.error('   ⚠️  Consider switching to SendGrid (EMAIL_SERVICE=sendgrid) for better reliability');
-      console.error('   ⚠️  Emails will still be sent when needed, but verification failed');
+      console.error('   ⚠️  This is often due to network/firewall (Port block) or specialized auth requirements.');
+
       if (error.code === 'EAUTH') {
         console.error('   ⚠️  Authentication failed - check EMAIL_USER and EMAIL_PASS');
-        console.error('   For Gmail: Use App Password, not regular password');
+        console.error('   IMPORTANT: For Brevo, EMAIL_USER must match the "Login" field in SMTP & API page exactly.');
       } else if (error.message.includes('timeout')) {
-        console.error('   ⚠️  Connection timeout - this is common in server environments');
-        console.error('   ⚠️  Recommendation: Use SendGrid instead (set EMAIL_SERVICE=sendgrid)');
+        console.error('   ⚠️  Connection timeout - common in server environments.');
+        console.error('   Recommendation: Use Port 2525 (EMAIL_PORT=2525) or switch to SendGrid.');
       }
-      // Don't return false - allow emails to still be sent
-      return true; // Return true so server continues
+      return true;
     }
   }
 }
@@ -250,7 +250,7 @@ async function sendAccessCodeEmail(email, code, retries = 3) {
   }
 
   const mailOptions = {
-    from: EMAIL_USER_CLEAN,
+    from: (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim(),
     to: email,
     subject: 'Your Tlangau Server Access Code',
     html: `
