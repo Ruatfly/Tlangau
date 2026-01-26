@@ -146,17 +146,6 @@ async function verifyEmailConfig() {
       return false;
     }
 
-    // DIAGNOSTIC LOG (Masked)
-    const EMAIL_FROM_CLEAN = (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim();
-    console.log('--- EMAIL DIAGNOSTIC ---');
-    console.log('Login User (Auth):', EMAIL_USER_CLEAN);
-    console.log('Sender Email (From):', EMAIL_FROM_CLEAN);
-    console.log('Pass Prefix:', EMAIL_PASS_CLEAN.substring(0, 12) + '...');
-    console.log('Pass Length:', EMAIL_PASS_CLEAN.length);
-    console.log('Service:', EMAIL_SERVICE);
-    console.log('Port:', transporter.options ? transporter.options.port : 'unknown');
-    console.log('------------------------');
-
     try {
       // Test email connection with a longer timeout for Render
       console.log(`📧 Verifying ${EMAIL_SERVICE} SMTP connection... (Port: ${transporter.options.port})`);
@@ -1541,6 +1530,7 @@ app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
     // Get unique emails with their order counts
     const userMap = new Map();
     orders.forEach(order => {
+      if (!order || !order.email) return; // Skip invalid orders
       const email = order.email.toLowerCase().trim();
       if (!userMap.has(email)) {
         userMap.set(email, {
@@ -1548,21 +1538,29 @@ app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
           totalOrders: 0,
           successfulOrders: 0,
           totalSpent: 0,
-          firstOrder: order.created_at,
-          lastOrder: order.created_at,
+          firstOrder: order.created_at || order.updated_at || new Date().toISOString(),
+          lastOrder: order.created_at || order.updated_at || new Date().toISOString(),
         });
       }
       const user = userMap.get(email);
       user.totalOrders++;
+
       if (order.status === 'SUCCESS') {
         user.successfulOrders++;
-        user.totalSpent += order.amount / 100; // Convert from paise to rupees
+        const amt = parseFloat(order.amount);
+        if (!isNaN(amt)) {
+          user.totalSpent += amt / 100; // Convert from paise to rupees
+        }
       }
-      if (new Date(order.created_at) < new Date(user.firstOrder)) {
-        user.firstOrder = order.created_at;
-      }
-      if (new Date(order.created_at) > new Date(user.lastOrder)) {
-        user.lastOrder = order.created_at;
+
+      const orderDate = order.created_at || order.updated_at;
+      if (orderDate) {
+        if (new Date(orderDate) < new Date(user.firstOrder)) {
+          user.firstOrder = orderDate;
+        }
+        if (new Date(orderDate) > new Date(user.lastOrder)) {
+          user.lastOrder = orderDate;
+        }
       }
     });
 

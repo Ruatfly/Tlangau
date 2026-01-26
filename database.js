@@ -217,7 +217,14 @@ class Database {
     const data = snapshot.val();
     if (!data) return [];
 
-    const orders = Object.values(data);
+    const orders = Object.values(data).map(o => {
+      // Normalize order_id
+      if (!o.order_id && o.orderId) o.order_id = o.orderId;
+      // Ensure created_at exists for sorting
+      if (!o.created_at) o.created_at = o.updated_at || new Date(0).toISOString();
+      return o;
+    });
+
     orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return orders;
   }
@@ -227,7 +234,14 @@ class Database {
     const data = snapshot.val();
     if (!data) return [];
 
-    const codes = Object.values(data);
+    const codes = Object.values(data).map(c => {
+      // Normalize order_id
+      if (!c.order_id && c.orderId) c.order_id = c.orderId;
+      // Ensure created_at exists for sorting
+      if (!c.created_at) c.created_at = c.updated_at || new Date(0).toISOString();
+      return c;
+    });
+
     codes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return codes;
   }
