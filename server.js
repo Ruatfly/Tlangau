@@ -138,7 +138,7 @@ async function verifyEmailConfig() {
     console.log('User:', process.env.EMAIL_USER);
     console.log('Pass Prefix:', process.env.EMAIL_PASS.substring(0, 12) + '...');
     console.log('Service:', EMAIL_SERVICE);
-    console.log('Port:', BREVO_PORT);
+    console.log('Port:', transporter.options ? transporter.options.port : 'unknown');
     console.log('------------------------');
 
     try {
