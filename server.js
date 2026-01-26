@@ -124,10 +124,13 @@ async function verifyEmailConfig() {
     console.log('✅ SendGrid email service configured (no verification needed)');
     return true;
   } else {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').trim();
+    const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').trim();
+
+    if (!EMAIL_USER_CLEAN || !EMAIL_PASS_CLEAN) {
       console.error('❌ EMAIL CONFIGURATION MISSING!');
-      console.error('   EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'NOT SET');
-      console.error('   EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'NOT SET');
+      console.error('   EMAIL_USER:', EMAIL_USER_CLEAN ? 'Set' : 'NOT SET');
+      console.error('   EMAIL_PASS:', EMAIL_PASS_CLEAN ? 'Set' : 'NOT SET');
       console.error('   ⚠️  Emails will NOT be sent until configured!');
       console.error('   Please set EMAIL_USER and EMAIL_PASS in your .env file');
       return false;
@@ -135,8 +138,9 @@ async function verifyEmailConfig() {
 
     // DIAGNOSTIC LOG (Masked)
     console.log('--- EMAIL DIAGNOSTIC ---');
-    console.log('User:', process.env.EMAIL_USER);
-    console.log('Pass Prefix:', process.env.EMAIL_PASS.substring(0, 12) + '...');
+    console.log('User:', EMAIL_USER_CLEAN);
+    console.log('Pass Prefix:', EMAIL_PASS_CLEAN.substring(0, 12) + '...');
+    console.log('Pass Length:', EMAIL_PASS_CLEAN.length);
     console.log('Service:', EMAIL_SERVICE);
     console.log('Port:', transporter.options ? transporter.options.port : 'unknown');
     console.log('------------------------');
