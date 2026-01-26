@@ -84,16 +84,16 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
     name: 'tlangau.onrender.com', // Explicit hostname for EHLO
     authMethod: 'LOGIN', // Force LOGIN auth
     auth: {
-      user: (process.env.EMAIL_USER || '').trim(),
-      pass: (process.env.EMAIL_PASS || '').trim(),
+      user: (process.env.EMAIL_USER || '').replace(/[^\x20-\x7E]/g, '').trim(),
+      pass: (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim(),
     },
     tls: {
       rejectUnauthorized: false, // Bypass Render proxy cert issues
       minVersion: 'TLSv1.2'
     },
-    // Enable full protocol logging for debugging
-    logger: true,
-    debug: true,
+    // Keep logger false for production performance unless debugging required
+    logger: false,
+    debug: false,
     connectionTimeout: 15000,
   });
   console.log(`📧 Using Brevo (Sendinblue) for email delivery on port ${BREVO_PORT}`);
@@ -133,8 +133,9 @@ async function verifyEmailConfig() {
     console.log('✅ SendGrid email service configured (no verification needed)');
     return true;
   } else {
-    const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').trim();
-    const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').trim();
+    // Aggressive sanitization (strip invisible characters, non-breaking spaces, etc.)
+    const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').replace(/[^\x20-\x7E]/g, '').trim();
+    const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim();
 
     if (!EMAIL_USER_CLEAN || !EMAIL_PASS_CLEAN) {
       console.error('❌ EMAIL CONFIGURATION MISSING!');
@@ -227,8 +228,8 @@ function generateAccessCode() {
 
 // Send email with access code (with retry logic)
 async function sendAccessCodeEmail(email, code, retries = 3) {
-  const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').trim();
-  const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').trim();
+  const EMAIL_USER_CLEAN = (process.env.EMAIL_USER || '').replace(/[^\x20-\x7E]/g, '').trim();
+  const EMAIL_PASS_CLEAN = (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim();
 
   // Check if email is configured
   if (EMAIL_SERVICE === 'sendgrid') {
