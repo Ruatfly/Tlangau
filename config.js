@@ -17,7 +17,7 @@ window.BACKEND_URL = 'https://tlangau.onrender.com';
     }
     // If running locally
     else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        window.BACKEND_URL = 'http://localhost:3001';
+        window.BACKEND_URL = 'http://localhost:10000';
     }
     // For other domains, set your backend URL
     else {

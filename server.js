@@ -1109,11 +1109,11 @@ app.post(
         code: accessCode.code,
         email: accessCode.email,
         used: accessCode.used,
-        expires_at: accessCode.expires_at,
+        expiresAt: accessCode.expiresAt || accessCode.expires_at,
       });
 
       // Check if code has expired (1 month validity)
-      const expiresAt = new Date(accessCode.expires_at);
+      const expiresAt = new Date(accessCode.expiresAt || accessCode.expires_at);
       const now = new Date();
       if (expiresAt < now) {
         console.log('❌ Code expired:', {
@@ -1170,7 +1170,7 @@ app.post(
         valid: true,
         message: 'Access code is valid',
         code: codeUpper,
-        expiresAt: accessCode.expires_at, // Return expiry date for client
+        expiresAt: accessCode.expiresAt || accessCode.expires_at, // Return expiry date for client
       });
     } catch (error) {
       console.error('❌ Error validating code:', error);
@@ -1257,13 +1257,13 @@ app.post(
         code: accessCode.code,
         email: accessCode.email,
         used: accessCode.used,
-        expires_at: accessCode.expires_at,
+        expiresAt: accessCode.expiresAt || accessCode.expires_at,
       });
 
       res.json({
         success: true,
         code: accessCode.code,
-        expiresAt: accessCode.expires_at,
+        expiresAt: accessCode.expiresAt || accessCode.expires_at,
         used: accessCode.used,
         message: 'Access code info retrieved',
       });
