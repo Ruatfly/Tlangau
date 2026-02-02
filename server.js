@@ -1137,14 +1137,23 @@ app.post(
       }
 
       // Check if this account has already used a code
+      // MODIFIED: Allow using a new code if the previous one is expired or if the user is activating a newly purchased code
+      // We still check if the SPECIFIC provided code has been used before
       const accountHasUsedCode = await db.hasAccountUsedCode(userAccountId);
       if (accountHasUsedCode) {
-        console.log('❌ Account has already used a code:', userAccountId);
-        return res.json({
-          success: false,
-          valid: false,
-          message: 'This account has already used an access code. Each account can only use one code.'
-        });
+        console.log('ℹ️ Account has previously used a code:', userAccountId);
+        // Check if the code currently being provided is the same as the one already used
+        const existingCodeForAccount = await db.getCodeByCode(codeUpper);
+        if (existingCodeForAccount && existingCodeForAccount.used && existingCodeForAccount.used_by_account === userAccountId) {
+          console.log('❌ This specific code has already been used by this account');
+          return res.json({
+            success: false,
+            valid: false,
+            message: 'This access code has already been used by your account.'
+          });
+        }
+        // If they are providing a NEW (unused) code, we allow it to replace the old one
+        console.log('✅ Allowing new code activation for account that used a code previously');
       }
 
       // Check if email matches
