@@ -593,11 +593,20 @@
                             const statusBadge = code.used 
                                 ? `<span class="badge used">Used</span>`
                                 : `<span class="badge unused">Unused</span>`;
-                            const expiresAt = new Date(code.expires_at);
+                            const expiresAtRaw = code.expires_at || code.expiresAt;
+                            let expiresAt = new Date(expiresAtRaw);
+                            
+                            // Fallback if expiresAt is invalid but createdAt exists
+                            if (isNaN(expiresAt.getTime()) && code.created_at) {
+                                expiresAt = new Date(new Date(code.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                            }
+                            
                             const isExpired = expiresAt < new Date();
-                            const expiresText = isExpired 
-                                ? `<span style="color: #dc3545;">${expiresAt.toLocaleString()} (Expired)</span>`
-                                : expiresAt.toLocaleString();
+                            const expiresText = isNaN(expiresAt.getTime()) 
+                                ? '<span style="color: #dc3545;">Unknown</span>'
+                                : (isExpired 
+                                    ? `<span style="color: #dc3545;">${expiresAt.toLocaleString()} (Expired)</span>`
+                                    : expiresAt.toLocaleString());
                             
                             row.innerHTML = `
                                 <td><strong>${code.code}</strong></td>

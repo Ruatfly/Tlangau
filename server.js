@@ -1113,11 +1113,21 @@ app.post(
       });
 
       // Check if code has expired (1 month validity)
-      const expiresAt = new Date(accessCode.expiresAt || accessCode.expires_at);
+      let expiresAt = accessCode.expires_at || accessCode.expiresAt;
+
+      // Fallback if expiration date is missing or invalid
+      if (!expiresAt || isNaN(new Date(expiresAt).getTime())) {
+        const createdAt = new Date(accessCode.created_at || new Date().toISOString());
+        const fallbackDate = new Date(createdAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+        expiresAt = fallbackDate.toISOString();
+        console.log('ℹ️ Expiration date missing or invalid, using fallback (30 days from creation):', expiresAt);
+      }
+
+      const expiresAtDate = new Date(expiresAt);
       const now = new Date();
-      if (expiresAt < now) {
+      if (expiresAtDate < now) {
         console.log('❌ Code expired:', {
-          expiresAt: expiresAt.toISOString(),
+          expiresAt: expiresAtDate.toISOString(),
           now: now.toISOString(),
         });
         return res.json({

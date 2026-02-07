@@ -143,10 +143,14 @@ class Database {
 
   async createAccessCode(codeData) {
     const { code } = codeData;
+    const expires = codeData.expires_at || codeData.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
     const data = {
       ...codeData,
       order_id: codeData.order_id || codeData.orderId, // Normalize
-      created_at: new Date().toISOString(),
+      created_at: codeData.created_at || new Date().toISOString(),
+      expires_at: expires,
+      expiresAt: expires, // Duplicate for compatibility
       used: codeData.used ? true : false
     };
     if (data.orderId) delete data.orderId;
@@ -157,7 +161,14 @@ class Database {
 
   async getCodeByCode(code) {
     const snapshot = await this.db.ref(`access_codes/${code}`).once('value');
-    return snapshot.val();
+    const data = snapshot.val();
+    if (data) {
+      // Normalize on retrieval
+      if (!data.expires_at && data.expiresAt) data.expires_at = data.expiresAt;
+      if (!data.expiresAt && data.expires_at) data.expiresAt = data.expires_at;
+      if (!data.order_id && data.orderId) data.order_id = data.orderId;
+    }
+    return data;
   }
 
   async getCodeByOrderId(order_id) {
@@ -173,7 +184,13 @@ class Database {
 
     const data = snapshot.val();
     if (!data) return null;
-    return Object.values(data)[0];
+    const code = Object.values(data)[0];
+    // Normalize
+    if (code) {
+      if (!code.expires_at && code.expiresAt) code.expires_at = code.expiresAt;
+      if (!code.expiresAt && code.expires_at) code.expiresAt = code.expires_at;
+    }
+    return code;
   }
 
   async getCodeByEmail(email) {
@@ -185,7 +202,12 @@ class Database {
     const data = snapshot.val();
     if (!data) return null;
 
-    const codes = Object.values(data);
+    const codes = Object.values(data).map(c => {
+      // Normalize
+      if (!c.expires_at && c.expiresAt) c.expires_at = c.expiresAt;
+      if (!c.expiresAt && c.expires_at) c.expiresAt = c.expires_at;
+      return c;
+    });
     codes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return codes[0];
   }
@@ -239,6 +261,9 @@ class Database {
       if (!c.order_id && c.orderId) c.order_id = c.orderId;
       // Ensure created_at exists for sorting
       if (!c.created_at) c.created_at = c.updated_at || new Date(0).toISOString();
+      // Normalize expiration
+      if (!c.expires_at && c.expiresAt) c.expires_at = c.expiresAt;
+      if (!c.expiresAt && c.expires_at) c.expiresAt = c.expires_at;
       return c;
     });
 
