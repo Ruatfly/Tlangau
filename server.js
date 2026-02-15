@@ -620,13 +620,7 @@ app.post(
         services: uniqueServices,
       });
 
-      // Calculate payment link expiry (IST)
-      const expiresAt = new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000);
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      const istDate = new Date(expiresAt.getTime() + istOffset);
-      const expiresAtIST = istDate.toISOString().replace('Z', '').split('.')[0];
-
-      const frontendUrl = process.env.FRONTEND_URL || 'https://ruatfly.github.io/Tlangau';
+      const frontendUrl = process.env.FRONTEND_URL || 'https://tlangau.onrender.com';
       const backendUrl = process.env.BACKEND_URL || 'https://tlangau.onrender.com';
 
       const purposeDetail = uniqueServices.length === 3
@@ -642,7 +636,6 @@ app.post(
         redirect_url: `${frontendUrl}/success.html?order_id=${orderId}`,
         webhook: `${backendUrl}/api/payment-webhook`,
         allow_repeated_payments: false,
-        expires_at: expiresAtIST,
       };
 
       try {
