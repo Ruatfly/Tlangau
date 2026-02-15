@@ -1557,8 +1557,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
   }
 });
 
-// Send message notification – requires 'message' service
-app.post('/api/send-message', fcmLimiter, requireServerAuth, requireService('message'), async (req, res) => {
+// Send message notification – requires 'message' OR 'broadcast' depending on mode
+app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) => {
   try {
     const {
       fcmTopicName, fcmTopicNames, bundleName, messageText,
@@ -1567,13 +1567,25 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireService('mes
       isBroadcast,
     } = req.body;
 
-    // If this is a broadcast request, check broadcast service
-    if (isBroadcast && !(req.userServices || []).includes('broadcast')) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have access to the Broadcast Message service. Please purchase this service to use it.',
-        requiredService: 'broadcast',
-      });
+    const userServices = req.userServices || [];
+
+    // Service gate: broadcast mode needs 'broadcast', normal mode needs 'message'
+    if (isBroadcast) {
+      if (!userServices.includes('broadcast')) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to the Broadcast Message service. Please purchase this service to use it.',
+          requiredService: 'broadcast',
+        });
+      }
+    } else {
+      if (!userServices.includes('message')) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to the Message Notification service. Please purchase this service to use it.',
+          requiredService: 'message',
+        });
+      }
     }
 
     const topicNames = fcmTopicNames || (fcmTopicName ? [fcmTopicName] : []);
