@@ -773,20 +773,32 @@
 
         // Switch tabs
         function switchTab(tab) {
+            // Remove active from all tabs and contents
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            if (tab === 'orders') {
-                document.getElementById('ordersTab').classList.add('active');
-            } else if (tab === 'codes') {
-                document.getElementById('codesTab').classList.add('active');
-            } else if (tab === 'users') {
-                document.getElementById('usersTab').classList.add('active');
-            } else if (tab === 'bundles') {
-                document.getElementById('bundlesTab').classList.add('active');
-                loadBundles(); // Load bundles when tab is opened
+
+            // Map tab name to button index and content ID
+            const tabMap = {
+                orders:  { index: 0, contentId: 'ordersTab' },
+                codes:   { index: 1, contentId: 'codesTab' },
+                users:   { index: 2, contentId: 'usersTab' },
+                bundles: { index: 3, contentId: 'bundlesTab' },
+            };
+
+            const info = tabMap[tab];
+            if (!info) return;
+
+            // Activate the correct tab button
+            const tabButtons = document.querySelectorAll('.tab');
+            if (tabButtons[info.index]) {
+                tabButtons[info.index].classList.add('active');
             }
+
+            // Show the correct content
+            document.getElementById(info.contentId).classList.add('active');
+
+            // Load bundles data when that tab is opened
+            if (tab === 'bundles') loadBundles();
         }
 
         // Filter table
