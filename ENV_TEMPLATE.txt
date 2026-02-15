@@ -1,0 +1,48 @@
+# Server Configuration
+PORT=3001
+NODE_ENV=production
+
+# Email Configuration (Gmail)
+EMAIL_SERVICE=brevo
+# Options: gmail, brevo, sendgrid
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+EMAIL_FROM=your_email@gmail.com
+EMAIL_PORT=2525
+# For Gmail, use App Password: https://support.google.com/accounts/answer/185833
+
+# Instamojo Payment Gateway Configuration
+INSTAMOJO_API_KEY=your_instamojo_api_key
+INSTAMOJO_AUTH_TOKEN=your_instamojo_auth_token
+INSTAMOJO_PRIVATE_SALT=your_instamojo_private_salt
+INSTAMOJO_ENV=production
+# Options: test (for testing) or production (for live payments)
+# INSTAMOJO_PRIVATE_SALT: Found in Instamojo Dashboard > API & Plugins > Private Salt
+# This is REQUIRED for webhook MAC verification (security)
+# Get your API credentials from: https://www.instamojo.com/developers/
+
+# Frontend and Backend URLs
+FRONTEND_URL=https://ruatfly.github.io/Tlangau
+BACKEND_URL=https://your-backend-url.com
+# For local development, use: http://localhost:3001
+# IMPORTANT: For webhooks to work, BACKEND_URL must be publicly accessible
+
+# Admin Dashboard Configuration
+ADMIN_PASSWORD=your_secure_admin_password
+# This password is used to access the admin dashboard at /admin.html
+# IMPORTANT: REQUIRED in production. Server will NOT start without it.
+# Use a strong, unique password (16+ chars recommended)
+
+# Firebase Admin SDK Configuration (for Database & Bundle/Topic Management)
+# Option 1: Service account JSON as environment variable (recommended for Render/Railway)
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
+# Option 2: Path to service account JSON file (for local development)
+FIREBASE_SERVICE_ACCOUNT_PATH=./service-account-key.json
+# Firebase Realtime Database URL
+FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebasedatabase.app
+# To get service account key:
+# 1. Go to Firebase Console > Project Settings > Service Accounts
+# 2. Click "Generate new private key"
+# 3. Download the JSON file
+# 4. For Render: Copy the entire JSON content and paste as FIREBASE_SERVICE_ACCOUNT_JSON
+# 5. For local: Save the file as service-account-key.json in tlangau-web directory

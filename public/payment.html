@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Purchase Tlangau server access code. Choose your services and pay securely. Get instant access code via email.">
+    <meta name="robots" content="noindex, follow">
+    <title>Purchase Access Code - Tlangau</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="index.html"><h1>🚀 Tlangau</h1></a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#features">Features</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Payment Section -->
+    <section class="payment-section">
+        <div class="container">
+            <div class="payment-container">
+                <div class="payment-header">
+                    <h1>Purchase Server Access Code</h1>
+                    <p>Select the services you need and complete payment to receive your access code</p>
+                </div>
+
+                <div class="payment-content">
+                    <!-- Order Summary (dynamic) -->
+                    <div class="order-summary" id="orderSummary">
+                        <h3>Order Summary</h3>
+
+                        <div class="summary-item" id="summaryServices">
+                            <span>Selected Services</span>
+                            <span id="serviceCount">0 selected</span>
+                        </div>
+                        <div id="serviceLineItems"></div>
+                        <div class="summary-item">
+                            <span>Validity</span>
+                            <span>30 Days</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Delivery</span>
+                            <span>Instant Email</span>
+                        </div>
+                        <div class="summary-item" style="border-bottom: none;">
+                            <span>📊 Statistics & Insights</span>
+                            <span style="color: #48bb78; font-weight: 600;">FREE</span>
+                        </div>
+                        <div class="summary-total">
+                            <span>Total Amount</span>
+                            <span class="total-amount" id="totalAmount">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Form -->
+                    <div class="payment-form-container">
+                        <form id="paymentForm" class="payment-form">
+                            <!-- Service Selection -->
+                            <div class="form-group">
+                                <label>Choose Your Services *</label>
+                                <small class="form-help" style="margin-bottom: 12px; display: block;">Select the services you want access to (₹10 each)</small>
+
+                                <div class="service-selection">
+                                    <label class="service-card" for="service-ring">
+                                        <input type="checkbox" id="service-ring" name="services" value="ring">
+                                        <div class="service-card-content">
+                                            <div class="service-icon" style="background: #AD131D;">♻️</div>
+                                            <div class="service-info">
+                                                <strong>Ring Notification</strong>
+                                                <span>Bawlhhlawh paih hriattirna</span>
+                                            </div>
+                                            <div class="service-price">₹10</div>
+                                        </div>
+                                    </label>
+
+                                    <label class="service-card" for="service-message">
+                                        <input type="checkbox" id="service-message" name="services" value="message">
+                                        <div class="service-card-content">
+                                            <div class="service-icon" style="background: #3B8C19;">💬</div>
+                                            <div class="service-info">
+                                                <strong>Message Notification</strong>
+                                                <span>Information Notice</span>
+                                            </div>
+                                            <div class="service-price">₹10</div>
+                                        </div>
+                                    </label>
+
+                                    <label class="service-card" for="service-broadcast">
+                                        <input type="checkbox" id="service-broadcast" name="services" value="broadcast">
+                                        <div class="service-card-content">
+                                            <div class="service-icon" style="background: #1565C0;">📢</div>
+                                            <div class="service-info">
+                                                <strong>Broadcast Message</strong>
+                                                <span>Multi-bundle broadcast</span>
+                                            </div>
+                                            <div class="service-price">₹10</div>
+                                        </div>
+                                    </label>
+
+                                    <div class="service-card service-card-free">
+                                        <div class="service-card-content">
+                                            <div class="service-icon" style="background: #6A1B9A;">📊</div>
+                                            <div class="service-info">
+                                                <strong>Statistics & Insights</strong>
+                                                <span>Always included</span>
+                                            </div>
+                                            <div class="service-price service-free-badge">FREE</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Quick select buttons -->
+                                <div class="service-quick-select">
+                                    <button type="button" class="quick-select-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All (₹30)</button>
+                                </div>
+
+                                <div id="serviceError" class="service-error" style="display: none;">
+                                    Please select at least one service
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="email">Email Address *</label>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    name="email" 
+                                    placeholder="your.email@example.com"
+                                    required
+                                    autocomplete="email"
+                                >
+                                <small class="form-help">Your access code will be sent to this email</small>
+                            </div>
+
+                            <div class="payment-info">
+                                <div class="info-box">
+                                    <h4>📋 What You'll Get</h4>
+                                    <ul>
+                                        <li>Unique 12-character access code</li>
+                                        <li>Valid for 30 days from purchase</li>
+                                        <li>Access to your selected services only</li>
+                                        <li>Instant email delivery</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-large btn-primary btn-payment" id="paymentBtn" disabled>
+                                <span id="paymentBtnText">Select services to continue</span>
+                                <span class="amount-badge" id="paymentBtnAmount">₹0</span>
+                            </button>
+
+                            <p class="payment-security">
+                                🔒 Secure payment via Instamojo • 256-bit encryption
+                            </p>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>🚀 Tlangau</h3>
+                    <p>Secure server access code purchase platform.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="privacy-policy.html">Privacy Policy</a></li>
+                        <li><a href="terms-conditions.html">Terms & Conditions</a></li>
+                        <li><a href="refund-policy.html">Refund Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="contact.html">Contact Us</a></li>
+                        <li><a href="index.html#faq">FAQ</a></li>
+                        <li><a href="index.html">Home</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Tlangau. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

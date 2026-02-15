@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Payment Status - Tlangau</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <section class="success-section">
+        <div class="container">
+            <div class="success-container">
+                <div class="success-icon" id="statusIcon">
+                    <div class="loading-spinner-large" id="loadingSpinner"></div>
+                </div>
+                <h1 id="statusTitle">Verifying Payment...</h1>
+                <p class="success-message" id="statusMessage">Please wait while we confirm your payment with our payment provider.</p>
+
+                <!-- Progress indicator -->
+                <div class="verify-progress" id="verifyProgress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">Checking payment status...</p>
+                </div>
+                
+                <div class="success-info" id="successInfo" style="display: none;">
+                    <div class="info-card">
+                        <h3>📧 Check Your Email</h3>
+                        <p>We've sent your unique access code to the email address you provided.</p>
+                    </div>
+                    <div class="info-card" id="servicesCard" style="display: none;">
+                        <h3>📦 Your Services</h3>
+                        <div id="purchasedServices"></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>⏰ Code Validity</h3>
+                        <p>Your access code is valid for 30 days from now.</p>
+                    </div>
+                    <div class="info-card">
+                        <h3>📱 Next Steps</h3>
+                        <p>Open the Tlangau app and enter your access code to unlock your selected services.</p>
+                    </div>
+                </div>
+
+                <div class="success-actions" id="successActions" style="display: none;">
+                    <a href="index.html" class="btn btn-primary">Back to Home</a>
+                    <a href="payment.html" class="btn btn-secondary">Purchase Another Code</a>
+                </div>
+
+                <div class="help-box" id="helpBox" style="display: none;">
+                    <h4>Need Help?</h4>
+                    <p>If you didn't receive the email, please check your spam folder. For support, contact us at <a href="mailto:chhakchhuakr59@gmail.com">chhakchhuakr59@gmail.com</a></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>🚀 Tlangau</h3>
+                    <p>Secure server access code purchase platform.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="privacy-policy.html">Privacy Policy</a></li>
+                        <li><a href="terms-conditions.html">Terms & Conditions</a></li>
+                        <li><a href="refund-policy.html">Refund Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="contact.html">Contact Us</a></li>
+                        <li><a href="index.html#faq">FAQ</a></li>
+                        <li><a href="index.html">Home</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Tlangau. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script>
+        (async function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('order_id');
+            const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+
+            const MAX_RETRIES = 12;    // Max polling attempts
+            const POLL_INTERVAL = 5000; // 5 seconds between each poll
+            let retryCount = 0;
+
+            // Clean up stored payment session
+            sessionStorage.removeItem('tlangau_payment');
+
+            if (!orderId) {
+                showFinalStatus('❌', 'Payment Verification Failed',
+                    'No order ID found. If you completed the payment, please contact support.');
+                return;
+            }
+
+            if (!backendUrl || backendUrl.includes('your-backend-url')) {
+                showFinalStatus('⚠️', 'Configuration Error',
+                    'Backend URL not configured. Please contact support.');
+                return;
+            }
+
+            // Start polling
+            await pollPaymentStatus();
+
+            async function pollPaymentStatus() {
+                retryCount++;
+                updateProgress(retryCount, MAX_RETRIES);
+
+                try {
+                    const response = await fetch(`${backendUrl}/api/verify-payment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ orderId }),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.paymentStatus === 'SUCCESS') {
+                        showFinalStatus('✅', 'Payment Successful!',
+                            'Your access code has been sent to your email address.', true);
+                        showPurchasedServices(data.services);
+                        return;
+                    }
+
+                    if (data.paymentStatus === 'FAILED') {
+                        showFinalStatus('❌', 'Payment Failed',
+                            'Your payment was not successful. No charges were made. Please try again.');
+                        return;
+                    }
+
+                    if (data.paymentStatus === 'EXPIRED') {
+                        showFinalStatus('⏰', 'Payment Session Expired',
+                            'Your payment session has expired. Please start a new payment.');
+                        return;
+                    }
+
+                    // Still pending – retry if within limits
+                    if (retryCount < MAX_RETRIES) {
+                        updateProgressText(`Verifying... (attempt ${retryCount}/${MAX_RETRIES})`);
+                        setTimeout(pollPaymentStatus, POLL_INTERVAL);
+                    } else {
+                        showFinalStatus('⏳', 'Payment Processing',
+                            'Your payment is still being processed. You will receive an email once it is confirmed. This may take a few minutes.',
+                            false, true);
+                    }
+                } catch (error) {
+                    console.error('Verification error:', error);
+                    if (retryCount < MAX_RETRIES) {
+                        updateProgressText(`Connection error. Retrying... (${retryCount}/${MAX_RETRIES})`);
+                        setTimeout(pollPaymentStatus, POLL_INTERVAL);
+                    } else {
+                        showFinalStatus('⚠️', 'Verification Error',
+                            'Unable to verify payment status. Please check your email or contact support.',
+                            false, true);
+                    }
+                }
+            }
+
+            function updateProgress(current, total) {
+                const fill = document.getElementById('progressFill');
+                if (fill) {
+                    fill.style.width = `${(current / total) * 100}%`;
+                }
+            }
+
+            function updateProgressText(text) {
+                const el = document.getElementById('progressText');
+                if (el) el.textContent = text;
+            }
+
+            const SERVICE_LABELS = {
+                ring: { icon: '♻️', name: 'Ring Notification' },
+                message: { icon: '💬', name: 'Message Notification' },
+                broadcast: { icon: '📢', name: 'Broadcast Message' },
+                statistics: { icon: '📊', name: 'Statistics & Insights' },
+            };
+
+            function showPurchasedServices(services) {
+                if (!services || services.length === 0) return;
+                const card = document.getElementById('servicesCard');
+                const container = document.getElementById('purchasedServices');
+                if (!card || !container) return;
+
+                const html = services.map(s => {
+                    const label = SERVICE_LABELS[s] || { icon: '✅', name: s };
+                    const isFree = s === 'statistics';
+                    return `<p style="margin: 4px 0; font-size: 0.95rem; color: #4a5568;">${label.icon} ${label.name}${isFree ? ' <span style="background:#48bb78;color:white;padding:1px 6px;border-radius:8px;font-size:0.7rem;">FREE</span>' : ''}</p>`;
+                }).join('');
+
+                container.innerHTML = html;
+                card.style.display = 'block';
+            }
+
+            function showFinalStatus(icon, title, message, showSuccess = false, showHelp = false) {
+                // Hide progress
+                const progress = document.getElementById('verifyProgress');
+                if (progress) progress.style.display = 'none';
+
+                // Hide loading spinner, show icon
+                const spinner = document.getElementById('loadingSpinner');
+                if (spinner) spinner.style.display = 'none';
+
+                const iconEl = document.getElementById('statusIcon');
+                if (iconEl) {
+                    iconEl.textContent = icon;
+                    iconEl.style.fontSize = '5rem';
+                }
+
+                document.getElementById('statusTitle').textContent = title;
+                document.getElementById('statusMessage').textContent = message;
+
+                if (showSuccess) {
+                    document.getElementById('successInfo').style.display = 'grid';
+                    document.getElementById('helpBox').style.display = 'block';
+                }
+
+                document.getElementById('successActions').style.display = 'flex';
+
+                if (showHelp) {
+                    document.getElementById('helpBox').style.display = 'block';
+                }
+            }
+        })();
+    </script>
+</body>
+</html>

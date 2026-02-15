@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: tlangau-server-portal
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: EMAIL_SERVICE
+        value: brevo
+      - key: EMAIL_PORT
+        value: 2525
+      - key: EMAIL_FROM
+        value: ruatfelachhakchhuak243@gmail.com
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: INSTAMOJO_API_KEY
+        sync: false
+      - key: INSTAMOJO_AUTH_TOKEN
+        sync: false
+      - key: INSTAMOJO_PRIVATE_SALT
+        sync: false
+      - key: INSTAMOJO_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FIREBASE_DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        value: https://ruatfly.github.io/Tlangau
+      - key: BACKEND_URL
+        value: https://tlangau.onrender.com
