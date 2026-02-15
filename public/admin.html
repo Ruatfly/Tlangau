@@ -328,7 +328,7 @@
     <div id="dashboard" class="dashboard">
         <div class="container">
             <div class="header">
-                <button class="logout-btn" onclick="logout()">Logout</button>
+                <button class="logout-btn" id="logoutBtn">Logout</button>
                 <h1>📊 Admin Dashboard</h1>
                 <p>Manage orders, access codes, users, and view statistics</p>
             </div>
@@ -366,17 +366,17 @@
             </div>
 
             <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab active" onclick="switchTab('orders')">Orders</button>
-                <button class="tab" onclick="switchTab('codes')">Access Codes</button>
-                <button class="tab" onclick="switchTab('users')">Users</button>
-                <button class="tab" onclick="switchTab('bundles')">Bundles & Topics</button>
+            <div class="tabs" id="tabsBar">
+                <button class="tab active" data-tab="orders">Orders</button>
+                <button class="tab" data-tab="codes">Access Codes</button>
+                <button class="tab" data-tab="users">Users</button>
+                <button class="tab" data-tab="bundles">Bundles & Topics</button>
             </div>
 
             <!-- Orders Tab -->
             <div id="ordersTab" class="tab-content active">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="ordersSearch" placeholder="Search orders by email, order ID, or payment ID..." onkeyup="filterTable('ordersTable', 'ordersSearch')">
+                    <input type="text" class="search-box" id="ordersSearch" placeholder="Search orders by email, order ID, or payment ID...">
                     <div id="ordersLoading" class="loading">Loading orders...</div>
                     <table id="ordersTable" style="display: none;">
                         <thead>
@@ -399,7 +399,7 @@
             <!-- Access Codes Tab -->
             <div id="codesTab" class="tab-content">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="codesSearch" placeholder="Search codes by code, email, or order ID..." onkeyup="filterTable('codesTable', 'codesSearch')">
+                    <input type="text" class="search-box" id="codesSearch" placeholder="Search codes by code, email, or order ID...">
                     <div id="codesLoading" class="loading">Loading access codes...</div>
                     <table id="codesTable" style="display: none;">
                         <thead>
@@ -423,7 +423,7 @@
             <!-- Users Tab -->
             <div id="usersTab" class="tab-content">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="usersSearch" placeholder="Search users by email..." onkeyup="filterTable('usersTable', 'usersSearch')">
+                    <input type="text" class="search-box" id="usersSearch" placeholder="Search users by email...">
                     <div id="usersLoading" class="loading">Loading users...</div>
                     <table id="usersTable" style="display: none;">
                         <thead>
@@ -445,7 +445,7 @@
             <!-- Bundles & Topics Tab -->
             <div id="bundlesTab" class="tab-content">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="bundlesSearch" placeholder="Search bundles or topics..." onkeyup="filterBundlesTable()">
+                    <input type="text" class="search-box" id="bundlesSearch" placeholder="Search bundles or topics...">
                     <div id="bundlesLoading" class="loading">Loading bundles and topics...</div>
                     <div id="bundlesContainer" style="display: none;">
                         <div id="bundlesList"></div>
@@ -460,7 +460,9 @@
         const BACKEND_URL = window.BACKEND_URL || 'http://localhost:3001';
         let adminPassword = '';
 
-        // Login
+        // ==================== EVENT LISTENERS (CSP-safe, no inline handlers) ====================
+
+        // Login form
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const password = document.getElementById('password').value;
@@ -498,7 +500,64 @@
             }
         });
 
-        // Load dashboard data
+        // Logout button
+        document.getElementById('logoutBtn').addEventListener('click', function () {
+            if (confirm('Are you sure you want to logout?')) {
+                adminPassword = '';
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('dashboard').classList.remove('active');
+                document.getElementById('password').value = '';
+            }
+        });
+
+        // Tab buttons (event delegation on tabs bar)
+        document.getElementById('tabsBar').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-tab]');
+            if (!btn) return;
+            switchTab(btn.dataset.tab);
+        });
+
+        // Search boxes
+        document.getElementById('ordersSearch').addEventListener('keyup', function () {
+            filterTable('ordersTable', 'ordersSearch');
+        });
+        document.getElementById('codesSearch').addEventListener('keyup', function () {
+            filterTable('codesTable', 'codesSearch');
+        });
+        document.getElementById('usersSearch').addEventListener('keyup', function () {
+            filterTable('usersTable', 'usersSearch');
+        });
+        document.getElementById('bundlesSearch').addEventListener('keyup', function () {
+            filterBundlesTable();
+        });
+
+        // Event delegation for dynamically created delete buttons
+        document.getElementById('ordersBody').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-delete-order]');
+            if (btn) deleteOrder(btn.dataset.deleteOrder);
+        });
+        document.getElementById('codesBody').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-delete-code]');
+            if (btn) deleteCode(btn.dataset.deleteCode);
+        });
+        document.getElementById('usersBody').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-delete-user]');
+            if (btn) deleteUser(btn.dataset.deleteUser);
+        });
+        document.getElementById('bundlesList').addEventListener('click', function (e) {
+            const delBundle = e.target.closest('[data-delete-bundle]');
+            if (delBundle) {
+                deleteBundle(delBundle.dataset.deleteBundle, delBundle.dataset.bundleName);
+                return;
+            }
+            const delTopic = e.target.closest('[data-delete-topic]');
+            if (delTopic) {
+                deleteTopic(delTopic.dataset.bundleId, delTopic.dataset.deleteTopic, delTopic.dataset.topicName);
+            }
+        });
+
+        // ==================== DASHBOARD DATA ====================
+
         async function loadDashboard() {
             await Promise.all([
                 loadStatistics(),
@@ -509,7 +568,6 @@
             ]);
         }
 
-        // Load statistics
         async function loadStatistics() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/statistics`, {
@@ -532,7 +590,13 @@
             }
         }
 
-        // Load orders
+        // Helper: escape HTML to prevent XSS in dynamic content
+        function esc(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
         async function loadOrders() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/orders`, {
@@ -550,21 +614,21 @@
                         data.orders.forEach(order => {
                             const row = document.createElement('tr');
                             const amount = (order.amount / 100).toFixed(2);
-                            const statusBadge = `<span class="badge ${order.status.toLowerCase()}">${order.status}</span>`;
+                            const statusBadge = `<span class="badge ${esc(order.status.toLowerCase())}">${esc(order.status)}</span>`;
                             const services = order.services || [];
                             const servicesBadges = services.length > 0
-                                ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${s}</span>`).join(' ')
+                                ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
                                 : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
                             row.innerHTML = `
-                                <td>${order.order_id}</td>
-                                <td>${order.email}</td>
-                                <td>₹${amount}</td>
+                                <td>${esc(order.order_id)}</td>
+                                <td>${esc(order.email)}</td>
+                                <td>₹${esc(amount)}</td>
                                 <td>${servicesBadges}</td>
                                 <td>${statusBadge}</td>
-                                <td>${order.payment_id || '-'}</td>
-                                <td>${new Date(order.created_at).toLocaleString()}</td>
+                                <td>${esc(order.payment_id || '-')}</td>
+                                <td>${esc(new Date(order.created_at).toLocaleString())}</td>
                                 <td>
-                                    <button class="btn-danger" onclick="deleteOrder('${order.order_id}')">Delete</button>
+                                    <button class="btn-danger" data-delete-order="${esc(order.order_id)}">Delete</button>
                                 </td>
                             `;
                             tbody.appendChild(row);
@@ -580,7 +644,6 @@
             }
         }
 
-        // Load access codes
         async function loadAccessCodes() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/access-codes`, {
@@ -598,8 +661,8 @@
                         data.codes.forEach(code => {
                             const row = document.createElement('tr');
                             const statusBadge = code.used 
-                                ? `<span class="badge used">Used</span>`
-                                : `<span class="badge unused">Unused</span>`;
+                                ? '<span class="badge used">Used</span>'
+                                : '<span class="badge unused">Unused</span>';
                             const expiresAtRaw = code.expires_at || code.expiresAt;
                             let expiresAt = new Date(expiresAtRaw);
                             
@@ -611,25 +674,25 @@
                             const expiresText = isNaN(expiresAt.getTime()) 
                                 ? '<span style="color: #dc3545;">Unknown</span>'
                                 : (isExpired 
-                                    ? `<span style="color: #dc3545;">${expiresAt.toLocaleString()} (Expired)</span>`
-                                    : expiresAt.toLocaleString());
+                                    ? `<span style="color: #dc3545;">${esc(expiresAt.toLocaleString())} (Expired)</span>`
+                                    : esc(expiresAt.toLocaleString()));
                             
                             const services = code.services || [];
                             const servicesBadges = services.length > 0
-                                ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${s}</span>`).join(' ')
+                                ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
                                 : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
 
                             row.innerHTML = `
-                                <td><strong>${code.code}</strong></td>
-                                <td>${code.email}</td>
-                                <td>${code.order_id}</td>
+                                <td><strong>${esc(code.code)}</strong></td>
+                                <td>${esc(code.email)}</td>
+                                <td>${esc(code.order_id)}</td>
                                 <td>${servicesBadges}</td>
                                 <td>${statusBadge}</td>
-                                <td>${code.used_by_email || '-'}</td>
+                                <td>${esc(code.used_by_email || '-')}</td>
                                 <td>${expiresText}</td>
-                                <td>${new Date(code.created_at).toLocaleString()}</td>
+                                <td>${esc(new Date(code.created_at).toLocaleString())}</td>
                                 <td>
-                                    <button class="btn-danger" onclick="deleteCode('${code.code}')">Delete</button>
+                                    <button class="btn-danger" data-delete-code="${esc(code.code)}">Delete</button>
                                 </td>
                             `;
                             tbody.appendChild(row);
@@ -645,7 +708,6 @@
             }
         }
 
-        // Load users
         async function loadUsers() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
@@ -663,14 +725,14 @@
                         data.users.forEach(user => {
                             const row = document.createElement('tr');
                             row.innerHTML = `
-                                <td>${user.email}</td>
+                                <td>${esc(user.email)}</td>
                                 <td>${user.totalOrders}</td>
                                 <td>${user.successfulOrders}</td>
                                 <td>₹${user.totalSpent.toFixed(2)}</td>
-                                <td>${new Date(user.firstOrder).toLocaleString()}</td>
-                                <td>${new Date(user.lastOrder).toLocaleString()}</td>
+                                <td>${esc(new Date(user.firstOrder).toLocaleString())}</td>
+                                <td>${esc(new Date(user.lastOrder).toLocaleString())}</td>
                                 <td>
-                                    <button class="btn-danger" onclick="deleteUser('${user.email}')">Delete All Data</button>
+                                    <button class="btn-danger" data-delete-user="${esc(user.email)}">Delete All Data</button>
                                 </td>
                             `;
                             tbody.appendChild(row);
@@ -686,145 +748,6 @@
             }
         }
 
-        // Delete access code
-        async function deleteCode(code) {
-            if (!confirm(`Are you sure you want to delete access code "${code}"?\n\nThis action cannot be undone.`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/access-codes/${code}`, {
-                    method: 'DELETE',
-                    headers: { 'X-Admin-Password': adminPassword },
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    alert('✅ Access code deleted successfully');
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete code'));
-                }
-            } catch (error) {
-                alert('❌ Error deleting code: ' + error.message);
-            }
-        }
-
-        // Delete order
-        async function deleteOrder(orderId) {
-            if (!confirm(`Are you sure you want to delete order "${orderId}"?\n\nThis will also delete all associated access codes.\n\nThis action cannot be undone.`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/orders/${orderId}`, {
-                    method: 'DELETE',
-                    headers: { 'X-Admin-Password': adminPassword },
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    alert('✅ Order and associated access codes deleted successfully');
-                    loadOrders();
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete order'));
-                }
-            } catch (error) {
-                alert('❌ Error deleting order: ' + error.message);
-            }
-        }
-
-        // Delete user
-        async function deleteUser(email) {
-            if (!confirm(`⚠️ WARNING: Are you sure you want to delete ALL data for user "${email}"?\n\nThis will delete:\n- All orders\n- All access codes\n- All user information\n\nThis action CANNOT be undone!`)) {
-                return;
-            }
-
-            // Double confirmation
-            const confirmText = prompt(`Type "DELETE" to confirm deletion of all data for ${email}:`);
-            if (confirmText !== 'DELETE') {
-                alert('Deletion cancelled');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/users/${encodeURIComponent(email)}`, {
-                    method: 'DELETE',
-                    headers: { 'X-Admin-Password': adminPassword },
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`✅ User data deleted successfully\n\nDeleted:\n- ${data.deletedOrders} orders\n- ${data.deletedCodes} access codes`);
-                    loadUsers();
-                    loadOrders();
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete user'));
-                }
-            } catch (error) {
-                alert('❌ Error deleting user: ' + error.message);
-            }
-        }
-
-        // Switch tabs
-        function switchTab(tab) {
-            // Remove active from all tabs and contents
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-            // Map tab name to button index and content ID
-            const tabMap = {
-                orders:  { index: 0, contentId: 'ordersTab' },
-                codes:   { index: 1, contentId: 'codesTab' },
-                users:   { index: 2, contentId: 'usersTab' },
-                bundles: { index: 3, contentId: 'bundlesTab' },
-            };
-
-            const info = tabMap[tab];
-            if (!info) return;
-
-            // Activate the correct tab button
-            const tabButtons = document.querySelectorAll('.tab');
-            if (tabButtons[info.index]) {
-                tabButtons[info.index].classList.add('active');
-            }
-
-            // Show the correct content
-            document.getElementById(info.contentId).classList.add('active');
-
-            // Load bundles data when that tab is opened
-            if (tab === 'bundles') loadBundles();
-        }
-
-        // Filter table
-        function filterTable(tableId, searchId) {
-            const input = document.getElementById(searchId);
-            const filter = input.value.toLowerCase();
-            const table = document.getElementById(tableId);
-            const tr = table.getElementsByTagName('tr');
-
-            for (let i = 1; i < tr.length; i++) {
-                const td = tr[i].getElementsByTagName('td');
-                let found = false;
-                for (let j = 0; j < td.length; j++) {
-                    if (td[j]) {
-                        const txtValue = td[j].textContent || td[j].innerText;
-                        if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                tr[i].style.display = found ? '' : 'none';
-            }
-        }
-
-        // Load bundles and topics
         async function loadBundles() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/bundles`, {
@@ -851,11 +774,11 @@
                                 bundle.topics.forEach(topic => {
                                     topicsHtml += `
                                         <tr>
-                                            <td><strong>${topic.name}</strong></td>
-                                            <td><code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${topic.fcmTopicName}</code></td>
+                                            <td><strong>${esc(topic.name)}</strong></td>
+                                            <td><code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(topic.fcmTopicName)}</code></td>
                                             <td>${topic.subscribers}</td>
                                             <td>
-                                                <button class="btn-danger" onclick="deleteTopic('${bundle.id}', '${topic.id}', '${topic.name.replace(/'/g, "\\'")}')">Delete Topic</button>
+                                                <button class="btn-danger" data-delete-topic="${esc(topic.id)}" data-bundle-id="${esc(bundle.id)}" data-topic-name="${esc(topic.name)}">Delete Topic</button>
                                             </td>
                                         </tr>
                                     `;
@@ -866,13 +789,13 @@
                             bundleCard.innerHTML = `
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <div>
-                                        <h3 style="margin: 0; color: #667eea; font-size: 20px;">${bundle.name}</h3>
+                                        <h3 style="margin: 0; color: #667eea; font-size: 20px;">${esc(bundle.name)}</h3>
                                         <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
-                                            Bundle ID: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${bundle.id}</code>
+                                            Bundle ID: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(bundle.id)}</code>
                                             | ${bundle.topicsCount} topic${bundle.topicsCount !== 1 ? 's' : ''}
                                         </p>
                                     </div>
-                                    <button class="btn-danger" onclick="deleteBundle('${bundle.id}', '${bundle.name.replace(/'/g, "\\'")}')" style="padding: 10px 20px; font-size: 14px;">
+                                    <button class="btn-danger" data-delete-bundle="${esc(bundle.id)}" data-bundle-name="${esc(bundle.name)}" style="padding: 10px 20px; font-size: 14px;">
                                         Delete Bundle
                                     </button>
                                 </div>
@@ -903,19 +826,81 @@
             }
         }
 
-        // Delete bundle
-        async function deleteBundle(bundleId, bundleName) {
-            if (!confirm(`⚠️ Are you sure you want to delete bundle "${bundleName}"?\n\nThis will delete ALL topics in this bundle.\n\nThis action cannot be undone.`)) {
-                return;
-            }
+        // ==================== DELETE ACTIONS ====================
 
+        async function deleteCode(code) {
+            if (!confirm(`Are you sure you want to delete access code "${code}"?\n\nThis action cannot be undone.`)) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/access-codes/${code}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Access code deleted successfully');
+                    loadAccessCodes();
+                    loadStatistics();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete code'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting code: ' + error.message);
+            }
+        }
+
+        async function deleteOrder(orderId) {
+            if (!confirm(`Are you sure you want to delete order "${orderId}"?\n\nThis will also delete all associated access codes.\n\nThis action cannot be undone.`)) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/orders/${orderId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Order and associated access codes deleted successfully');
+                    loadOrders();
+                    loadAccessCodes();
+                    loadStatistics();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete order'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting order: ' + error.message);
+            }
+        }
+
+        async function deleteUser(email) {
+            if (!confirm(`⚠️ WARNING: Are you sure you want to delete ALL data for user "${email}"?\n\nThis will delete:\n- All orders\n- All access codes\n- All user information\n\nThis action CANNOT be undone!`)) return;
+            const confirmText = prompt(`Type "DELETE" to confirm deletion of all data for ${email}:`);
+            if (confirmText !== 'DELETE') { alert('Deletion cancelled'); return; }
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/users/${encodeURIComponent(email)}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ User data deleted successfully\n\nDeleted:\n- ${data.deletedOrders} orders\n- ${data.deletedCodes} access codes`);
+                    loadUsers();
+                    loadOrders();
+                    loadAccessCodes();
+                    loadStatistics();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete user'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting user: ' + error.message);
+            }
+        }
+
+        async function deleteBundle(bundleId, bundleName) {
+            if (!confirm(`⚠️ Are you sure you want to delete bundle "${bundleName}"?\n\nThis will delete ALL topics in this bundle.\n\nThis action cannot be undone.`)) return;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
-
                 if (data.success) {
                     alert('✅ Bundle deleted successfully');
                     loadBundles();
@@ -927,19 +912,14 @@
             }
         }
 
-        // Delete topic
         async function deleteTopic(bundleId, topicId, topicName) {
-            if (!confirm(`Are you sure you want to delete topic "${topicName}"?\n\nThis action cannot be undone.`)) {
-                return;
-            }
-
+            if (!confirm(`Are you sure you want to delete topic "${topicName}"?\n\nThis action cannot be undone.`)) return;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}/topics/${topicId}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
-
                 if (data.success) {
                     alert('✅ Topic deleted successfully');
                     loadBundles();
@@ -951,7 +931,50 @@
             }
         }
 
-        // Filter bundles table
+        // ==================== HELPERS ====================
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+            const tabMap = {
+                orders:  { index: 0, contentId: 'ordersTab' },
+                codes:   { index: 1, contentId: 'codesTab' },
+                users:   { index: 2, contentId: 'usersTab' },
+                bundles: { index: 3, contentId: 'bundlesTab' },
+            };
+
+            const info = tabMap[tab];
+            if (!info) return;
+
+            const tabButtons = document.querySelectorAll('.tab');
+            if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
+            document.getElementById(info.contentId).classList.add('active');
+            if (tab === 'bundles') loadBundles();
+        }
+
+        function filterTable(tableId, searchId) {
+            const input = document.getElementById(searchId);
+            const filter = input.value.toLowerCase();
+            const table = document.getElementById(tableId);
+            const tr = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < tr.length; i++) {
+                const td = tr[i].getElementsByTagName('td');
+                let found = false;
+                for (let j = 0; j < td.length; j++) {
+                    if (td[j]) {
+                        const txtValue = td[j].textContent || td[j].innerText;
+                        if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                tr[i].style.display = found ? '' : 'none';
+            }
+        }
+
         function filterBundlesTable() {
             const input = document.getElementById('bundlesSearch');
             const filter = input.value.toLowerCase();
@@ -961,16 +984,6 @@
                 const text = bundleCard.textContent || bundleCard.innerText;
                 bundleCard.style.display = text.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
             });
-        }
-
-        // Logout
-        function logout() {
-            if (confirm('Are you sure you want to logout?')) {
-                adminPassword = '';
-                document.getElementById('loginScreen').style.display = 'block';
-                document.getElementById('dashboard').classList.remove('active');
-                document.getElementById('password').value = '';
-            }
         }
     </script>
 </body>
