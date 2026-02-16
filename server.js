@@ -25,7 +25,7 @@ const PAID_SERVICES = {
   message: { name: 'Message Notification', price: 10 },
   broadcast: { name: 'Broadcast Message', price: 10 },
 };
-const FREE_SERVICES = ['statistics'];
+const FREE_SERVICES = ['statistics', 'poll'];
 const VALID_SERVICE_IDS = Object.keys(PAID_SERVICES);
 const SERVICE_PRICE = 10; // ₹10 per service (configurable)
 
@@ -556,7 +556,10 @@ app.get('/api/services', (req, res) => {
       name: info.name,
       price: info.price,
     })),
-    freeServices: FREE_SERVICES.map(id => ({ id, name: 'Statistics & Insights' })),
+    freeServices: FREE_SERVICES.map(id => ({
+      id,
+      name: id === 'statistics' ? 'Statistics & Insights' : id === 'poll' ? 'Community Poll' : id,
+    })),
     pricePerService: SERVICE_PRICE,
     currency: 'INR',
   });
@@ -1697,6 +1700,221 @@ setInterval(async () => {
 app.use('/api/*', (req, res) => {
   res.status(404).json({ success: false, error: 'API endpoint not found' });
 });
+
+// ==================== POLL ENDPOINTS (Free for all users) ====================
+
+// Simple Google auth for any signed-in user (client or server)
+async function requireAnyAuth(req, res, next) {
+  const fbReady = await waitForFirebaseReady(15000);
+  if (!fbReady) {
+    return res.status(503).json({ success: false, message: 'Server starting up.' });
+  }
+  const email = await verifyGoogleAuth(req);
+  if (!email) {
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
+  }
+  req.userEmail = email;
+  next();
+}
+
+// Create poll (server users only)
+app.post('/api/polls', fcmLimiter, requireServerAuth, [
+  body('question').trim().notEmpty().withMessage('Question is required'),
+  body('options').isArray({ min: 2 }).withMessage('At least 2 options required'),
+  body('duration_type').isIn(['24h', '1week', 'custom']).withMessage('Invalid duration type'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, message: errors.array()[0].msg });
+  }
+
+  try {
+    const { question, options, duration_type, expires_at } = req.body;
+
+    // Calculate expiry
+    let expiresAt;
+    if (duration_type === '24h') {
+      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    } else if (duration_type === '1week') {
+      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      // custom — client sends expires_at
+      if (!expires_at) {
+        return res.status(400).json({ success: false, message: 'Custom expiry date required.' });
+      }
+      expiresAt = new Date(expires_at).toISOString();
+    }
+
+    const formattedOptions = options.map((text, idx) => ({
+      id: idx,
+      text: typeof text === 'string' ? text.trim() : text.text?.trim() || `Option ${idx + 1}`,
+      votes: 0,
+    }));
+
+    const pollId = await db.createPoll({
+      question: question.trim(),
+      options: formattedOptions,
+      created_by: req.userEmail,
+      expires_at: expiresAt,
+      duration_type,
+    });
+
+    console.log(`📊 Poll created by ${req.userEmail}: "${question.trim()}" (${formattedOptions.length} options, ${duration_type})`);
+
+    res.json({ success: true, pollId, message: 'Poll created successfully.' });
+  } catch (error) {
+    console.error('❌ Create poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to create poll.' });
+  }
+});
+
+// Get all polls (any authenticated user)
+app.get('/api/polls', requireAnyAuth, async (req, res) => {
+  try {
+    const polls = await db.getAllPolls();
+    const now = new Date();
+
+    // Auto-close expired polls
+    for (const poll of polls) {
+      if (poll.status === 'active' && new Date(poll.expires_at) <= now) {
+        poll.status = 'closed';
+        await db.updatePoll(poll.id, { status: 'closed' });
+      }
+    }
+
+    // Check which polls the user has voted on
+    for (const poll of polls) {
+      const choice = await db.getVoterChoice(poll.id, req.userEmail);
+      poll.user_voted = choice !== null;
+      poll.user_choice = choice;
+      // Strip voter map (privacy)
+      delete poll.voters;
+    }
+
+    res.json({ success: true, polls });
+  } catch (error) {
+    console.error('❌ Get polls error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch polls.' });
+  }
+});
+
+// Vote on a poll (any authenticated user)
+app.post('/api/polls/:id/vote', fcmLimiter, requireAnyAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { optionId } = req.body;
+
+    if (optionId === undefined || optionId === null) {
+      return res.status(400).json({ success: false, message: 'Option ID required.' });
+    }
+
+    const poll = await db.getPoll(id);
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+
+    // Check if expired
+    if (new Date(poll.expires_at) <= new Date()) {
+      if (poll.status !== 'closed') {
+        await db.updatePoll(id, { status: 'closed' });
+      }
+      return res.status(400).json({ success: false, message: 'This poll has expired.' });
+    }
+
+    if (poll.status !== 'active') {
+      return res.status(400).json({ success: false, message: 'This poll is closed.' });
+    }
+
+    // Validate option ID
+    if (optionId < 0 || optionId >= poll.options.length) {
+      return res.status(400).json({ success: false, message: 'Invalid option.' });
+    }
+
+    const result = await db.votePoll(id, optionId, req.userEmail);
+    if (!result.success) {
+      return res.status(409).json({ success: false, message: result.message });
+    }
+
+    // Fetch updated poll to return latest counts
+    const updated = await db.getPoll(id);
+    delete updated.voters;
+    updated.user_voted = true;
+    updated.user_choice = optionId;
+
+    console.log(`🗳️ Vote on "${poll.question}" by ${req.userEmail}: option ${optionId}`);
+    res.json({ success: true, message: 'Vote recorded!', poll: updated });
+  } catch (error) {
+    console.error('❌ Vote error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to record vote.' });
+  }
+});
+
+// Publish / unpublish results (poll creator only)
+app.post('/api/polls/:id/publish', requireServerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { publish } = req.body;
+
+    const poll = await db.getPoll(id);
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+    if (poll.created_by !== req.userEmail) {
+      return res.status(403).json({ success: false, message: 'Only the poll creator can publish results.' });
+    }
+
+    await db.updatePoll(id, { publish_results: publish === true });
+    console.log(`📊 Poll "${poll.question}" results ${publish ? 'published' : 'unpublished'} by ${req.userEmail}`);
+    res.json({ success: true, message: publish ? 'Results published.' : 'Results unpublished.' });
+  } catch (error) {
+    console.error('❌ Publish poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to update poll.' });
+  }
+});
+
+// Close poll early (poll creator only)
+app.post('/api/polls/:id/close', requireServerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const poll = await db.getPoll(id);
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+    if (poll.created_by !== req.userEmail) {
+      return res.status(403).json({ success: false, message: 'Only the poll creator can close the poll.' });
+    }
+
+    await db.updatePoll(id, { status: 'closed' });
+    console.log(`📊 Poll "${poll.question}" closed early by ${req.userEmail}`);
+    res.json({ success: true, message: 'Poll closed.' });
+  } catch (error) {
+    console.error('❌ Close poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to close poll.' });
+  }
+});
+
+// Delete poll (poll creator only)
+app.delete('/api/polls/:id', requireServerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const poll = await db.getPoll(id);
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+    if (poll.created_by !== req.userEmail) {
+      return res.status(403).json({ success: false, message: 'Only the poll creator can delete the poll.' });
+    }
+
+    await db.deletePoll(id);
+    console.log(`🗑️ Poll "${poll.question}" deleted by ${req.userEmail}`);
+    res.json({ success: true, message: 'Poll deleted.' });
+  } catch (error) {
+    console.error('❌ Delete poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete poll.' });
+  }
+});
+
+// ==================== ERROR HANDLER ====================
 
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err.message);

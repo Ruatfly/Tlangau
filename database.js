@@ -385,6 +385,89 @@ class Database {
     return stats;
   }
 
+  // ==================== POLL METHODS ====================
+
+  async createPoll(pollData) {
+    const pollId = pollData.id || `poll_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const poll = {
+      id: pollId,
+      question: pollData.question,
+      options: pollData.options, // [{id:0, text:'...', votes:0}, ...]
+      created_by: pollData.created_by,
+      created_at: new Date().toISOString(),
+      expires_at: pollData.expires_at,
+      duration_type: pollData.duration_type, // '24h','1week','custom'
+      status: 'active',
+      publish_results: false,
+      total_votes: 0,
+    };
+    await this.db.ref(`polls/${pollId}`).set(poll);
+    return pollId;
+  }
+
+  async getPoll(pollId) {
+    const snapshot = await this.db.ref(`polls/${pollId}`).once('value');
+    return snapshot.val();
+  }
+
+  async getAllPolls() {
+    const snapshot = await this.db.ref('polls').once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    const polls = Object.values(data);
+    polls.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return polls;
+  }
+
+  async votePoll(pollId, optionId, voterEmail) {
+    const voterKey = Buffer.from(voterEmail.toLowerCase().trim())
+      .toString('base64')
+      .replace(/[.#$/\[\]]/g, '_');
+
+    // Check if already voted
+    const voterRef = this.db.ref(`polls/${pollId}/voters/${voterKey}`);
+    const voterSnap = await voterRef.once('value');
+    if (voterSnap.exists()) {
+      return { success: false, message: 'You have already voted on this poll.' };
+    }
+
+    // Record voter → option
+    await voterRef.set(optionId);
+
+    // Increment option vote count (transaction for atomicity)
+    const optionVotesRef = this.db.ref(`polls/${pollId}/options/${optionId}/votes`);
+    await optionVotesRef.transaction(current => (current || 0) + 1);
+
+    // Increment total votes
+    const totalRef = this.db.ref(`polls/${pollId}/total_votes`);
+    await totalRef.transaction(current => (current || 0) + 1);
+
+    return { success: true };
+  }
+
+  async getVoterChoice(pollId, voterEmail) {
+    const voterKey = Buffer.from(voterEmail.toLowerCase().trim())
+      .toString('base64')
+      .replace(/[.#$/\[\]]/g, '_');
+    const snapshot = await this.db.ref(`polls/${pollId}/voters/${voterKey}`).once('value');
+    if (!snapshot.exists()) return null;
+    return snapshot.val();
+  }
+
+  async updatePoll(pollId, updates) {
+    await this.db.ref(`polls/${pollId}`).update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async deletePoll(pollId) {
+    const snapshot = await this.db.ref(`polls/${pollId}`).once('value');
+    if (!snapshot.exists()) return { deleted: false };
+    await this.db.ref(`polls/${pollId}`).remove();
+    return { deleted: true };
+  }
+
   close() {
     return Promise.resolve();
   }
