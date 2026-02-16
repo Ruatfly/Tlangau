@@ -1723,7 +1723,7 @@ app.post('/api/polls', fcmLimiter, requireServerAuth, [
   }
 
   try {
-    const { question, options, duration_type, expires_at } = req.body;
+    const { question, options, duration_type, expires_at, anonymous } = req.body;
 
     // Calculate expiry
     let expiresAt;
@@ -1751,6 +1751,7 @@ app.post('/api/polls', fcmLimiter, requireServerAuth, [
       created_by: req.userEmail,
       expires_at: expiresAt,
       duration_type,
+      anonymous: anonymous === true,
     });
 
     console.log(`📊 Poll created by ${req.userEmail}: "${question.trim()}" (${formattedOptions.length} options, ${duration_type})`);
@@ -1776,13 +1777,22 @@ app.get('/api/polls', requireAnyAuth, async (req, res) => {
       }
     }
 
-    // Check which polls the user has voted on
+    // Enrich polls with per-user info & enforce anonymous mode
     for (const poll of polls) {
       const choice = await db.getVoterChoice(poll.id, req.userEmail);
       poll.user_voted = choice !== null;
       poll.user_choice = choice;
+      poll.is_creator = (poll.created_by === req.userEmail);
       // Strip voter map (privacy)
       delete poll.voters;
+
+      // Anonymous poll: hide vote counts & percentages from non-creators
+      if (poll.anonymous && !poll.is_creator) {
+        for (const opt of (poll.options || [])) {
+          opt.votes = 0;
+        }
+        poll.total_votes = 0;
+      }
     }
 
     res.json({ success: true, polls });
@@ -1805,6 +1815,11 @@ app.post('/api/polls/:id/vote', fcmLimiter, requireAnyAuth, async (req, res) => 
     const poll = await db.getPoll(id);
     if (!poll) {
       return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+
+    // Poll creators cannot vote on their own polls
+    if (poll.created_by === req.userEmail) {
+      return res.status(403).json({ success: false, message: 'Poll creators cannot vote on their own polls.' });
     }
 
     // Check if expired
@@ -1834,6 +1849,15 @@ app.post('/api/polls/:id/vote', fcmLimiter, requireAnyAuth, async (req, res) => 
     delete updated.voters;
     updated.user_voted = true;
     updated.user_choice = optionId;
+    updated.is_creator = false; // voter is never the creator
+
+    // Anonymous poll: hide counts from voter
+    if (updated.anonymous) {
+      for (const opt of (updated.options || [])) {
+        opt.votes = 0;
+      }
+      updated.total_votes = 0;
+    }
 
     console.log(`🗳️ Vote on "${poll.question}" by ${req.userEmail}: option ${optionId}`);
     res.json({ success: true, message: 'Vote recorded!', poll: updated });

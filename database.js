@@ -400,6 +400,7 @@ class Database {
       status: 'active',
       publish_results: false,
       total_votes: 0,
+      anonymous: pollData.anonymous === true, // anonymous voting mode
     };
     await this.db.ref(`polls/${pollId}`).set(poll);
     return pollId;
