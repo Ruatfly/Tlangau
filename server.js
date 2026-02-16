@@ -1695,12 +1695,6 @@ setInterval(async () => {
   }
 }, 15 * 60 * 1000);
 
-// ==================== ERROR HANDLING ====================
-
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ success: false, error: 'API endpoint not found' });
-});
-
 // ==================== POLL ENDPOINTS (Free for all users) ====================
 
 // Simple Google auth for any signed-in user (client or server)
@@ -1912,6 +1906,12 @@ app.delete('/api/polls/:id', requireServerAuth, async (req, res) => {
     console.error('❌ Delete poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete poll.' });
   }
+});
+
+// ==================== ERROR HANDLING ====================
+
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ success: false, error: 'API endpoint not found' });
 });
 
 // ==================== ERROR HANDLER ====================
