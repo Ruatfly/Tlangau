@@ -361,11 +361,11 @@ function buildAccessCodeEmailHtml(code, services) {
     <body>
       <div class="container">
         <div class="header">
-          <h1>🎉 Welcome to Tlangau Server Access</h1>
+          <h1>🎉 Welcome to Tlangau</h1>
         </div>
         <div class="content">
           <p>Thank you for your purchase of <strong>₹${totalAmount}</strong>!</p>
-          <p>Your server access code has been generated successfully.</p>
+          <p>Your access code has been generated successfully.</p>
           
           <div class="code-box">
             <p style="margin: 0 0 10px 0; color: #666;">Your Access Code:</p>
@@ -383,7 +383,7 @@ function buildAccessCodeEmailHtml(code, services) {
           <p><strong>Important:</strong></p>
           <ul>
             <li>This code can only be used once per account</li>
-            <li>Enter this code in the "Server access code" field when signing in</li>
+            <li>Enter this code in the "Access Code" field when signing in</li>
             <li>Keep this code secure and do not share it</li>
             <li>Code is valid for 30 days from purchase</li>
             <li>Only the services you purchased will be accessible</li>
@@ -422,7 +422,7 @@ async function sendAccessCodeEmail(email, code, services, retries = 3) {
   const mailOptions = {
     from: (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim(),
     to: email,
-    subject: 'Your Tlangau Server Access Code',
+    subject: 'Your Tlangau Access Code',
     html: htmlContent,
   };
 
@@ -434,7 +434,7 @@ async function sendAccessCodeEmail(email, code, services, retries = 3) {
         const msg = {
           to: email,
           from: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@tlangau.com',
-          subject: 'Your Tlangau Server Access Code',
+          subject: 'Your Tlangau Access Code',
           html: htmlContent,
         };
         await Promise.race([
@@ -1461,12 +1461,12 @@ async function requireServerAuth(req, res, next) {
     }
 
     if (!accessCode) {
-      return res.status(403).json({ success: false, message: 'Server access not authorized for this account.' });
+      return res.status(403).json({ success: false, message: 'Access not authorized for this account.' });
     }
 
     const expiresAt = new Date(accessCode.expiresAt || accessCode.expires_at);
     if (expiresAt < new Date()) {
-      return res.status(403).json({ success: false, message: 'Your server access code has expired.' });
+      return res.status(403).json({ success: false, message: 'Your access code has expired.' });
     }
 
     req.userEmail = email;

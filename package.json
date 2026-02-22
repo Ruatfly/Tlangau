@@ -1,7 +1,7 @@
 {
   "name": "tlangau-web",
   "version": "1.0.0",
-  "description": "Tlangau Server Access Code Web Portal with Payment Gateway",
+  "description": "Tlangau Access Code Web Portal with Payment Gateway",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
