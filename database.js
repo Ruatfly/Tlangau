@@ -469,6 +469,49 @@ class Database {
     return { deleted: true };
   }
 
+  // ==================== DEV MAIL METHODS ====================
+
+  async createDevMail(mailData) {
+    const mailId = mailData.id || `mail_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const mail = {
+      id: mailId,
+      title: mailData.title,
+      body: mailData.body,
+      created_at: new Date().toISOString(),
+      pinned: mailData.pinned === true,
+    };
+    await this.db.ref(`dev_mails/${mailId}`).set(mail);
+    return mailId;
+  }
+
+  async getDevMail(mailId) {
+    const snapshot = await this.db.ref(`dev_mails/${mailId}`).once('value');
+    return snapshot.val();
+  }
+
+  async getAllDevMails() {
+    const snapshot = await this.db.ref('dev_mails').once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    const mails = Object.values(data);
+    mails.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return mails;
+  }
+
+  async updateDevMail(mailId, updates) {
+    await this.db.ref(`dev_mails/${mailId}`).update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async deleteDevMail(mailId) {
+    const snapshot = await this.db.ref(`dev_mails/${mailId}`).once('value');
+    if (!snapshot.exists()) return { deleted: false };
+    await this.db.ref(`dev_mails/${mailId}`).remove();
+    return { deleted: true };
+  }
+
   close() {
     return Promise.resolve();
   }

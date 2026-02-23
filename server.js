@@ -1932,6 +1932,83 @@ app.delete('/api/polls/:id', requireServerAuth, async (req, res) => {
   }
 });
 
+// ==================== DEV MAIL ENDPOINTS ====================
+
+// Admin: Create a new dev mail
+app.post('/api/admin/dev-mails', checkAdminAuth, [
+  body('title').trim().notEmpty().withMessage('Title is required'),
+  body('body').trim().notEmpty().withMessage('Body is required'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, message: errors.array()[0].msg });
+  }
+  try {
+    const { title, body: mailBody, pinned } = req.body;
+    const mailId = await db.createDevMail({ title, body: mailBody, pinned });
+    console.log(`📧 Admin created dev mail: "${title}" (${mailId})`);
+    res.json({ success: true, mailId });
+  } catch (error) {
+    console.error('❌ Create dev mail error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to create mail.' });
+  }
+});
+
+// Admin: Get all dev mails
+app.get('/api/admin/dev-mails', checkAdminAuth, async (req, res) => {
+  try {
+    const mails = await db.getAllDevMails();
+    res.json({ success: true, mails, count: mails.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Update a dev mail
+app.put('/api/admin/dev-mails/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, body: mailBody, pinned } = req.body;
+    const updates = {};
+    if (title !== undefined) updates.title = title;
+    if (mailBody !== undefined) updates.body = mailBody;
+    if (pinned !== undefined) updates.pinned = pinned;
+    await db.updateDevMail(id, updates);
+    console.log(`📧 Admin updated dev mail: ${id}`);
+    res.json({ success: true, message: 'Mail updated.' });
+  } catch (error) {
+    console.error('❌ Update dev mail error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to update mail.' });
+  }
+});
+
+// Admin: Delete a dev mail
+app.delete('/api/admin/dev-mails/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const result = await db.deleteDevMail(req.params.id);
+    if (result.deleted) {
+      console.log(`🗑️ Admin deleted dev mail: ${req.params.id}`);
+      res.json({ success: true, message: 'Mail deleted.' });
+    } else {
+      res.status(404).json({ success: false, message: 'Mail not found.' });
+    }
+  } catch (error) {
+    console.error('❌ Delete dev mail error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete mail.' });
+  }
+});
+
+// Public: Get all dev mails (any authenticated user)
+app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
+  try {
+    const mails = await db.getAllDevMails();
+    res.json({ success: true, mails });
+  } catch (error) {
+    console.error('❌ Get dev mails error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch mails.' });
+  }
+});
+
 // ==================== ERROR HANDLING ====================
 
 app.use('/api/*', (req, res) => {

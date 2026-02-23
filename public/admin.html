@@ -371,6 +371,7 @@
                 <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="bundles">Bundles & Topics</button>
+                <button class="tab" data-tab="mails">📧 Dev Mails</button>
             </div>
 
             <!-- Orders Tab -->
@@ -450,6 +451,44 @@
                     <div id="bundlesContainer" style="display: none;">
                         <div id="bundlesList"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Dev Mails Tab -->
+            <div id="mailsTab" class="tab-content">
+                <div class="table-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; color: #667eea;">Compose &amp; Manage Mails</h3>
+                        <button class="btn" id="showComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">✉️ Compose New Mail</button>
+                    </div>
+
+                    <!-- Compose Form (hidden by default) -->
+                    <div id="composeForm" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: #333;">New Mail</h4>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label for="mailTitle">Title</label>
+                            <input type="text" id="mailTitle" placeholder="Enter mail title..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label for="mailBody">Body</label>
+                            <textarea id="mailBody" rows="6" placeholder="Enter mail body..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <label style="margin: 0; cursor: pointer;">
+                                <input type="checkbox" id="mailPinned"> Pin this mail (appears at top)
+                            </label>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" id="sendMailBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">Send Mail</button>
+                            <button class="btn" id="cancelComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px; background: #999;">Cancel</button>
+                        </div>
+                        <div id="composeError" class="error" style="display: none;"></div>
+                        <div id="composeSuccess" class="success" style="display: none;"></div>
+                    </div>
+
+                    <!-- Mails List -->
+                    <div id="mailsLoading" class="loading">Loading mails...</div>
+                    <div id="mailsList" style="display: none;"></div>
                 </div>
             </div>
         </div>
@@ -556,6 +595,34 @@
             }
         });
 
+        // Dev Mails: Compose form toggle
+        document.getElementById('showComposeBtn').addEventListener('click', function () {
+            document.getElementById('composeForm').style.display = 'block';
+            this.style.display = 'none';
+            document.getElementById('mailTitle').focus();
+        });
+        document.getElementById('cancelComposeBtn').addEventListener('click', function () {
+            document.getElementById('composeForm').style.display = 'none';
+            document.getElementById('showComposeBtn').style.display = '';
+            document.getElementById('mailTitle').value = '';
+            document.getElementById('mailBody').value = '';
+            document.getElementById('mailPinned').checked = false;
+            document.getElementById('composeError').style.display = 'none';
+            document.getElementById('composeSuccess').style.display = 'none';
+        });
+        document.getElementById('sendMailBtn').addEventListener('click', sendDevMail);
+        document.getElementById('mailsList').addEventListener('click', function (e) {
+            const delBtn = e.target.closest('[data-delete-mail]');
+            if (delBtn) {
+                deleteDevMail(delBtn.dataset.deleteMail, delBtn.dataset.mailTitle);
+                return;
+            }
+            const pinBtn = e.target.closest('[data-toggle-pin]');
+            if (pinBtn) {
+                togglePinDevMail(pinBtn.dataset.togglePin, pinBtn.dataset.currentPinned === 'true');
+            }
+        });
+
         // ==================== DASHBOARD DATA ====================
 
         async function loadDashboard() {
@@ -565,6 +632,7 @@
                 loadAccessCodes(),
                 loadUsers(),
                 loadBundles(),
+                loadDevMails(),
             ]);
         }
 
@@ -931,6 +999,150 @@
             }
         }
 
+        // ==================== DEV MAILS ====================
+
+        async function loadDevMails() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('mailsList');
+                    container.innerHTML = '';
+
+                    if (data.mails.length === 0) {
+                        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>No mails sent yet. Compose your first mail to notify app users.</p></div>';
+                    } else {
+                        data.mails.forEach(mail => {
+                            const card = document.createElement('div');
+                            card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0; position: relative;';
+                            if (mail.pinned) {
+                                card.style.borderLeft = '4px solid #667eea';
+                            }
+
+                            const pinnedBadge = mail.pinned ? '<span class="badge" style="background:#667eea; color:#fff; margin-left:8px;">📌 Pinned</span>' : '';
+                            const dateStr = new Date(mail.created_at).toLocaleString();
+                            const bodyPreview = (mail.body || '').length > 200 ? mail.body.substring(0, 200) + '...' : mail.body;
+
+                            card.innerHTML = `
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div style="flex: 1;">
+                                        <h4 style="margin: 0 0 6px 0; color: #333; font-size: 16px;">${esc(mail.title)}${pinnedBadge}</h4>
+                                        <p style="margin: 0 0 8px 0; color: #666; font-size: 13px; white-space: pre-wrap;">${esc(bodyPreview)}</p>
+                                        <span style="color: #999; font-size: 11px;">Sent: ${esc(dateStr)}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 6px; margin-left: 12px; flex-shrink: 0;">
+                                        <button class="btn-danger" data-toggle-pin="${esc(mail.id)}" data-current-pinned="${mail.pinned}" style="background: ${mail.pinned ? '#ffc107' : '#6c757d'}; padding: 6px 10px; font-size: 11px;">
+                                            ${mail.pinned ? 'Unpin' : 'Pin'}
+                                        </button>
+                                        <button class="btn-danger" data-delete-mail="${esc(mail.id)}" data-mail-title="${esc(mail.title)}">Delete</button>
+                                    </div>
+                                </div>
+                            `;
+                            container.appendChild(card);
+                        });
+                    }
+
+                    document.getElementById('mailsLoading').style.display = 'none';
+                    container.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading dev mails:', error);
+                document.getElementById('mailsLoading').textContent = 'Error loading mails: ' + error.message;
+            }
+        }
+
+        async function sendDevMail() {
+            const title = document.getElementById('mailTitle').value.trim();
+            const mailBody = document.getElementById('mailBody').value.trim();
+            const pinned = document.getElementById('mailPinned').checked;
+            const errorDiv = document.getElementById('composeError');
+            const successDiv = document.getElementById('composeSuccess');
+
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            if (!title || !mailBody) {
+                errorDiv.textContent = 'Title and body are required.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ title, body: mailBody, pinned }),
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    successDiv.textContent = '✅ Mail sent successfully!';
+                    successDiv.style.display = 'block';
+                    document.getElementById('mailTitle').value = '';
+                    document.getElementById('mailBody').value = '';
+                    document.getElementById('mailPinned').checked = false;
+                    setTimeout(() => {
+                        document.getElementById('composeForm').style.display = 'none';
+                        document.getElementById('showComposeBtn').style.display = '';
+                        successDiv.style.display = 'none';
+                    }, 1500);
+                    loadDevMails();
+                } else {
+                    errorDiv.textContent = data.message || 'Failed to send mail.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function deleteDevMail(mailId, mailTitle) {
+            if (!confirm(`Are you sure you want to delete mail "${mailTitle}"?\n\nThis will remove it from all app users.\n\nThis action cannot be undone.`)) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails/${mailId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Mail deleted successfully');
+                    loadDevMails();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete mail'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting mail: ' + error.message);
+            }
+        }
+
+        async function togglePinDevMail(mailId, currentPinned) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails/${mailId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ pinned: !currentPinned }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadDevMails();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to update pin status'));
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
         // ==================== HELPERS ====================
 
         function switchTab(tab) {
@@ -942,6 +1154,7 @@
                 codes:   { index: 1, contentId: 'codesTab' },
                 users:   { index: 2, contentId: 'usersTab' },
                 bundles: { index: 3, contentId: 'bundlesTab' },
+                mails:   { index: 4, contentId: 'mailsTab' },
             };
 
             const info = tabMap[tab];
@@ -951,6 +1164,7 @@
             if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
             document.getElementById(info.contentId).classList.add('active');
             if (tab === 'bundles') loadBundles();
+            if (tab === 'mails') loadDevMails();
         }
 
         function filterTable(tableId, searchId) {
