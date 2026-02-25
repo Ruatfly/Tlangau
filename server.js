@@ -1036,6 +1036,12 @@ app.post(
       }
 
       await db.markCodeAsUsed(codeUpper, emailLower, userAccountId);
+      accessCode.used = true;
+      accessCode.used_at = new Date().toISOString();
+      await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
+        sendWelcome: true,
+        codeKey: codeUpper,
+      });
       console.log(`✅ Code validated and used: ${codeUpper} by ${userAccountId}`);
 
       // Return services – backward compat: codes without services get all
@@ -1110,6 +1116,9 @@ app.post(
 
       const codeServices = accessCode.services || VALID_SERVICE_IDS;
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+      await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
+        sendWelcome: false,
+      });
 
       res.json({
         success: true,
@@ -1407,6 +1416,81 @@ setInterval(() => {
 const accessCodeCache = new Map();
 const ACCESS_CODE_CACHE_TTL_MS = 5 * 60 * 1000;
 
+function normalizeEmail(email) {
+  return (email || '').toString().toLowerCase().trim();
+}
+
+async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}) {
+  try {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !accessCode) return;
+
+    const codeKey = accessCode.code || options.codeKey;
+    if (!codeKey) return;
+
+    const expiresAtRaw = accessCode.expiresAt || accessCode.expires_at;
+    if (!expiresAtRaw) return;
+
+    const expiresAt = new Date(expiresAtRaw);
+    if (isNaN(expiresAt.getTime())) return;
+
+    const now = new Date();
+    const diffMs = expiresAt.getTime() - now.getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const sevenDaysMs = 7 * oneDayMs;
+    const updates = {};
+
+    // Welcome mail: send once when user first activates/logs in with a valid code.
+    if (options.sendWelcome === true && !accessCode.welcome_mail_sent_at) {
+      await db.createDevMail({
+        title: 'Welcome to Tlangau',
+        body:
+          'Welcome! Your access code is active and your server dashboard is ready.\n\nIf you need help, open the Mailbox anytime for developer updates.',
+        pinned: false,
+        target_email: normalizedEmail,
+        category: 'system_welcome',
+        system_generated: true,
+      });
+      updates.welcome_mail_sent_at = new Date().toISOString();
+    }
+
+    // Expiry warnings: each milestone sends once.
+    if (diffMs > 0 && diffMs <= sevenDaysMs && !accessCode.expiry_warning_7d_sent_at) {
+      await db.createDevMail({
+        title: 'Access code expires in 7 days',
+        body:
+          'Your server access code will expire in about one week. Please renew before expiry to avoid interruption.',
+        pinned: true,
+        target_email: normalizedEmail,
+        category: 'system_expiry_7d',
+        system_generated: true,
+      });
+      updates.expiry_warning_7d_sent_at = new Date().toISOString();
+    }
+
+    if (diffMs > 0 && diffMs <= oneDayMs && !accessCode.expiry_warning_1d_sent_at) {
+      await db.createDevMail({
+        title: 'Access code expires tomorrow',
+        body:
+          'Reminder: your server access code is about to expire in less than 24 hours. Please renew today to keep access active.',
+        pinned: true,
+        target_email: normalizedEmail,
+        category: 'system_expiry_1d',
+        system_generated: true,
+      });
+      updates.expiry_warning_1d_sent_at = new Date().toISOString();
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.updateAccessCode(codeKey, updates);
+      Object.assign(accessCode, updates);
+      accessCodeCache.set(normalizedEmail, { accessCode, cachedAt: Date.now() });
+    }
+  } catch (error) {
+    console.error('⚠️ Automated mail check failed:', error.message);
+  }
+}
+
 async function verifyGoogleAuth(req) {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -1469,6 +1553,7 @@ async function requireServerAuth(req, res, next) {
       return res.status(403).json({ success: false, message: 'Your access code has expired.' });
     }
 
+    await maybeSendAutomatedAccessCodeMails(email, accessCode, { sendWelcome: false });
     req.userEmail = email;
     req.userServices = accessCode.services || VALID_SERVICE_IDS; // Backward compat
     next();
@@ -1694,6 +1779,31 @@ setInterval(async () => {
     // Silent fail – cleanup is best-effort
   }
 }, 15 * 60 * 1000);
+
+let automatedMailScanRunning = false;
+async function runAutomatedAccessCodeMailScan() {
+  if (automatedMailScanRunning) return;
+  automatedMailScanRunning = true;
+  try {
+    const codes = await db.getAllAccessCodes();
+    for (const code of codes) {
+      const codeEmail = normalizeEmail(code.email || code.used_by_email);
+      if (!codeEmail) continue;
+      await maybeSendAutomatedAccessCodeMails(codeEmail, code, {
+        sendWelcome: false,
+        codeKey: code.code,
+      });
+    }
+  } catch (error) {
+    console.error('⚠️ Automated access-code scan failed:', error.message);
+  } finally {
+    automatedMailScanRunning = false;
+  }
+}
+
+// Background scan so expiry reminders are created even if users don't open the app daily.
+setInterval(runAutomatedAccessCodeMailScan, 6 * 60 * 60 * 1000);
+setTimeout(runAutomatedAccessCodeMailScan, 30 * 1000);
 
 // ==================== POLL ENDPOINTS (Free for all users) ====================
 
@@ -2115,7 +2225,12 @@ app.delete('/api/admin/dev-mails/:id', checkAdminAuth, async (req, res) => {
 app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
   try {
     const mails = await db.getAllDevMails();
-    res.json({ success: true, mails });
+    const userEmail = normalizeEmail(req.userEmail);
+    const visibleMails = mails.filter((mail) => {
+      const targetEmail = normalizeEmail(mail.target_email);
+      return !targetEmail || targetEmail === userEmail;
+    });
+    res.json({ success: true, mails: visibleMails });
   } catch (error) {
     console.error('❌ Get dev mails error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch mails.' });

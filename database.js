@@ -221,6 +221,13 @@ class Database {
     });
   }
 
+  async updateAccessCode(code, updates) {
+    await this.db.ref(`access_codes/${code}`).update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
   async hasAccountUsedCode(accountId) {
     const snapshot = await this.db.ref('access_codes')
       .orderByChild('used_by_account')
@@ -479,6 +486,11 @@ class Database {
       body: mailData.body,
       created_at: new Date().toISOString(),
       pinned: mailData.pinned === true,
+      target_email: typeof mailData.target_email === 'string'
+        ? mailData.target_email.toLowerCase().trim()
+        : null,
+      category: mailData.category || 'manual',
+      system_generated: mailData.system_generated === true,
     };
     await this.db.ref(`dev_mails/${mailId}`).set(mail);
     return mailId;
