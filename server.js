@@ -1494,7 +1494,7 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         title: 'Your access code has expired',
         body:
           `Your access code has expired, so your app has switched to Client Dashboard.\n\n` +
-          `You can purchase a new access code here:\n${purchaseLink}`,
+          `You can purchase a new access code [here](${purchaseLink}).`,
         pinned: true,
         target_email: normalizedEmail,
         category: 'system_expired',
