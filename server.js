@@ -1711,8 +1711,8 @@ async function requireAnyAuth(req, res, next) {
   next();
 }
 
-// Create poll (server users only)
-app.post('/api/polls', fcmLimiter, requireServerAuth, [
+// Create poll (any authenticated user)
+app.post('/api/polls', fcmLimiter, requireAnyAuth, [
   body('question').trim().notEmpty().withMessage('Question is required'),
   body('options').isArray({ min: 2 }).withMessage('At least 2 options required'),
   body('duration_type').isIn(['24h', '1week', 'custom']).withMessage('Invalid duration type'),
@@ -1868,7 +1868,7 @@ app.post('/api/polls/:id/vote', fcmLimiter, requireAnyAuth, async (req, res) => 
 });
 
 // Publish / unpublish results (poll creator only)
-app.post('/api/polls/:id/publish', requireServerAuth, async (req, res) => {
+app.post('/api/polls/:id/publish', requireAnyAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { publish } = req.body;
@@ -1891,7 +1891,7 @@ app.post('/api/polls/:id/publish', requireServerAuth, async (req, res) => {
 });
 
 // Close poll early (poll creator only)
-app.post('/api/polls/:id/close', requireServerAuth, async (req, res) => {
+app.post('/api/polls/:id/close', requireAnyAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const poll = await db.getPoll(id);
@@ -1912,7 +1912,7 @@ app.post('/api/polls/:id/close', requireServerAuth, async (req, res) => {
 });
 
 // Delete poll (poll creator only)
-app.delete('/api/polls/:id', requireServerAuth, async (req, res) => {
+app.delete('/api/polls/:id', requireAnyAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const poll = await db.getPoll(id);
@@ -1928,6 +1928,119 @@ app.delete('/api/polls/:id', requireServerAuth, async (req, res) => {
     res.json({ success: true, message: 'Poll deleted.' });
   } catch (error) {
     console.error('❌ Delete poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete poll.' });
+  }
+});
+
+// ==================== ADMIN POLL ENDPOINTS ====================
+
+// Admin: list all polls
+app.get('/api/admin/polls', checkAdminAuth, async (req, res) => {
+  try {
+    const polls = await db.getAllPolls();
+    const now = new Date();
+    for (const poll of polls) {
+      if (poll.status === 'active' && new Date(poll.expires_at) <= now) {
+        poll.status = 'closed';
+        await db.updatePoll(poll.id, { status: 'closed' });
+      }
+      delete poll.voters;
+    }
+    res.json({ success: true, polls });
+  } catch (error) {
+    console.error('❌ Admin get polls error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch polls.' });
+  }
+});
+
+// Admin: create poll
+app.post('/api/admin/polls', checkAdminAuth, [
+  body('question').trim().notEmpty().withMessage('Question is required'),
+  body('options').isArray({ min: 2 }).withMessage('At least 2 options required'),
+  body('duration_type').isIn(['24h', '1week', 'custom']).withMessage('Invalid duration type'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, message: errors.array()[0].msg });
+  }
+
+  try {
+    const { question, options, duration_type, expires_at, anonymous, created_by } = req.body;
+
+    let expiresAt;
+    if (duration_type === '24h') {
+      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    } else if (duration_type === '1week') {
+      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      if (!expires_at) {
+        return res.status(400).json({ success: false, message: 'Custom expiry date required.' });
+      }
+      expiresAt = new Date(expires_at).toISOString();
+    }
+
+    const formattedOptions = options.map((text, idx) => ({
+      id: idx,
+      text: typeof text === 'string' ? text.trim() : text.text?.trim() || `Option ${idx + 1}`,
+      votes: 0,
+    }));
+
+    const pollId = await db.createPoll({
+      question: question.trim(),
+      options: formattedOptions,
+      created_by: (typeof created_by === 'string' && created_by.trim()) ? created_by.trim() : 'admin@panel',
+      expires_at: expiresAt,
+      duration_type,
+      anonymous: anonymous === true,
+    });
+
+    console.log(`📊 Admin created poll: "${question.trim()}" (${pollId})`);
+    res.json({ success: true, pollId, message: 'Poll created successfully.' });
+  } catch (error) {
+    console.error('❌ Admin create poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to create poll.' });
+  }
+});
+
+// Admin: update poll fields (status / publish_results)
+app.put('/api/admin/polls/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const poll = await db.getPoll(id);
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+
+    const updates = {};
+    if (typeof req.body.publish_results === 'boolean') {
+      updates.publish_results = req.body.publish_results;
+    }
+    if (req.body.status === 'active' || req.body.status === 'closed') {
+      updates.status = req.body.status;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update.' });
+    }
+
+    await db.updatePoll(id, updates);
+    res.json({ success: true, message: 'Poll updated successfully.' });
+  } catch (error) {
+    console.error('❌ Admin update poll error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to update poll.' });
+  }
+});
+
+// Admin: delete poll
+app.delete('/api/admin/polls/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.deletePoll(id);
+    if (!result.deleted) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+    res.json({ success: true, message: 'Poll deleted successfully.' });
+  } catch (error) {
+    console.error('❌ Admin delete poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete poll.' });
   }
 });

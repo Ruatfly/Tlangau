@@ -371,6 +371,7 @@
                 <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="bundles">Bundles & Topics</button>
+                <button class="tab" data-tab="polls">📊 Polls</button>
                 <button class="tab" data-tab="mails">📧 Dev Mails</button>
             </div>
 
@@ -451,6 +452,56 @@
                     <div id="bundlesContainer" style="display: none;">
                         <div id="bundlesList"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Polls Tab -->
+            <div id="pollsTab" class="tab-content">
+                <div class="table-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; color: #667eea;">Create &amp; Manage Polls</h3>
+                        <button class="btn" id="showPollComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">📊 New Poll</button>
+                    </div>
+
+                    <div id="pollComposeForm" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: #333;">Create Poll</h4>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label for="pollQuestion">Question</label>
+                            <input type="text" id="pollQuestion" placeholder="Enter poll question..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label for="pollOptions">Options (one per line)</label>
+                            <textarea id="pollOptions" rows="5" placeholder="Option 1&#10;Option 2&#10;Option 3" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin: 0; min-width: 180px;">
+                                <label for="pollDurationType">Duration</label>
+                                <select id="pollDurationType" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                                    <option value="24h">24 hours</option>
+                                    <option value="1week">1 week</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0; min-width: 220px;">
+                                <label for="pollCustomExpiry">Custom expiry</label>
+                                <input type="datetime-local" id="pollCustomExpiry" disabled style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 15px;">
+                            <label style="margin: 0; cursor: pointer;">
+                                <input type="checkbox" id="pollAnonymous"> Anonymous voting
+                            </label>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" id="createPollBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">Create Poll</button>
+                            <button class="btn" id="cancelPollComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px; background: #999;">Cancel</button>
+                        </div>
+                        <div id="pollComposeError" class="error" style="display: none;"></div>
+                        <div id="pollComposeSuccess" class="success" style="display: none;"></div>
+                    </div>
+
+                    <div id="pollsLoading" class="loading">Loading polls...</div>
+                    <div id="pollsList" style="display: none;"></div>
                 </div>
             </div>
 
@@ -569,6 +620,11 @@
         document.getElementById('bundlesSearch').addEventListener('keyup', function () {
             filterBundlesTable();
         });
+        document.getElementById('pollDurationType').addEventListener('change', function () {
+            const customInput = document.getElementById('pollCustomExpiry');
+            customInput.disabled = this.value !== 'custom';
+            if (this.value !== 'custom') customInput.value = '';
+        });
 
         // Event delegation for dynamically created delete buttons
         document.getElementById('ordersBody').addEventListener('click', function (e) {
@@ -594,6 +650,25 @@
                 deleteTopic(delTopic.dataset.bundleId, delTopic.dataset.deleteTopic, delTopic.dataset.topicName);
             }
         });
+        document.getElementById('pollsList').addEventListener('click', function (e) {
+            const delBtn = e.target.closest('[data-delete-poll]');
+            if (delBtn) {
+                deleteAdminPoll(delBtn.dataset.deletePoll, delBtn.dataset.pollQuestion);
+                return;
+            }
+            const closeBtn = e.target.closest('[data-close-poll]');
+            if (closeBtn) {
+                closeAdminPoll(closeBtn.dataset.closePoll, closeBtn.dataset.pollQuestion);
+                return;
+            }
+            const publishBtn = e.target.closest('[data-toggle-publish-poll]');
+            if (publishBtn) {
+                togglePublishAdminPoll(
+                    publishBtn.dataset.togglePublishPoll,
+                    publishBtn.dataset.currentPublished === 'true'
+                );
+            }
+        });
 
         // Dev Mails: Compose form toggle
         document.getElementById('showComposeBtn').addEventListener('click', function () {
@@ -611,6 +686,24 @@
             document.getElementById('composeSuccess').style.display = 'none';
         });
         document.getElementById('sendMailBtn').addEventListener('click', sendDevMail);
+        document.getElementById('showPollComposeBtn').addEventListener('click', function () {
+            document.getElementById('pollComposeForm').style.display = 'block';
+            this.style.display = 'none';
+            document.getElementById('pollQuestion').focus();
+        });
+        document.getElementById('cancelPollComposeBtn').addEventListener('click', function () {
+            document.getElementById('pollComposeForm').style.display = 'none';
+            document.getElementById('showPollComposeBtn').style.display = '';
+            document.getElementById('pollQuestion').value = '';
+            document.getElementById('pollOptions').value = '';
+            document.getElementById('pollDurationType').value = '24h';
+            document.getElementById('pollCustomExpiry').value = '';
+            document.getElementById('pollCustomExpiry').disabled = true;
+            document.getElementById('pollAnonymous').checked = false;
+            document.getElementById('pollComposeError').style.display = 'none';
+            document.getElementById('pollComposeSuccess').style.display = 'none';
+        });
+        document.getElementById('createPollBtn').addEventListener('click', createAdminPoll);
         document.getElementById('mailsList').addEventListener('click', function (e) {
             const delBtn = e.target.closest('[data-delete-mail]');
             if (delBtn) {
@@ -632,6 +725,7 @@
                 loadAccessCodes(),
                 loadUsers(),
                 loadBundles(),
+                loadAdminPolls(),
                 loadDevMails(),
             ]);
         }
@@ -999,6 +1093,215 @@
             }
         }
 
+        // ==================== POLLS ====================
+
+        async function loadAdminPolls() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                const loading = document.getElementById('pollsLoading');
+                const container = document.getElementById('pollsList');
+                container.innerHTML = '';
+
+                if (data.success) {
+                    const polls = data.polls || [];
+                    if (polls.length === 0) {
+                        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No polls yet. Create one to engage your users.</p></div>';
+                    } else {
+                        polls.forEach(poll => {
+                            const card = document.createElement('div');
+                            card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0;';
+
+                            const statusColor = poll.status === 'active' ? '#155724' : '#721c24';
+                            const statusBg = poll.status === 'active' ? '#d4edda' : '#f8d7da';
+                            const options = Array.isArray(poll.options) ? poll.options : [];
+                            const optionsHtml = options
+                                .map(o => `<li style="margin-bottom: 3px;">${esc(o.text || '')} <span style="color:#666;">(${Number(o.votes || 0)} votes)</span></li>`)
+                                .join('');
+                            const anonymousBadge = poll.anonymous ? '<span class="badge" style="background:#e8eaf6;color:#3949ab;margin-left:6px;">Anonymous</span>' : '';
+                            const publishedBadge = poll.publish_results ? '<span class="badge" style="background:#d4edda;color:#155724;margin-left:6px;">Published</span>' : '';
+
+                            card.innerHTML = `
+                                <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                                    <div style="flex:1;">
+                                        <h4 style="margin:0 0 6px 0; color:#333; font-size:16px;">
+                                            ${esc(poll.question || 'Untitled poll')}
+                                            ${anonymousBadge}
+                                            ${publishedBadge}
+                                        </h4>
+                                        <p style="margin:0 0 8px 0; font-size:12px; color:#666;">
+                                            <span class="badge" style="background:${statusBg}; color:${statusColor};">${esc((poll.status || 'active').toUpperCase())}</span>
+                                            <span style="margin-left:8px;">Total votes: ${Number(poll.total_votes || 0)}</span>
+                                            <span style="margin-left:8px;">Ends: ${esc(new Date(poll.expires_at).toLocaleString())}</span>
+                                        </p>
+                                        <ul style="margin:0; padding-left:18px; color:#444; font-size:13px;">
+                                            ${optionsHtml}
+                                        </ul>
+                                    </div>
+                                    <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                                        ${poll.status === 'active'
+                                            ? `<button class="btn-danger" data-close-poll="${esc(poll.id)}" data-poll-question="${esc(poll.question || '')}" style="background:#fd7e14;">Close</button>`
+                                            : ''
+                                        }
+                                        <button class="btn-danger" data-toggle-publish-poll="${esc(poll.id)}" data-current-published="${poll.publish_results === true}" style="background:${poll.publish_results ? '#6c757d' : '#28a745'};">
+                                            ${poll.publish_results ? 'Unpublish' : 'Publish'}
+                                        </button>
+                                        <button class="btn-danger" data-delete-poll="${esc(poll.id)}" data-poll-question="${esc(poll.question || '')}">Delete</button>
+                                    </div>
+                                </div>
+                            `;
+                            container.appendChild(card);
+                        });
+                    }
+                    loading.style.display = 'none';
+                    container.style.display = 'block';
+                } else {
+                    loading.textContent = 'Error loading polls: ' + (data.message || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error loading polls:', error);
+                document.getElementById('pollsLoading').textContent = 'Error loading polls: ' + error.message;
+            }
+        }
+
+        async function createAdminPoll() {
+            const question = document.getElementById('pollQuestion').value.trim();
+            const options = document.getElementById('pollOptions').value
+                .split('\n')
+                .map(o => o.trim())
+                .filter(Boolean);
+            const durationType = document.getElementById('pollDurationType').value;
+            const customExpiry = document.getElementById('pollCustomExpiry').value;
+            const anonymous = document.getElementById('pollAnonymous').checked;
+            const errorDiv = document.getElementById('pollComposeError');
+            const successDiv = document.getElementById('pollComposeSuccess');
+
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            if (!question) {
+                errorDiv.textContent = 'Question is required.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (options.length < 2) {
+                errorDiv.textContent = 'Please provide at least 2 options.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (durationType === 'custom' && !customExpiry) {
+                errorDiv.textContent = 'Please set custom expiry date and time.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const payload = {
+                    question,
+                    options,
+                    duration_type: durationType,
+                    anonymous,
+                    ...(durationType === 'custom' ? { expires_at: new Date(customExpiry).toISOString() } : {}),
+                };
+
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    successDiv.textContent = '✅ Poll created successfully!';
+                    successDiv.style.display = 'block';
+                    document.getElementById('pollQuestion').value = '';
+                    document.getElementById('pollOptions').value = '';
+                    document.getElementById('pollDurationType').value = '24h';
+                    document.getElementById('pollCustomExpiry').value = '';
+                    document.getElementById('pollCustomExpiry').disabled = true;
+                    document.getElementById('pollAnonymous').checked = false;
+                    setTimeout(() => {
+                        document.getElementById('pollComposeForm').style.display = 'none';
+                        document.getElementById('showPollComposeBtn').style.display = '';
+                        successDiv.style.display = 'none';
+                    }, 1200);
+                    loadAdminPolls();
+                } else {
+                    errorDiv.textContent = data.message || 'Failed to create poll.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function closeAdminPoll(pollId, pollQuestion) {
+            if (!confirm(`Close poll "${pollQuestion}" now?\n\nUsers will not be able to vote after closing.`)) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls/${pollId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ status: 'closed' }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadAdminPolls();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to close poll'));
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function togglePublishAdminPoll(pollId, currentlyPublished) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls/${pollId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ publish_results: !currentlyPublished }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadAdminPolls();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to update publish status'));
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function deleteAdminPoll(pollId, pollQuestion) {
+            if (!confirm(`Delete poll "${pollQuestion}"?\n\nThis action cannot be undone.`)) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls/${pollId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadAdminPolls();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to delete poll'));
+                }
+            } catch (error) {
+                alert('❌ Error deleting poll: ' + error.message);
+            }
+        }
+
         // ==================== DEV MAILS ====================
 
         async function loadDevMails() {
@@ -1154,7 +1457,8 @@
                 codes:   { index: 1, contentId: 'codesTab' },
                 users:   { index: 2, contentId: 'usersTab' },
                 bundles: { index: 3, contentId: 'bundlesTab' },
-                mails:   { index: 4, contentId: 'mailsTab' },
+                polls:   { index: 4, contentId: 'pollsTab' },
+                mails:   { index: 5, contentId: 'mailsTab' },
             };
 
             const info = tabMap[tab];
@@ -1164,6 +1468,7 @@
             if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
             document.getElementById(info.contentId).classList.add('active');
             if (tab === 'bundles') loadBundles();
+            if (tab === 'polls') loadAdminPolls();
             if (tab === 'mails') loadDevMails();
         }
 
