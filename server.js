@@ -1118,6 +1118,7 @@ app.post(
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
       await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
         sendWelcome: false,
+        sendExpiredNotice: true,
       });
 
       res.json({
@@ -1438,6 +1439,7 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
     const diffMs = expiresAt.getTime() - now.getTime();
     const oneDayMs = 24 * 60 * 60 * 1000;
     const sevenDaysMs = 7 * oneDayMs;
+    const purchaseLink = process.env.PURCHASE_WEB_LINK || 'https://tlangau.onrender.com';
     const updates = {};
 
     // Welcome mail: send once when user first activates/logs in with a valid code.
@@ -1479,6 +1481,26 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         system_generated: true,
       });
       updates.expiry_warning_1d_sent_at = new Date().toISOString();
+    }
+
+    // Expired notice: sent when user is moved back to client dashboard due to expiry.
+    if (
+      options.sendExpiredNotice === true &&
+      diffMs <= 0 &&
+      accessCode.used === true &&
+      !accessCode.expired_notice_sent_at
+    ) {
+      await db.createDevMail({
+        title: 'Your access code has expired',
+        body:
+          `Your access code has expired, so your app has switched to Client Dashboard.\n\n` +
+          `You can purchase a new access code here:\n${purchaseLink}`,
+        pinned: true,
+        target_email: normalizedEmail,
+        category: 'system_expired',
+        system_generated: true,
+      });
+      updates.expired_notice_sent_at = new Date().toISOString();
     }
 
     if (Object.keys(updates).length > 0) {
@@ -1550,6 +1572,10 @@ async function requireServerAuth(req, res, next) {
 
     const expiresAt = new Date(accessCode.expiresAt || accessCode.expires_at);
     if (expiresAt < new Date()) {
+      await maybeSendAutomatedAccessCodeMails(email, accessCode, {
+        sendWelcome: false,
+        sendExpiredNotice: true,
+      });
       return res.status(403).json({ success: false, message: 'Your access code has expired.' });
     }
 
