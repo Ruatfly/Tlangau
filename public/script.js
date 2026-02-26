@@ -11,11 +11,17 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // ==================== SERVICE SELECTION ====================
 
-const SERVICE_PRICE = 10; // ₹10 per service
+const SERVICE_PRICE = 10; // ₹10 per service (monthly plan)
+const YEARLY_FLAT_PRICE = 100; // Rs 100 flat
 const SERVICE_NAMES = {
     ring: 'Ring Notification',
     message: 'Message Notification',
     broadcast: 'Broadcast Message',
+};
+
+const PLAN_META = {
+    monthly: { validityLabel: '30 Days' },
+    yearly: { validityLabel: '365 Days' },
 };
 
 function getSelectedServices() {
@@ -23,9 +29,21 @@ function getSelectedServices() {
     return Array.from(checkboxes).map(cb => cb.value);
 }
 
+function getSelectedPlanDuration() {
+    const select = document.getElementById('planDuration');
+    const value = (select?.value || 'monthly').trim();
+    return value === 'yearly' ? 'yearly' : 'monthly';
+}
+
+function computeTotalAmount(selectedServices, planDuration) {
+    if (planDuration === 'yearly') return YEARLY_FLAT_PRICE;
+    return selectedServices.length * SERVICE_PRICE;
+}
+
 function updateOrderSummary() {
     const selected = getSelectedServices();
-    const total = selected.length * SERVICE_PRICE;
+    const planDuration = getSelectedPlanDuration();
+    const total = computeTotalAmount(selected, planDuration);
 
     // Update service count
     const serviceCountEl = document.getElementById('serviceCount');
@@ -41,13 +59,27 @@ function updateOrderSummary() {
         if (selected.length === 0) {
             lineItemsEl.innerHTML = '';
         } else {
+            const linePrice = planDuration === 'yearly'
+                ? `Included in yearly plan`
+                : `₹${SERVICE_PRICE}.00`;
             lineItemsEl.innerHTML = selected.map(s => `
                 <div class="summary-item summary-line-item">
                     <span>• ${SERVICE_NAMES[s] || s}</span>
-                    <span>₹${SERVICE_PRICE}.00</span>
+                    <span>${linePrice}</span>
                 </div>
             `).join('');
         }
+    }
+
+    const summaryValidity = document.getElementById('summaryValidity');
+    if (summaryValidity) {
+        summaryValidity.textContent = PLAN_META[planDuration].validityLabel;
+    }
+    const validityInfoLine = document.getElementById('validityInfoLine');
+    if (validityInfoLine) {
+        validityInfoLine.textContent = planDuration === 'yearly'
+            ? 'Valid for 365 days from purchase'
+            : 'Valid for 30 days from purchase';
     }
 
     // Update total
@@ -83,7 +115,9 @@ function updateOrderSummary() {
         const allServices = document.querySelectorAll('input[name="services"]');
         selectAllBtn.textContent = selected.length === allServices.length
             ? 'Deselect All'
-            : `Select All (₹${allServices.length * SERVICE_PRICE})`;
+            : (planDuration === 'yearly'
+                ? 'Select All (included in yearly)'
+                : `Select All (₹${allServices.length * SERVICE_PRICE})`);
     }
 }
 
@@ -104,6 +138,10 @@ document.addEventListener('DOMContentLoaded', function () {
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateOrderSummary);
     });
+    const planSelect = document.getElementById('planDuration');
+    if (planSelect) {
+        planSelect.addEventListener('change', updateOrderSummary);
+    }
 
     // Initial state
     updateOrderSummary();
@@ -118,6 +156,7 @@ if (paymentForm) {
 
         const email = document.getElementById('email').value.trim();
         const services = getSelectedServices();
+        const planDuration = getSelectedPlanDuration();
 
         if (services.length === 0) {
             const errorEl = document.getElementById('serviceError');
@@ -147,7 +186,7 @@ if (paymentForm) {
             const response = await fetch(`${backendUrl}/api/create-payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, services }),
+                body: JSON.stringify({ email, services, planDuration }),
             });
 
             if (!response.ok) {
@@ -169,6 +208,13 @@ if (paymentForm) {
             }
 
             console.log('Payment link created:', data.orderId, 'Services:', data.services);
+
+            sessionStorage.setItem('tlangau_last_payment', JSON.stringify({
+                orderId: data.orderId,
+                email,
+                services,
+                planDuration,
+            }));
 
             // Redirect directly to Instamojo payment page
             window.location.href = data.paymentUrl;

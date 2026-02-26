@@ -28,6 +28,11 @@ const PAID_SERVICES = {
 const FREE_SERVICES = ['statistics', 'poll'];
 const VALID_SERVICE_IDS = Object.keys(PAID_SERVICES);
 const SERVICE_PRICE = 10; // ₹10 per service (configurable)
+const ACCESS_PLANS = {
+  monthly: { id: 'monthly', label: '1 Month', validityDays: 30 },
+  yearly: { id: 'yearly', label: '1 Year', validityDays: 365, flatPrice: 100 },
+};
+const VALID_PLAN_IDS = Object.keys(ACCESS_PLANS);
 
 // ==================== PAYMENT SESSION CONFIG ====================
 const PAYMENT_SESSION_MINUTES = 10;
@@ -336,11 +341,27 @@ function getServiceNames(services) {
   return services.map(s => PAID_SERVICES[s]?.name || s);
 }
 
+function getPlanInfo(planId) {
+  return ACCESS_PLANS[planId] || ACCESS_PLANS.monthly;
+}
+
+function getValidityText(validityDays) {
+  if (validityDays >= 365) return '1 year';
+  return `${validityDays} days`;
+}
+
+function computePlanAmount(services, planId) {
+  const plan = getPlanInfo(planId);
+  if (typeof plan.flatPrice === 'number') return plan.flatPrice;
+  return (services?.length || 0) * SERVICE_PRICE;
+}
+
 // Build email HTML with service info
-function buildAccessCodeEmailHtml(code, services) {
+function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
   const servicesHtml = serviceNames.map(s => `<li style="padding: 4px 0;">✅ ${s}</li>`).join('');
   const totalAmount = (services && services.length > 0) ? services.length * SERVICE_PRICE : SERVICE_PRICE;
+  const validityText = getValidityText(validityDays);
 
   return `
     <!DOCTYPE html>
@@ -385,7 +406,7 @@ function buildAccessCodeEmailHtml(code, services) {
             <li>This code can only be used once per account</li>
             <li>Enter this code in the "Access Code" field when signing in</li>
             <li>Keep this code secure and do not share it</li>
-            <li>Code is valid for 30 days from purchase</li>
+            <li>Code is valid for ${validityText} from purchase</li>
             <li>Only the services you purchased will be accessible</li>
           </ul>
           
@@ -401,7 +422,7 @@ function buildAccessCodeEmailHtml(code, services) {
 }
 
 // Send access code email with retry logic
-async function sendAccessCodeEmail(email, code, services, retries = 3) {
+async function sendAccessCodeEmail(email, code, services, validityDays = 30, retries = 3) {
   const emailUser = (process.env.EMAIL_USER || '').replace(/[^\x20-\x7E]/g, '').trim();
   const emailPass = (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim();
 
@@ -417,7 +438,7 @@ async function sendAccessCodeEmail(email, code, services, retries = 3) {
     }
   }
 
-  const htmlContent = buildAccessCodeEmailHtml(code, services);
+  const htmlContent = buildAccessCodeEmailHtml(code, services, validityDays);
 
   const mailOptions = {
     from: (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim(),
@@ -530,6 +551,7 @@ console.log(`  Email:         ${process.env.EMAIL_USER ? EMAIL_SERVICE : 'Not co
 console.log(`  Admin:         ${ADMIN_PASSWORD ? 'Configured' : 'NOT SET!'}`);
 console.log(`  Session TTL:   ${PAYMENT_SESSION_MINUTES} minutes`);
 console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (₹${SERVICE_PRICE} each)`);
+console.log(`  Plans:         monthly(30d), yearly(365d, ₹100 flat)`);
 console.log('═══════════════════════════════════════════');
 console.log('');
 
@@ -561,6 +583,12 @@ app.get('/api/services', (req, res) => {
       name: id === 'statistics' ? 'Statistics & Insights' : id === 'poll' ? 'Community Poll' : id,
     })),
     pricePerService: SERVICE_PRICE,
+    plans: Object.values(ACCESS_PLANS).map(plan => ({
+      id: plan.id,
+      label: plan.label,
+      validityDays: plan.validityDays,
+      flatPrice: plan.flatPrice ?? null,
+    })),
     currency: 'INR',
   });
 });
@@ -575,6 +603,7 @@ app.post(
     body('email').isEmail().normalizeEmail(),
     body('services').isArray({ min: 1 }).withMessage('At least one service must be selected'),
     body('services.*').isIn(VALID_SERVICE_IDS).withMessage('Invalid service selected'),
+    body('planDuration').optional().isIn(VALID_PLAN_IDS).withMessage('Invalid plan selected'),
   ],
   async (req, res) => {
     try {
@@ -596,6 +625,10 @@ app.post(
       }
 
       const { email, services } = req.body;
+      const planDuration = VALID_PLAN_IDS.includes(req.body.planDuration)
+        ? req.body.planDuration
+        : 'monthly';
+      const plan = getPlanInfo(planDuration);
       // Deduplicate services
       const uniqueServices = [...new Set(services)].filter(s => VALID_SERVICE_IDS.includes(s));
 
@@ -607,12 +640,12 @@ app.post(
       }
 
       // Calculate amount server-side (never trust client amount)
-      const amount = uniqueServices.length * SERVICE_PRICE;
+      const amount = computePlanAmount(uniqueServices, plan.id);
       const orderId = `order_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
       const emailLower = email.toLowerCase().trim();
 
       const serviceNames = uniqueServices.map(s => PAID_SERVICES[s].name).join(', ');
-      console.log(`📝 New payment: ${emailLower} | ₹${amount} | ${orderId} | Services: ${serviceNames}`);
+      console.log(`📝 New payment: ${emailLower} | ₹${amount} | ${orderId} | Plan: ${plan.id} | Services: ${serviceNames}`);
 
       // Create order in database with services
       await db.createOrder({
@@ -621,6 +654,8 @@ app.post(
         amount: amount * 100, // Store in paise
         status: 'PENDING',
         services: uniqueServices,
+        plan_duration: plan.id,
+        validity_days: plan.validityDays,
       });
 
       const frontendUrl = process.env.FRONTEND_URL || 'https://tlangau.onrender.com';
@@ -631,7 +666,7 @@ app.post(
         : serviceNames;
 
       const paymentData = {
-        purpose: `Tlangau: ${purposeDetail}`,
+        purpose: `Tlangau (${plan.label}): ${purposeDetail}`,
         amount: amount,
         currency: 'INR',
         buyer_name: emailLower.split('@')[0],
@@ -669,6 +704,8 @@ app.post(
             paymentUrl: paymentLink.longurl,
             amount: amount,
             services: uniqueServices,
+            planDuration: plan.id,
+            validityDays: plan.validityDays,
             currency: 'INR',
           });
         } else {
@@ -824,10 +861,13 @@ async function verifyAndFulfillPayment(order, payment, paymentId) {
   const existingCode = await db.getCodeByOrderId(order.order_id);
   let accessCodeToSend = existingCode?.code || null;
   const orderServices = order.services || VALID_SERVICE_IDS; // Backward compat: old orders get all services
+  const plan = getPlanInfo(order.plan_duration);
+  const validityDays = plan.validityDays || 30;
+  let expiresAt = existingCode?.expiresAt || existingCode?.expires_at || null;
 
   if (!existingCode) {
     const accessCode = generateAccessCode();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    expiresAt = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000).toISOString();
     await db.createAccessCode({
       code: accessCode,
       email: order.email,
@@ -836,20 +876,40 @@ async function verifyAndFulfillPayment(order, payment, paymentId) {
       used: false,
       expiresAt,
       services: orderServices,
+      plan_duration: plan.id,
+      validity_days: validityDays,
     });
     console.log(`✅ Access code created: ${accessCode} | Services: ${orderServices.join(', ')}`);
     accessCodeToSend = accessCode;
   }
 
   if (accessCodeToSend) {
-    const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend, orderServices);
+    const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend, orderServices, validityDays);
+    await db.updateOrder(order.order_id, {
+      access_code: accessCodeToSend,
+      access_code_expires_at: expiresAt,
+      code_email_sent: emailSent === true,
+      code_email_last_attempt_at: new Date().toISOString(),
+      plan_duration: plan.id,
+      validity_days: validityDays,
+    });
     if (!emailSent) {
       console.error(`❌ CRITICAL: Email NOT sent to ${order.email} | Code: ${accessCodeToSend}`);
       console.error('   ⚠️  Manual intervention required!');
     }
+    order.code_email_sent = emailSent === true;
   }
 
-  return { verified: true, status: 'SUCCESS' };
+  return {
+    verified: true,
+    status: 'SUCCESS',
+    accessCode: accessCodeToSend,
+    expiresAt,
+    planDuration: plan.id,
+    validityDays,
+    services: orderServices,
+    codeEmailSent: order.code_email_sent === true,
+  };
 }
 
 // Verify payment (for frontend callback / success page polling)
@@ -872,10 +932,17 @@ app.post(
       }
 
       if (order.status === 'SUCCESS') {
+        const codeByOrder = await db.getCodeByOrderId(order.order_id || orderId);
+        const plan = getPlanInfo(order.plan_duration);
         return res.json({
           success: true,
           paymentStatus: 'SUCCESS',
           services: order.services || VALID_SERVICE_IDS,
+          accessCode: order.access_code || codeByOrder?.code || null,
+          expiresAt: order.access_code_expires_at || codeByOrder?.expiresAt || codeByOrder?.expires_at || null,
+          planDuration: order.plan_duration || codeByOrder?.plan_duration || plan.id,
+          validityDays: order.validity_days || codeByOrder?.validity_days || plan.validityDays,
+          codeEmailSent: order.code_email_sent === true,
           message: 'Payment verified successfully',
         });
       }
@@ -947,7 +1014,12 @@ app.post(
           return res.json({
             success: true,
             paymentStatus: 'SUCCESS',
-            services: order.services || VALID_SERVICE_IDS,
+            services: result.services || order.services || VALID_SERVICE_IDS,
+            accessCode: result.accessCode || null,
+            expiresAt: result.expiresAt || null,
+            planDuration: result.planDuration || order.plan_duration || 'monthly',
+            validityDays: result.validityDays || order.validity_days || ACCESS_PLANS.monthly.validityDays,
+            codeEmailSent: result.codeEmailSent === true,
             message: 'Payment verified successfully',
           });
         }
@@ -967,6 +1039,75 @@ app.post(
     } catch (error) {
       console.error('❌ Error verifying payment:', error.message);
       res.status(500).json({ success: false, error: 'Failed to verify payment. Please try again.' });
+    }
+  }
+);
+
+// Resend access code email for a successful order (customer self-service fallback)
+app.post(
+  '/api/resend-access-code',
+  paymentLimiter,
+  [
+    body('orderId').notEmpty().withMessage('orderId is required'),
+    body('email').isEmail().normalizeEmail(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const orderId = req.body.orderId;
+      const emailLower = req.body.email.toLowerCase().trim();
+      const order = await db.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      if ((order.email || '').toLowerCase().trim() !== emailLower) {
+        return res.status(403).json({ success: false, message: 'Email does not match this order.' });
+      }
+      if (order.status !== 'SUCCESS') {
+        return res.status(400).json({ success: false, message: 'Payment is not completed yet.' });
+      }
+
+      const codeByOrder = await db.getCodeByOrderId(order.order_id || orderId);
+      const codeToSend = codeByOrder?.code || order.access_code;
+      if (!codeToSend) {
+        return res.status(404).json({ success: false, message: 'Access code not generated yet. Please retry shortly.' });
+      }
+      const validityDays = codeByOrder?.validity_days || order.validity_days || ACCESS_PLANS.monthly.validityDays;
+      const services = codeByOrder?.services || order.services || VALID_SERVICE_IDS;
+      const emailSent = await sendAccessCodeEmail(emailLower, codeToSend, services, validityDays);
+      await db.updateOrder(order.order_id || orderId, {
+        code_email_sent: emailSent === true,
+        code_email_last_attempt_at: new Date().toISOString(),
+      });
+
+      if (!emailSent) {
+        return res.status(500).json({
+          success: false,
+          message: 'We could not resend the email right now.',
+          accessCode: codeToSend,
+          expiresAt: codeByOrder?.expiresAt || codeByOrder?.expires_at || order.access_code_expires_at || null,
+          services,
+          planDuration: (codeByOrder?.plan_duration || order.plan_duration || 'monthly'),
+          validityDays,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Access code email resent.',
+        accessCode: codeToSend,
+        expiresAt: codeByOrder?.expiresAt || codeByOrder?.expires_at || order.access_code_expires_at || null,
+        services,
+        planDuration: (codeByOrder?.plan_duration || order.plan_duration || 'monthly'),
+        validityDays,
+      });
+    } catch (error) {
+      console.error('❌ Resend access code error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to resend access code.' });
     }
   }
 );
@@ -1083,7 +1224,7 @@ app.post(
         });
       }
 
-      const testResult = await sendAccessCodeEmail(email, 'TEST123456', ['ring', 'message']);
+      const testResult = await sendAccessCodeEmail(email, 'TEST123456', ['ring', 'message'], 30);
       if (testResult) {
         res.json({ success: true, message: 'Test email sent! Check your inbox.' });
       } else {
@@ -1127,6 +1268,8 @@ app.post(
         expiresAt: accessCode.expiresAt || accessCode.expires_at,
         used: accessCode.used,
         services: allServices,
+        planDuration: accessCode.plan_duration || 'monthly',
+        validityDays: accessCode.validity_days || ACCESS_PLANS.monthly.validityDays,
         message: 'Access code info retrieved',
       });
     } catch (error) {
@@ -1219,8 +1362,19 @@ app.post(
         return res.status(404).json({ success: false, message: 'No access code found for this email' });
       }
 
-      const emailSent = await sendAccessCodeEmail(emailLower, accessCode.code, accessCode.services);
+      const emailSent = await sendAccessCodeEmail(
+        emailLower,
+        accessCode.code,
+        accessCode.services,
+        accessCode.validity_days || ACCESS_PLANS.monthly.validityDays,
+      );
       if (emailSent) {
+        if (accessCode.order_id) {
+          await db.updateOrder(accessCode.order_id, {
+            code_email_sent: true,
+            code_email_last_attempt_at: new Date().toISOString(),
+          });
+        }
         res.json({ success: true, message: 'Email resent successfully', code: accessCode.code });
       } else {
         res.status(500).json({ success: false, message: 'Failed to send email', code: accessCode.code });
@@ -1419,6 +1573,10 @@ const ACCESS_CODE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function normalizeEmail(email) {
   return (email || '').toString().toLowerCase().trim();
+}
+
+function toSafeEmailKey(email) {
+  return normalizeEmail(email).replace(/[.#$/\[\]]/g, '_');
 }
 
 async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}) {
@@ -1846,6 +2004,36 @@ async function requireAnyAuth(req, res, next) {
   req.userEmail = email;
   next();
 }
+
+// Create one-time client welcome mail on first install/login per account.
+app.post('/api/client-welcome', requireAnyAuth, async (req, res) => {
+  try {
+    const userEmail = normalizeEmail(req.userEmail);
+    if (!userEmail) {
+      return res.status(400).json({ success: false, message: 'Missing account email.' });
+    }
+    const safeKey = toSafeEmailKey(userEmail);
+    const flagRef = admin.database().ref(`user_flags/${safeKey}/client_welcome_sent_at`);
+    const flagSnap = await flagRef.once('value');
+    if (flagSnap.exists()) {
+      return res.json({ success: true, created: false, message: 'Client welcome already sent.' });
+    }
+
+    await db.createDevMail({
+      title: 'Welcome to Tlangau',
+      body: 'Welcome to Tlangau client dashboard. You are all set to subscribe and receive updates.',
+      pinned: false,
+      target_email: userEmail,
+      category: 'system_client_welcome',
+      system_generated: true,
+    });
+    await flagRef.set(new Date().toISOString());
+    return res.json({ success: true, created: true, message: 'Client welcome created.' });
+  } catch (error) {
+    console.error('❌ Client welcome mail error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to create client welcome mail.' });
+  }
+});
 
 // Create poll (any authenticated user)
 app.post('/api/polls', fcmLimiter, requireAnyAuth, [

@@ -778,6 +778,8 @@
                             const amount = (order.amount / 100).toFixed(2);
                             const statusBadge = `<span class="badge ${esc(order.status.toLowerCase())}">${esc(order.status)}</span>`;
                             const services = order.services || [];
+                            const planDuration = order.plan_duration || 'monthly';
+                            const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(planDuration)}</span>`;
                             const servicesBadges = services.length > 0
                                 ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
                                 : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
@@ -785,7 +787,7 @@
                                 <td>${esc(order.order_id)}</td>
                                 <td>${esc(order.email)}</td>
                                 <td>₹${esc(amount)}</td>
-                                <td>${servicesBadges}</td>
+                                <td>${planBadge} ${servicesBadges}</td>
                                 <td>${statusBadge}</td>
                                 <td>${esc(order.payment_id || '-')}</td>
                                 <td>${esc(new Date(order.created_at).toLocaleString())}</td>
@@ -840,6 +842,8 @@
                                     : esc(expiresAt.toLocaleString()));
                             
                             const services = code.services || [];
+                            const planDuration = code.plan_duration || 'monthly';
+                            const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(planDuration)}</span>`;
                             const servicesBadges = services.length > 0
                                 ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
                                 : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
@@ -848,7 +852,7 @@
                                 <td><strong>${esc(code.code)}</strong></td>
                                 <td>${esc(code.email)}</td>
                                 <td>${esc(code.order_id)}</td>
-                                <td>${servicesBadges}</td>
+                                <td>${planBadge} ${servicesBadges}</td>
                                 <td>${statusBadge}</td>
                                 <td>${esc(code.used_by_email || '-')}</td>
                                 <td>${expiresText}</td>

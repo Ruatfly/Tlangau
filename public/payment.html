@@ -43,7 +43,7 @@
                         <div id="serviceLineItems"></div>
                         <div class="summary-item">
                             <span>Validity</span>
-                            <span>30 Days</span>
+                            <span id="summaryValidity">30 Days</span>
                         </div>
                         <div class="summary-item">
                             <span>Delivery</span>
@@ -118,12 +118,21 @@
 
                                 <!-- Quick select buttons -->
                                 <div class="service-quick-select">
-                                    <button type="button" class="quick-select-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All (₹30)</button>
+                                    <button type="button" class="quick-select-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
                                 </div>
 
                                 <div id="serviceError" class="service-error" style="display: none;">
                                     Please select at least one service
                                 </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="planDuration">Access Plan *</label>
+                                <select id="planDuration" name="planDuration" required>
+                                    <option value="monthly" selected>1 Month - Pay per service (Rs 10 each)</option>
+                                    <option value="yearly">1 Year - Rs 100 flat</option>
+                                </select>
+                                <small class="form-help">Yearly plan gives 365-day validity with a flat Rs 100 price.</small>
                             </div>
 
                             <div class="form-group">
@@ -144,7 +153,7 @@
                                     <h4>📋 What You'll Get</h4>
                                     <ul>
                                         <li>Unique 12-character access code</li>
-                                        <li>Valid for 30 days from purchase</li>
+                                        <li id="validityInfoLine">Valid for 30 days from purchase</li>
                                         <li>Access to your selected services only</li>
                                         <li>Instant email delivery</li>
                                     </ul>
