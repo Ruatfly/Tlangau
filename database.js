@@ -212,6 +212,85 @@ class Database {
     return codes[0];
   }
 
+  async getLatestUsedCodeByEmail(email) {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (!normalizedEmail) return null;
+
+    const snapshot = await this.db.ref('access_codes')
+      .orderByChild('used_by_email')
+      .equalTo(normalizedEmail)
+      .once('value');
+
+    const data = snapshot.val();
+    if (!data) return null;
+
+    const codes = Object.values(data)
+      .filter(c => c && c.used === true)
+      .map(c => {
+        if (!c.expires_at && c.expiresAt) c.expires_at = c.expiresAt;
+        if (!c.expiresAt && c.expires_at) c.expiresAt = c.expires_at;
+        return c;
+      });
+
+    if (codes.length === 0) return null;
+
+    codes.sort((a, b) => {
+      const aExp = new Date(a.expires_at || a.expiresAt || 0).getTime();
+      const bExp = new Date(b.expires_at || b.expiresAt || 0).getTime();
+      if (bExp !== aExp) return bExp - aExp;
+      return new Date(b.used_at || b.updated_at || b.created_at || 0) - new Date(a.used_at || a.updated_at || a.created_at || 0);
+    });
+    return codes[0];
+  }
+
+  async getLatestUsedCodeForIdentity(email, accountId) {
+    const merged = new Map();
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    const normalizedAccountId = (accountId || '').toString().trim();
+
+    if (normalizedEmail) {
+      const byEmailSnap = await this.db.ref('access_codes')
+        .orderByChild('used_by_email')
+        .equalTo(normalizedEmail)
+        .once('value');
+      const byEmailData = byEmailSnap.val() || {};
+      for (const code of Object.values(byEmailData)) {
+        if (code && code.code) merged.set(code.code, code);
+      }
+    }
+
+    if (normalizedAccountId) {
+      const byAccountSnap = await this.db.ref('access_codes')
+        .orderByChild('used_by_account')
+        .equalTo(normalizedAccountId)
+        .once('value');
+      const byAccountData = byAccountSnap.val() || {};
+      for (const code of Object.values(byAccountData)) {
+        if (code && code.code && !merged.has(code.code)) {
+          merged.set(code.code, code);
+        }
+      }
+    }
+
+    const usedCodes = Array.from(merged.values())
+      .filter(c => c && c.used === true)
+      .map(c => {
+        if (!c.expires_at && c.expiresAt) c.expires_at = c.expiresAt;
+        if (!c.expiresAt && c.expires_at) c.expiresAt = c.expires_at;
+        return c;
+      });
+
+    if (usedCodes.length === 0) return null;
+
+    usedCodes.sort((a, b) => {
+      const aExp = new Date(a.expires_at || a.expiresAt || 0).getTime();
+      const bExp = new Date(b.expires_at || b.expiresAt || 0).getTime();
+      if (bExp !== aExp) return bExp - aExp;
+      return new Date(b.used_at || b.updated_at || b.created_at || 0) - new Date(a.used_at || a.updated_at || a.created_at || 0);
+    });
+    return usedCodes[0];
+  }
+
   async markCodeAsUsed(code, email, accountId) {
     await this.db.ref(`access_codes/${code}`).update({
       used: true,

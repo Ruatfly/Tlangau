@@ -36,6 +36,8 @@ const VALID_PLAN_IDS = Object.keys(ACCESS_PLANS);
 
 // ==================== PAYMENT SESSION CONFIG ====================
 const PAYMENT_SESSION_MINUTES = 10;
+const ACCESS_GRACE_PERIOD_HOURS = 24;
+const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
 
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -354,6 +356,31 @@ function computePlanAmount(services, planId) {
   const plan = getPlanInfo(planId);
   if (typeof plan.flatPrice === 'number') return plan.flatPrice;
   return (services?.length || 0) * SERVICE_PRICE;
+}
+
+function toTimestamp(dateLike) {
+  const ts = new Date(dateLike).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
+
+function getGraceWindowEnd(expiresAt) {
+  const expiryTs = toTimestamp(expiresAt);
+  if (expiryTs === null) return null;
+  return new Date(expiryTs + ACCESS_GRACE_PERIOD_MS).toISOString();
+}
+
+function isWithinAccessWindow(expiresAt, nowTs = Date.now()) {
+  const graceEndIso = getGraceWindowEnd(expiresAt);
+  if (!graceEndIso) return false;
+  const graceEndTs = toTimestamp(graceEndIso);
+  return graceEndTs !== null && nowTs <= graceEndTs;
+}
+
+function stackExpiry(currentExpiryRaw, validityDays) {
+  const durationMs = Math.max(1, Number(validityDays) || 30) * 24 * 60 * 60 * 1000;
+  const currentExpiryTs = toTimestamp(currentExpiryRaw) || 0;
+  const baseTs = Math.max(Date.now(), currentExpiryTs);
+  return new Date(baseTs + durationMs).toISOString();
 }
 
 // Build email HTML with service info
@@ -1158,15 +1185,6 @@ app.post(
         });
       }
 
-      const accountHasUsedCode = await db.hasAccountUsedCode(userAccountId);
-      if (accountHasUsedCode) {
-        return res.json({
-          success: false,
-          valid: false,
-          message: 'This account has already used an access code. Each account can only use one code.',
-        });
-      }
-
       const codeEmail = accessCode.email.toLowerCase().trim();
       if (codeEmail !== emailLower) {
         return res.json({
@@ -1176,9 +1194,25 @@ app.post(
         });
       }
 
+      const plan = getPlanInfo(accessCode.plan_duration);
+      const validityDays = accessCode.validity_days || plan.validityDays || ACCESS_PLANS.monthly.validityDays;
+      const latestUsedEntitlement = await db.getLatestUsedCodeForIdentity(emailLower, userAccountId);
+      const stackedExpiry = stackExpiry(
+        latestUsedEntitlement?.expiresAt || latestUsedEntitlement?.expires_at,
+        validityDays
+      );
+
       await db.markCodeAsUsed(codeUpper, emailLower, userAccountId);
+      await db.updateAccessCode(codeUpper, {
+        expires_at: stackedExpiry,
+        expiresAt: stackedExpiry,
+        plan_duration: accessCode.plan_duration || plan.id,
+        validity_days: validityDays,
+      });
       accessCode.used = true;
       accessCode.used_at = new Date().toISOString();
+      accessCode.expires_at = stackedExpiry;
+      accessCode.expiresAt = stackedExpiry;
       await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
         sendWelcome: true,
         codeKey: codeUpper,
@@ -1195,7 +1229,10 @@ app.post(
         valid: true,
         message: 'Access code is valid',
         code: codeUpper,
-        expiresAt: accessCode.expiresAt || accessCode.expires_at,
+        expiresAt: getGraceWindowEnd(accessCode.expiresAt || accessCode.expires_at),
+        accessExpiryAt: accessCode.expiresAt || accessCode.expires_at,
+        gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
+        graceEndsAt: getGraceWindowEnd(accessCode.expiresAt || accessCode.expires_at),
         services: allServices,
       });
     } catch (error) {
@@ -1249,7 +1286,10 @@ app.post(
 
       const { email } = req.body;
       const emailLower = email.toLowerCase().trim();
-      const accessCode = await db.getCodeByEmail(emailLower);
+      let accessCode = await db.getLatestUsedCodeByEmail(emailLower);
+      if (!accessCode) {
+        accessCode = await db.getCodeByEmail(emailLower);
+      }
 
       if (!accessCode) {
         return res.json({ success: false, valid: false, message: 'No access code found for this email' });
@@ -1257,15 +1297,20 @@ app.post(
 
       const codeServices = accessCode.services || VALID_SERVICE_IDS;
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+      const rawExpiry = accessCode.expiresAt || accessCode.expires_at;
+      const accessStillValid = isWithinAccessWindow(rawExpiry);
       await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
         sendWelcome: false,
-        sendExpiredNotice: true,
+        sendExpiredNotice: accessStillValid === false,
       });
 
       res.json({
         success: true,
         code: accessCode.code,
-        expiresAt: accessCode.expiresAt || accessCode.expires_at,
+        expiresAt: getGraceWindowEnd(rawExpiry),
+        accessExpiryAt: rawExpiry,
+        gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
+        graceEndsAt: getGraceWindowEnd(rawExpiry),
         used: accessCode.used,
         services: allServices,
         planDuration: accessCode.plan_duration || 'monthly',
@@ -1720,7 +1765,11 @@ async function requireServerAuth(req, res, next) {
     if (cachedAccess && (Date.now() - cachedAccess.cachedAt) < ACCESS_CODE_CACHE_TTL_MS) {
       accessCode = cachedAccess.accessCode;
     } else {
-      accessCode = await db.getCodeByEmail(email);
+      // Primary source: used/activated entitlement; fallback keeps backward compatibility.
+      accessCode = await db.getLatestUsedCodeByEmail(email);
+      if (!accessCode) {
+        accessCode = await db.getCodeByEmail(email);
+      }
       accessCodeCache.set(email, { accessCode, cachedAt: Date.now() });
     }
 
@@ -1728,13 +1777,16 @@ async function requireServerAuth(req, res, next) {
       return res.status(403).json({ success: false, message: 'Access not authorized for this account.' });
     }
 
-    const expiresAt = new Date(accessCode.expiresAt || accessCode.expires_at);
-    if (expiresAt < new Date()) {
+    const rawExpiry = accessCode.expiresAt || accessCode.expires_at;
+    if (!isWithinAccessWindow(rawExpiry)) {
       await maybeSendAutomatedAccessCodeMails(email, accessCode, {
         sendWelcome: false,
         sendExpiredNotice: true,
       });
-      return res.status(403).json({ success: false, message: 'Your access code has expired.' });
+      return res.status(403).json({
+        success: false,
+        message: `Your access code has expired (including ${ACCESS_GRACE_PERIOD_HOURS}h grace period).`,
+      });
     }
 
     await maybeSendAutomatedAccessCodeMails(email, accessCode, { sendWelcome: false });
