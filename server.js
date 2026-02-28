@@ -36,8 +36,17 @@ const VALID_PLAN_IDS = Object.keys(ACCESS_PLANS);
 
 // ==================== PAYMENT SESSION CONFIG ====================
 const PAYMENT_SESSION_MINUTES = 10;
-const ACCESS_GRACE_PERIOD_HOURS = 24;
-const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
+// TEST OVERRIDES (temporary): keep flow identical, but shorten windows for QA.
+// Set to null/0 to use normal production durations.
+const ACCESS_VALIDITY_OVERRIDE_MINUTES = 5;
+const ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES = 2;
+
+const ACCESS_GRACE_PERIOD_HOURS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
+  ? (ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES / 60)
+  : 24;
+const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
+  ? ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES * 60 * 1000
+  : ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
 
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -348,6 +357,9 @@ function getPlanInfo(planId) {
 }
 
 function getValidityText(validityDays) {
+  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
+    return `${ACCESS_VALIDITY_OVERRIDE_MINUTES} minutes`;
+  }
   if (validityDays >= 365) return '1 year';
   return `${validityDays} days`;
 }
@@ -361,6 +373,14 @@ function computePlanAmount(services, planId) {
 function toTimestamp(dateLike) {
   const ts = new Date(dateLike).getTime();
   return Number.isNaN(ts) ? null : ts;
+}
+
+function getValidityDurationMs(validityDays) {
+  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
+    return ACCESS_VALIDITY_OVERRIDE_MINUTES * 60 * 1000;
+  }
+  const safeDays = Math.max(1, Number(validityDays) || 30);
+  return safeDays * 24 * 60 * 60 * 1000;
 }
 
 function getGraceWindowEnd(expiresAt) {
@@ -377,7 +397,7 @@ function isWithinAccessWindow(expiresAt, nowTs = Date.now()) {
 }
 
 function stackExpiry(currentExpiryRaw, validityDays) {
-  const durationMs = Math.max(1, Number(validityDays) || 30) * 24 * 60 * 60 * 1000;
+  const durationMs = getValidityDurationMs(validityDays);
   const currentExpiryTs = toTimestamp(currentExpiryRaw) || 0;
   const baseTs = Math.max(Date.now(), currentExpiryTs);
   return new Date(baseTs + durationMs).toISOString();
@@ -579,6 +599,9 @@ console.log(`  Admin:         ${ADMIN_PASSWORD ? 'Configured' : 'NOT SET!'}`);
 console.log(`  Session TTL:   ${PAYMENT_SESSION_MINUTES} minutes`);
 console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (₹${SERVICE_PRICE} each)`);
 console.log(`  Plans:         monthly(30d), yearly(365d, ₹100 flat)`);
+if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 || ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0) {
+  console.log(`  Access Test:   validity=${ACCESS_VALIDITY_OVERRIDE_MINUTES}m, grace=${ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES}m`);
+}
 console.log('═══════════════════════════════════════════');
 console.log('');
 
@@ -894,7 +917,7 @@ async function verifyAndFulfillPayment(order, payment, paymentId) {
 
   if (!existingCode) {
     const accessCode = generateAccessCode();
-    expiresAt = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000).toISOString();
+    expiresAt = new Date(Date.now() + getValidityDurationMs(validityDays)).toISOString();
     await db.createAccessCode({
       code: accessCode,
       email: order.email,
