@@ -943,7 +943,7 @@ async function createPaymentEvent(orderId, eventType, payload = {}) {
 }
 
 // Helper: verify payment and fulfill order (reusable for webhook + verify-payment)
-async function verifyAndFulfillPayment(order, payment, paymentId) {
+async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) {
   const orderId = order.order_id;
   const expectedAmount = order.amount / 100;
   const paymentAmount = parseFloat(payment.amount);
@@ -1030,7 +1030,10 @@ async function verifyAndFulfillPayment(order, payment, paymentId) {
   const nowTs = Date.now();
   const lastEmailAttemptTs = toTimestamp(order.code_email_last_attempt_at) || 0;
   const emailCooldownMs = Math.max(1, CODE_EMAIL_RESEND_COOLDOWN_MINUTES) * 60 * 1000;
-  const shouldAttemptEmail = !order.code_email_sent || (nowTs - lastEmailAttemptTs >= emailCooldownMs);
+  const forceResendEmail = options.forceResendEmail === true;
+  const shouldAttemptEmail = forceResendEmail
+    ? (nowTs - lastEmailAttemptTs >= emailCooldownMs)
+    : (order.code_email_sent !== true);
 
   let codeEmailSent = order.code_email_sent === true;
   if (accessCodeToSend && shouldAttemptEmail) {
@@ -1127,16 +1130,13 @@ async function runPaymentReconciliation(options = {}) {
 
   const source = options.source || 'manual';
   const maxOrders = Math.max(1, Number(options.maxOrders) || RECONCILE_MAX_ORDERS_PER_RUN);
-  const recentHours = Math.max(1, Number(options.recentHours) || 48);
-  const nowTs = Date.now();
 
   const allOrders = await db.getAllOrders();
   const candidates = allOrders.filter((order) => {
     if (!order) return false;
     if (order.status === 'PENDING' || order.status === 'FAILED') return true;
     if (order.status === 'SUCCESS' && order.code_email_sent !== true) return true;
-    const createdTs = toTimestamp(order.created_at) || 0;
-    return (nowTs - createdTs) <= recentHours * 60 * 60 * 1000 && order.status !== 'EXPIRED';
+    return false;
   }).slice(0, maxOrders);
 
   const report = {
