@@ -403,6 +403,35 @@ function stackExpiry(currentExpiryRaw, validityDays) {
   return new Date(baseTs + durationMs).toISOString();
 }
 
+function getEntitlementStartTs(code) {
+  return toTimestamp(code?.entitlement_starts_at || code?.used_at || code?.created_at) || 0;
+}
+
+function resolveEffectiveEntitlement(codes, nowTs = Date.now()) {
+  if (!Array.isArray(codes) || codes.length === 0) return null;
+
+  const activeCodes = codes.filter((code) => {
+    const startTs = getEntitlementStartTs(code);
+    const graceEndIso = getGraceWindowEnd(code?.expiresAt || code?.expires_at);
+    const graceEndTs = toTimestamp(graceEndIso);
+    return startTs <= nowTs && graceEndTs !== null && nowTs <= graceEndTs;
+  });
+
+  if (activeCodes.length === 0) return null;
+
+  // If two entitlements overlap during grace, prefer the newer one (later start).
+  activeCodes.sort((a, b) => {
+    const aStart = getEntitlementStartTs(a);
+    const bStart = getEntitlementStartTs(b);
+    if (bStart !== aStart) return bStart - aStart;
+    const aExp = toTimestamp(a.expiresAt || a.expires_at) || 0;
+    const bExp = toTimestamp(b.expiresAt || b.expires_at) || 0;
+    return bExp - aExp;
+  });
+
+  return activeCodes[0];
+}
+
 // Build email HTML with service info
 function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
@@ -1219,14 +1248,19 @@ app.post(
 
       const plan = getPlanInfo(accessCode.plan_duration);
       const validityDays = accessCode.validity_days || plan.validityDays || ACCESS_PLANS.monthly.validityDays;
-      const latestUsedEntitlement = await db.getLatestUsedCodeForIdentity(emailLower, userAccountId);
-      const stackedExpiry = stackExpiry(
-        latestUsedEntitlement?.expiresAt || latestUsedEntitlement?.expires_at,
-        validityDays
-      );
+      const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+      const latestUsedEntitlement = usedEntitlements.length > 0 ? usedEntitlements[0] : null;
+      const previousExpiryIso = latestUsedEntitlement?.expiresAt || latestUsedEntitlement?.expires_at;
+      const previousExpiryTs = toTimestamp(previousExpiryIso) || 0;
+      const nowTs = Date.now();
+      const entitlementStartsAt = new Date(Math.max(nowTs, previousExpiryTs)).toISOString();
+      const stackedExpiry = new Date(
+        (toTimestamp(entitlementStartsAt) || nowTs) + getValidityDurationMs(validityDays)
+      ).toISOString();
 
       await db.markCodeAsUsed(codeUpper, emailLower, userAccountId);
       await db.updateAccessCode(codeUpper, {
+        entitlement_starts_at: entitlementStartsAt,
         expires_at: stackedExpiry,
         expiresAt: stackedExpiry,
         plan_duration: accessCode.plan_duration || plan.id,
@@ -1234,6 +1268,7 @@ app.post(
       });
       accessCode.used = true;
       accessCode.used_at = new Date().toISOString();
+      accessCode.entitlement_starts_at = entitlementStartsAt;
       accessCode.expires_at = stackedExpiry;
       accessCode.expiresAt = stackedExpiry;
       await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
@@ -1242,20 +1277,23 @@ app.post(
       });
       console.log(`✅ Code validated and used: ${codeUpper} by ${userAccountId}`);
 
-      // Return services – backward compat: codes without services get all
-      const codeServices = accessCode.services || VALID_SERVICE_IDS;
+      const effectiveEntitlements = [...usedEntitlements, accessCode];
+      const effectiveCode = resolveEffectiveEntitlement(effectiveEntitlements, nowTs) || accessCode;
+      // Return services from currently effective entitlement.
+      const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
       // Always include free services
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+      const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
 
       res.json({
         success: true,
         valid: true,
         message: 'Access code is valid',
-        code: codeUpper,
-        expiresAt: getGraceWindowEnd(accessCode.expiresAt || accessCode.expires_at),
-        accessExpiryAt: accessCode.expiresAt || accessCode.expires_at,
+        code: effectiveCode.code || codeUpper,
+        expiresAt: getGraceWindowEnd(effectiveRawExpiry),
+        accessExpiryAt: effectiveRawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-        graceEndsAt: getGraceWindowEnd(accessCode.expiresAt || accessCode.expires_at),
+        graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
         services: allServices,
       });
     } catch (error) {
@@ -1309,7 +1347,11 @@ app.post(
 
       const { email } = req.body;
       const emailLower = email.toLowerCase().trim();
-      let accessCode = await db.getLatestUsedCodeByEmail(emailLower);
+      const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, emailLower);
+      let accessCode = resolveEffectiveEntitlement(usedEntitlements);
+      if (!accessCode) {
+        accessCode = await db.getLatestUsedCodeByEmail(emailLower);
+      }
       if (!accessCode) {
         accessCode = await db.getCodeByEmail(emailLower);
       }
@@ -1788,12 +1830,18 @@ async function requireServerAuth(req, res, next) {
     if (cachedAccess && (Date.now() - cachedAccess.cachedAt) < ACCESS_CODE_CACHE_TTL_MS) {
       accessCode = cachedAccess.accessCode;
     } else {
-      // Primary source: used/activated entitlement; fallback keeps backward compatibility.
-      accessCode = await db.getLatestUsedCodeByEmail(email);
+      // Primary source: currently effective entitlement; fallback keeps backward compatibility.
+      const usedEntitlements = await db.getUsedCodesForIdentity(email, email);
+      accessCode = resolveEffectiveEntitlement(usedEntitlements);
+      if (!accessCode) {
+        accessCode = await db.getLatestUsedCodeByEmail(email);
+      }
       if (!accessCode) {
         accessCode = await db.getCodeByEmail(email);
       }
-      accessCodeCache.set(email, { accessCode, cachedAt: Date.now() });
+      if (accessCode) {
+        accessCodeCache.set(email, { accessCode, cachedAt: Date.now() });
+      }
     }
 
     if (!accessCode) {
