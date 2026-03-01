@@ -27,6 +27,16 @@ BACKEND_URL=https://your-backend-url.com
 # For local development, use: http://localhost:3001
 # IMPORTANT: For webhooks to work, BACKEND_URL must be publicly accessible
 
+# Payment/code delivery reliability
+CODE_EMAIL_RESEND_COOLDOWN_MINUTES=10
+# Prevents duplicate resend storms from repeated verify/webhook calls.
+AUTO_RECONCILE_ENABLED=true
+AUTO_RECONCILE_INTERVAL_MINUTES=30
+AUTO_EMAIL_RETRY_ENABLED=true
+AUTO_EMAIL_RETRY_INTERVAL_MINUTES=15
+RECONCILE_MAX_ORDERS_PER_RUN=100
+# Keep enabled in production for self-healing payment and email delivery.
+
 # Admin Dashboard Configuration
 ADMIN_PASSWORD=your_secure_admin_password
 # This password is used to access the admin dashboard at /admin.html

@@ -36,17 +36,23 @@ const VALID_PLAN_IDS = Object.keys(ACCESS_PLANS);
 
 // ==================== PAYMENT SESSION CONFIG ====================
 const PAYMENT_SESSION_MINUTES = 10;
-// TEST OVERRIDES (temporary): keep flow identical, but shorten windows for QA.
-// Set to null/0 to use normal production durations.
-const ACCESS_VALIDITY_OVERRIDE_MINUTES = 5;
-const ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES = 2;
+const CODE_EMAIL_RESEND_COOLDOWN_MINUTES = process.env.CODE_EMAIL_RESEND_COOLDOWN_MINUTES
+  ? parseInt(process.env.CODE_EMAIL_RESEND_COOLDOWN_MINUTES, 10)
+  : 10;
+const AUTO_RECONCILE_ENABLED = (process.env.AUTO_RECONCILE_ENABLED || 'true').toLowerCase() !== 'false';
+const AUTO_RECONCILE_INTERVAL_MINUTES = process.env.AUTO_RECONCILE_INTERVAL_MINUTES
+  ? parseInt(process.env.AUTO_RECONCILE_INTERVAL_MINUTES, 10)
+  : 30;
+const AUTO_EMAIL_RETRY_ENABLED = (process.env.AUTO_EMAIL_RETRY_ENABLED || 'true').toLowerCase() !== 'false';
+const AUTO_EMAIL_RETRY_INTERVAL_MINUTES = process.env.AUTO_EMAIL_RETRY_INTERVAL_MINUTES
+  ? parseInt(process.env.AUTO_EMAIL_RETRY_INTERVAL_MINUTES, 10)
+  : 15;
+const RECONCILE_MAX_ORDERS_PER_RUN = process.env.RECONCILE_MAX_ORDERS_PER_RUN
+  ? parseInt(process.env.RECONCILE_MAX_ORDERS_PER_RUN, 10)
+  : 100;
 
-const ACCESS_GRACE_PERIOD_HOURS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? (ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES / 60)
-  : 24;
-const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES * 60 * 1000
-  : ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
+const ACCESS_GRACE_PERIOD_HOURS = 24;
+const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
 
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -175,6 +181,22 @@ const fcmLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Notification rate limit exceeded. Please wait a few minutes.' },
+});
+
+const codeValidationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many code attempts. Please try again later.' },
+});
+
+const supportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many support requests. Please try again later.' },
 });
 
 app.use('/api/', generalLimiter);
@@ -357,9 +379,6 @@ function getPlanInfo(planId) {
 }
 
 function getValidityText(validityDays) {
-  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
-    return `${ACCESS_VALIDITY_OVERRIDE_MINUTES} minutes`;
-  }
   if (validityDays >= 365) return '1 year';
   return `${validityDays} days`;
 }
@@ -376,9 +395,6 @@ function toTimestamp(dateLike) {
 }
 
 function getValidityDurationMs(validityDays) {
-  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
-    return ACCESS_VALIDITY_OVERRIDE_MINUTES * 60 * 1000;
-  }
   const safeDays = Math.max(1, Number(validityDays) || 30);
   return safeDays * 24 * 60 * 60 * 1000;
 }
@@ -626,11 +642,10 @@ console.log(`  Webhook MAC:   ${INSTAMOJO_PRIVATE_SALT ? 'Enabled' : 'DISABLED (
 console.log(`  Email:         ${process.env.EMAIL_USER ? EMAIL_SERVICE : 'Not configured'}`);
 console.log(`  Admin:         ${ADMIN_PASSWORD ? 'Configured' : 'NOT SET!'}`);
 console.log(`  Session TTL:   ${PAYMENT_SESSION_MINUTES} minutes`);
+console.log(`  Reconcile Job: ${AUTO_RECONCILE_ENABLED ? `enabled/${AUTO_RECONCILE_INTERVAL_MINUTES}m` : 'disabled'}`);
+console.log(`  Email Retry:   ${AUTO_EMAIL_RETRY_ENABLED ? `enabled/${AUTO_EMAIL_RETRY_INTERVAL_MINUTES}m` : 'disabled'}`);
 console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (₹${SERVICE_PRICE} each)`);
 console.log(`  Plans:         monthly(30d), yearly(365d, ₹100 flat)`);
-if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 || ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0) {
-  console.log(`  Access Test:   validity=${ACCESS_VALIDITY_OVERRIDE_MINUTES}m, grace=${ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES}m`);
-}
 console.log('═══════════════════════════════════════════');
 console.log('');
 
@@ -735,6 +750,7 @@ app.post(
         services: uniqueServices,
         plan_duration: plan.id,
         validity_days: plan.validityDays,
+        payment_session_expires_at: new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000).toISOString(),
       });
 
       const frontendUrl = process.env.FRONTEND_URL || 'https://tlangau.onrender.com';
@@ -834,6 +850,10 @@ app.post('/api/payment-webhook', async (req, res) => {
     // Verify webhook MAC signature
     if (!verifyWebhookMAC(webhookData)) {
       console.error('❌ Webhook MAC verification FAILED – possible forgery!');
+      await createPaymentEvent('unknown', 'WEBHOOK_REJECTED_INVALID_MAC', {
+        payment_request_id: webhookData?.payment_request_id || null,
+        payment_id: webhookData?.payment_id || null,
+      });
       return res.status(403).json({ success: false, message: 'Invalid webhook signature' });
     }
 
@@ -872,6 +892,10 @@ app.post('/api/payment-webhook', async (req, res) => {
 
     if (!order) {
       console.error('❌ Order not found for payment_request_id:', payment_request_id);
+      await createPaymentEvent('unknown', 'WEBHOOK_ORDER_NOT_FOUND', {
+        payment_request_id: payment_request_id || null,
+        payment_id: payment_id || null,
+      });
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
@@ -910,73 +934,123 @@ app.post('/api/payment-webhook', async (req, res) => {
   }
 });
 
+async function createPaymentEvent(orderId, eventType, payload = {}) {
+  try {
+    await db.createPaymentEvent(orderId, eventType, payload);
+  } catch (error) {
+    console.error(`⚠️ Failed to write payment event (${eventType}):`, error.message);
+  }
+}
+
 // Helper: verify payment and fulfill order (reusable for webhook + verify-payment)
 async function verifyAndFulfillPayment(order, payment, paymentId) {
+  const orderId = order.order_id;
   const expectedAmount = order.amount / 100;
   const paymentAmount = parseFloat(payment.amount);
   const paymentStatus = payment.status;
   const paymentRequestId = payment.payment_request?.id || payment.payment_request_id;
 
   if (paymentStatus !== 'Credit') {
+    await createPaymentEvent(orderId, 'PAYMENT_STATUS_NON_CREDIT', {
+      paymentId,
+      paymentStatus,
+      paymentAmount: Number.isFinite(paymentAmount) ? paymentAmount : payment.amount,
+    });
     if (paymentStatus === 'Failed') {
-      await db.updateOrder(order.order_id, { status: 'FAILED', payment_id: paymentId });
+      await db.updateOrder(orderId, { status: 'FAILED', payment_id: paymentId });
     }
     return { verified: false, status: paymentStatus };
   }
 
   if (Math.abs(paymentAmount - expectedAmount) > 0.01) {
     console.error(`❌ Amount mismatch: expected ${expectedAmount}, got ${paymentAmount}`);
+    await createPaymentEvent(orderId, 'PAYMENT_AMOUNT_MISMATCH', {
+      paymentId,
+      expectedAmount,
+      paymentAmount,
+    });
     return { verified: false, status: 'AMOUNT_MISMATCH' };
   }
 
   if (paymentRequestId && order.payment_request_id && paymentRequestId !== order.payment_request_id) {
     console.error('❌ Payment request ID mismatch');
+    await createPaymentEvent(orderId, 'PAYMENT_REQUEST_ID_MISMATCH', {
+      paymentId,
+      expectedPaymentRequestId: order.payment_request_id,
+      receivedPaymentRequestId: paymentRequestId,
+    });
     return { verified: false, status: 'REQUEST_ID_MISMATCH' };
   }
 
-  // All checks passed
-  await db.updateOrder(order.order_id, { status: 'SUCCESS', payment_id: paymentId });
-
-  const existingCode = await db.getCodeByOrderId(order.order_id);
-  let accessCodeToSend = existingCode?.code || null;
+  const existingCode = await db.getCodeByOrderId(orderId);
+  const orderAlreadyFulfilled = order.status === 'SUCCESS' && !!existingCode;
   const orderServices = order.services || VALID_SERVICE_IDS; // Backward compat: old orders get all services
   const plan = getPlanInfo(order.plan_duration);
-  const validityDays = plan.validityDays || 30;
-  let expiresAt = existingCode?.expiresAt || existingCode?.expires_at || null;
+  const validityDays = order.validity_days || plan.validityDays || ACCESS_PLANS.monthly.validityDays;
 
-  if (!existingCode) {
-    const accessCode = generateAccessCode();
+  // Idempotent: once fulfilled and code exists, do not create additional codes.
+  let accessCodeToSend = existingCode?.code || null;
+  let expiresAt = existingCode?.expiresAt || existingCode?.expires_at || null;
+  if (!accessCodeToSend) {
+    accessCodeToSend = generateAccessCode();
     expiresAt = new Date(Date.now() + getValidityDurationMs(validityDays)).toISOString();
     await db.createAccessCode({
-      code: accessCode,
+      code: accessCodeToSend,
       email: order.email,
-      orderId: order.order_id,
-      paymentId: paymentId,
+      orderId,
+      paymentId,
       used: false,
       expiresAt,
       services: orderServices,
       plan_duration: plan.id,
       validity_days: validityDays,
     });
-    console.log(`✅ Access code created: ${accessCode} | Services: ${orderServices.join(', ')}`);
-    accessCodeToSend = accessCode;
+    await createPaymentEvent(orderId, 'ACCESS_CODE_CREATED', {
+      code: accessCodeToSend,
+      expiresAt,
+      planDuration: plan.id,
+      validityDays,
+    });
+    console.log(`✅ Access code created: ${accessCodeToSend} | Services: ${orderServices.join(', ')}`);
   }
 
-  if (accessCodeToSend) {
+  const orderUpdate = {
+    status: 'SUCCESS',
+    payment_id: paymentId,
+    access_code: accessCodeToSend,
+    access_code_expires_at: expiresAt,
+    plan_duration: plan.id,
+    validity_days: validityDays,
+  };
+  if (!order.fulfilled_at) {
+    orderUpdate.fulfilled_at = new Date().toISOString();
+  }
+  await db.updateOrder(orderId, orderUpdate);
+
+  const nowTs = Date.now();
+  const lastEmailAttemptTs = toTimestamp(order.code_email_last_attempt_at) || 0;
+  const emailCooldownMs = Math.max(1, CODE_EMAIL_RESEND_COOLDOWN_MINUTES) * 60 * 1000;
+  const shouldAttemptEmail = !order.code_email_sent || (nowTs - lastEmailAttemptTs >= emailCooldownMs);
+
+  let codeEmailSent = order.code_email_sent === true;
+  if (accessCodeToSend && shouldAttemptEmail) {
     const emailSent = await sendAccessCodeEmail(order.email, accessCodeToSend, orderServices, validityDays);
-    await db.updateOrder(order.order_id, {
-      access_code: accessCodeToSend,
-      access_code_expires_at: expiresAt,
-      code_email_sent: emailSent === true,
+    codeEmailSent = emailSent === true;
+    await db.updateOrder(orderId, {
+      code_email_sent: codeEmailSent,
       code_email_last_attempt_at: new Date().toISOString(),
-      plan_duration: plan.id,
-      validity_days: validityDays,
+    });
+    await createPaymentEvent(orderId, emailSent ? 'ACCESS_CODE_EMAIL_SENT' : 'ACCESS_CODE_EMAIL_FAILED', {
+      paymentId,
+      email: order.email,
+      code: accessCodeToSend,
     });
     if (!emailSent) {
       console.error(`❌ CRITICAL: Email NOT sent to ${order.email} | Code: ${accessCodeToSend}`);
       console.error('   ⚠️  Manual intervention required!');
     }
-    order.code_email_sent = emailSent === true;
+  } else if (orderAlreadyFulfilled) {
+    await createPaymentEvent(orderId, 'FULFILLMENT_IDEMPOTENT_REPLAY', { paymentId });
   }
 
   return {
@@ -987,8 +1061,125 @@ async function verifyAndFulfillPayment(order, payment, paymentId) {
     planDuration: plan.id,
     validityDays,
     services: orderServices,
-    codeEmailSent: order.code_email_sent === true,
+    codeEmailSent,
   };
+}
+
+async function fetchGatewayPaymentForOrder(order) {
+  let payment = null;
+  let paymentId = order.payment_id || null;
+
+  if (paymentId) {
+    try {
+      const paymentResponse = await axios.get(
+        `${INSTAMOJO_API_BASE}/payments/${paymentId}/`,
+        {
+          headers: {
+            'X-Api-Key': INSTAMOJO_API_KEY,
+            'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+          },
+          timeout: 10000,
+        }
+      );
+      if (paymentResponse.data.success) {
+        payment = paymentResponse.data.payment;
+        paymentId = payment.id || payment.payment_id || paymentId;
+      }
+    } catch (error) {
+      console.error('❌ Error checking payment by payment_id:', error.message);
+    }
+  }
+
+  if (!payment && order.payment_request_id) {
+    try {
+      const prResponse = await axios.get(
+        `${INSTAMOJO_API_BASE}/payment-requests/${order.payment_request_id}/`,
+        {
+          headers: {
+            'X-Api-Key': INSTAMOJO_API_KEY,
+            'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
+          },
+          timeout: 10000,
+        }
+      );
+      if (prResponse.data.success) {
+        const pr = prResponse.data.payment_request;
+        if (pr.payments && pr.payments.length > 0) {
+          const successfulPayment = pr.payments.find((p) => p.status === 'Credit') || pr.payments[0];
+          if (successfulPayment) {
+            payment = successfulPayment;
+            paymentId = successfulPayment.payment_id || successfulPayment.id || paymentId;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking payment_request:', error.message);
+    }
+  }
+
+  return { payment, paymentId };
+}
+
+async function runPaymentReconciliation(options = {}) {
+  if (!INSTAMOJO_API_KEY || !INSTAMOJO_AUTH_TOKEN) {
+    throw new Error('Payment gateway not configured.');
+  }
+
+  const source = options.source || 'manual';
+  const maxOrders = Math.max(1, Number(options.maxOrders) || RECONCILE_MAX_ORDERS_PER_RUN);
+  const recentHours = Math.max(1, Number(options.recentHours) || 48);
+  const nowTs = Date.now();
+
+  const allOrders = await db.getAllOrders();
+  const candidates = allOrders.filter((order) => {
+    if (!order) return false;
+    if (order.status === 'PENDING' || order.status === 'FAILED') return true;
+    if (order.status === 'SUCCESS' && order.code_email_sent !== true) return true;
+    const createdTs = toTimestamp(order.created_at) || 0;
+    return (nowTs - createdTs) <= recentHours * 60 * 60 * 1000 && order.status !== 'EXPIRED';
+  }).slice(0, maxOrders);
+
+  const report = {
+    source,
+    scanned: 0,
+    recovered: 0,
+    failed: 0,
+    unchanged: 0,
+    details: [],
+  };
+
+  for (const order of candidates) {
+    report.scanned++;
+    try {
+      const { payment, paymentId } = await fetchGatewayPaymentForOrder(order);
+      if (!payment) {
+        report.unchanged++;
+        report.details.push({ orderId: order.order_id, status: 'NO_GATEWAY_PAYMENT_FOUND' });
+        continue;
+      }
+
+      const result = await verifyAndFulfillPayment(order, payment, paymentId);
+      if (result.verified) {
+        report.recovered++;
+        report.details.push({ orderId: order.order_id, status: 'RECOVERED_SUCCESS' });
+      } else if (result.status === 'Failed') {
+        report.failed++;
+        report.details.push({ orderId: order.order_id, status: 'FAILED' });
+      } else {
+        report.unchanged++;
+        report.details.push({ orderId: order.order_id, status: result.status || 'UNCHANGED' });
+      }
+    } catch (error) {
+      report.failed++;
+      report.details.push({
+        orderId: order.order_id,
+        status: 'RECONCILE_ERROR',
+        error: error.message,
+      });
+    }
+  }
+
+  return report;
 }
 
 // Verify payment (for frontend callback / success page polling)
@@ -1196,6 +1387,7 @@ app.post(
 // Validate access code (for Flutter app) – returns services array
 app.post(
   '/api/validate-code',
+  codeValidationLimiter,
   [
     body('code').notEmpty().trim(),
     body('email').isEmail().normalizeEmail(),
@@ -1309,6 +1501,9 @@ app.post(
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
     try {
+      if (IS_PROD) {
+        return res.status(404).json({ success: false, message: 'Endpoint not available.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ success: false, errors: errors.array() });
@@ -1337,6 +1532,7 @@ app.post(
 // Get access code info by email
 app.post(
   '/api/get-code-info',
+  codeValidationLimiter,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
     try {
@@ -1596,6 +1792,102 @@ app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
   }
 });
 
+// Admin: list support tickets
+app.get('/api/admin/support-tickets', checkAdminAuth, async (req, res) => {
+  try {
+    const tickets = await db.getAllSupportTickets();
+    res.json({ success: true, tickets, count: tickets.length });
+  } catch (error) {
+    console.error('❌ Admin get support tickets error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch support tickets.' });
+  }
+});
+
+// Admin: update support ticket status/notes
+app.put('/api/admin/support-tickets/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ticket = await db.getSupportTicket(id);
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found.' });
+    }
+
+    const updates = {};
+    if (typeof req.body.status === 'string' && ['open', 'in_progress', 'resolved', 'closed'].includes(req.body.status)) {
+      updates.status = req.body.status;
+    }
+    if (typeof req.body.admin_note === 'string') {
+      updates.admin_note = req.body.admin_note.trim();
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update.' });
+    }
+
+    await db.updateSupportTicket(id, updates);
+    res.json({ success: true, message: 'Ticket updated.' });
+  } catch (error) {
+    console.error('❌ Admin update support ticket error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to update support ticket.' });
+  }
+});
+
+// Admin: update refund status for an order
+app.post('/api/admin/refunds/:orderId', checkAdminAuth, [
+  body('status').isIn(['approved', 'rejected', 'processed', 'failed']).withMessage('Invalid refund status'),
+  body('note').optional().trim(),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+
+    const orderId = req.params.orderId;
+    const order = await db.getOrder(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    const status = req.body.status;
+    const note = req.body.note ? req.body.note.trim() : '';
+    const update = {
+      refund_status: status,
+      refund_updated_at: new Date().toISOString(),
+    };
+    if (status === 'processed') {
+      update.refund_processed_at = new Date().toISOString();
+    }
+    if (note) update.refund_admin_note = note;
+
+    await db.updateOrder(orderId, update);
+    await createPaymentEvent(orderId, `REFUND_${status.toUpperCase()}`, { note });
+
+    if (order.refund_ticket_id) {
+      const ticketStatus = (status === 'processed' || status === 'rejected') ? 'resolved' : 'in_progress';
+      await db.updateSupportTicket(order.refund_ticket_id, {
+        status: ticketStatus,
+        admin_note: note || `Refund ${status}.`,
+      });
+    }
+
+    res.json({ success: true, message: `Refund status set to ${status}.`, orderId, refundStatus: status });
+  } catch (error) {
+    console.error('❌ Admin update refund error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to update refund status.' });
+  }
+});
+
+// Admin: reconcile pending/suspicious orders by checking gateway status
+app.post('/api/admin/reconcile-payments', checkAdminAuth, async (req, res) => {
+  try {
+    const report = await runPaymentReconciliation({ source: 'admin_api' });
+    res.json({ success: true, report });
+  } catch (error) {
+    console.error('❌ Reconcile payments error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to reconcile payments.' });
+  }
+});
+
 // ==================== BUNDLES & TOPICS ADMIN ====================
 
 app.get('/api/admin/bundles', checkAdminAuth, async (req, res) => {
@@ -1704,9 +1996,14 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
     if (isNaN(expiresAt.getTime())) return;
 
     const now = new Date();
+    const nowTs = now.getTime();
     const diffMs = expiresAt.getTime() - now.getTime();
     const oneDayMs = 24 * 60 * 60 * 1000;
     const sevenDaysMs = 7 * oneDayMs;
+    const graceEndsAtIso = getGraceWindowEnd(expiresAtRaw);
+    const graceEndsAtTs = toTimestamp(graceEndsAtIso);
+    const isInGracePeriod = diffMs <= 0 && graceEndsAtTs !== null && nowTs <= graceEndsAtTs;
+    const isGracePeriodOver = graceEndsAtTs !== null && nowTs > graceEndsAtTs;
     const purchaseLink = process.env.PURCHASE_WEB_LINK || 'https://tlangau.onrender.com';
     const updates = {};
 
@@ -1751,10 +2048,30 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
       updates.expiry_warning_1d_sent_at = new Date().toISOString();
     }
 
+    // Grace notice: send once after code expiry, during 24-hour grace window.
+    if (
+      isInGracePeriod &&
+      accessCode.used === true &&
+      !accessCode.grace_notice_sent_at
+    ) {
+      await db.createDevMail({
+        title: 'You are on grace period (24 hours)',
+        body:
+          `Your access code has expired, and you are now in the 24-hour grace period.\n\n` +
+          `After the grace period ends, your service will stop.\n\n` +
+          `Get your new access code [here](${purchaseLink}).`,
+        pinned: true,
+        target_email: normalizedEmail,
+        category: 'system_grace_period',
+        system_generated: true,
+      });
+      updates.grace_notice_sent_at = new Date().toISOString();
+    }
+
     // Expired notice: sent when user is moved back to client dashboard due to expiry.
     if (
       options.sendExpiredNotice === true &&
-      diffMs <= 0 &&
+      isGracePeriodOver &&
       accessCode.used === true &&
       !accessCode.expired_notice_sent_at
     ) {
@@ -2071,7 +2388,7 @@ setInterval(async () => {
   try {
     if (!db.db) return;
     const orders = await db.getAllOrders();
-    const cutoff = Date.now() - 30 * 60 * 1000;
+    const cutoff = Date.now() - PAYMENT_SESSION_MINUTES * 60 * 1000;
     let expiredCount = 0;
     for (const order of orders) {
       if (order.status === 'PENDING' && new Date(order.created_at).getTime() < cutoff) {
@@ -2086,6 +2403,74 @@ setInterval(async () => {
     // Silent fail – cleanup is best-effort
   }
 }, 15 * 60 * 1000);
+
+let paymentReconciliationRunning = false;
+async function runScheduledPaymentReconciliation() {
+  if (paymentReconciliationRunning) return;
+  paymentReconciliationRunning = true;
+  try {
+    const report = await runPaymentReconciliation({ source: 'scheduler' });
+    if (report.recovered > 0 || report.failed > 0) {
+      console.log(`🔁 Reconciliation: scanned=${report.scanned}, recovered=${report.recovered}, failed=${report.failed}`);
+    }
+  } catch (error) {
+    console.error('⚠️ Scheduled payment reconciliation failed:', error.message);
+  } finally {
+    paymentReconciliationRunning = false;
+  }
+}
+
+let codeEmailRetryRunning = false;
+async function runCodeEmailRetryScan() {
+  if (codeEmailRetryRunning) return;
+  codeEmailRetryRunning = true;
+  try {
+    const orders = await db.getAllOrders();
+    const nowTs = Date.now();
+    const cooldownMs = Math.max(1, CODE_EMAIL_RESEND_COOLDOWN_MINUTES) * 60 * 1000;
+    let retried = 0;
+    let sent = 0;
+    let failed = 0;
+
+    for (const order of orders) {
+      if (!order || order.status !== 'SUCCESS' || order.code_email_sent === true) continue;
+
+      const lastAttemptTs = toTimestamp(order.code_email_last_attempt_at) || 0;
+      if (lastAttemptTs > 0 && nowTs - lastAttemptTs < cooldownMs) {
+        continue;
+      }
+
+      const codeByOrder = await db.getCodeByOrderId(order.order_id);
+      const codeToSend = order.access_code || codeByOrder?.code;
+      if (!codeToSend) continue;
+
+      retried++;
+      const services = codeByOrder?.services || order.services || VALID_SERVICE_IDS;
+      const validityDays = codeByOrder?.validity_days || order.validity_days || ACCESS_PLANS.monthly.validityDays;
+      const emailSent = await sendAccessCodeEmail(order.email, codeToSend, services, validityDays, 2);
+
+      await db.updateOrder(order.order_id, {
+        code_email_sent: emailSent === true,
+        code_email_last_attempt_at: new Date().toISOString(),
+      });
+      await createPaymentEvent(
+        order.order_id,
+        emailSent ? 'ACCESS_CODE_EMAIL_RETRY_SENT' : 'ACCESS_CODE_EMAIL_RETRY_FAILED',
+        { email: order.email, code: codeToSend }
+      );
+      if (emailSent) sent++;
+      else failed++;
+    }
+
+    if (retried > 0) {
+      console.log(`📧 Email retry scan: retried=${retried}, sent=${sent}, failed=${failed}`);
+    }
+  } catch (error) {
+    console.error('⚠️ Scheduled email retry scan failed:', error.message);
+  } finally {
+    codeEmailRetryRunning = false;
+  }
+}
 
 let automatedMailScanRunning = false;
 async function runAutomatedAccessCodeMailScan() {
@@ -2111,6 +2496,16 @@ async function runAutomatedAccessCodeMailScan() {
 // Background scan so expiry reminders are created even if users don't open the app daily.
 setInterval(runAutomatedAccessCodeMailScan, 6 * 60 * 60 * 1000);
 setTimeout(runAutomatedAccessCodeMailScan, 30 * 1000);
+
+if (AUTO_RECONCILE_ENABLED) {
+  setInterval(runScheduledPaymentReconciliation, Math.max(5, AUTO_RECONCILE_INTERVAL_MINUTES) * 60 * 1000);
+  setTimeout(runScheduledPaymentReconciliation, 2 * 60 * 1000);
+}
+
+if (AUTO_EMAIL_RETRY_ENABLED) {
+  setInterval(runCodeEmailRetryScan, Math.max(5, AUTO_EMAIL_RETRY_INTERVAL_MINUTES) * 60 * 1000);
+  setTimeout(runCodeEmailRetryScan, 90 * 1000);
+}
 
 // ==================== POLL ENDPOINTS (Free for all users) ====================
 
@@ -2139,22 +2534,135 @@ app.post('/api/client-welcome', requireAnyAuth, async (req, res) => {
     const flagRef = admin.database().ref(`user_flags/${safeKey}/client_welcome_sent_at`);
     const flagSnap = await flagRef.once('value');
     if (flagSnap.exists()) {
-      return res.json({ success: true, created: false, message: 'Client welcome already sent.' });
+      return res.json({ success: true, created: false, message: 'Client welcome already processed.' });
     }
 
-    await db.createDevMail({
-      title: 'Welcome to Tlangau',
-      body: 'Welcome to Tlangau client dashboard. You are all set to subscribe and receive updates.',
-      pinned: false,
-      target_email: userEmail,
-      category: 'system_client_welcome',
-      system_generated: true,
-    });
+    // Client welcome auto-mail was a temporary rollout message and is now disabled.
+    // Keep a flag so clients do not keep retrying this endpoint on future launches.
     await flagRef.set(new Date().toISOString());
-    return res.json({ success: true, created: true, message: 'Client welcome created.' });
+    return res.json({ success: true, created: false, message: 'Client welcome mail is disabled.' });
   } catch (error) {
     console.error('❌ Client welcome mail error:', error.message);
     return res.status(500).json({ success: false, message: 'Failed to create client welcome mail.' });
+  }
+});
+
+// Create support ticket (authenticated users)
+app.post(
+  '/api/support-tickets',
+  supportLimiter,
+  requireAnyAuth,
+  [
+    body('subject').trim().notEmpty().withMessage('Subject is required'),
+    body('message').trim().isLength({ min: 10 }).withMessage('Message must be at least 10 characters'),
+    body('category').optional().isIn(['general', 'payment', 'refund', 'code', 'bug']).withMessage('Invalid category'),
+    body('orderId').optional().trim(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: errors.array()[0].msg });
+      }
+
+      const email = normalizeEmail(req.userEmail);
+      const orderId = (req.body.orderId || '').trim();
+      if (orderId) {
+        const order = await db.getOrder(orderId);
+        if (!order || normalizeEmail(order.email) !== email) {
+          return res.status(403).json({ success: false, message: 'Order does not belong to this account.' });
+        }
+      }
+
+      const ticketId = await db.createSupportTicket({
+        email,
+        order_id: orderId || null,
+        subject: req.body.subject.trim(),
+        message: req.body.message.trim(),
+        category: req.body.category || 'general',
+        status: 'open',
+      });
+      console.log(`🎫 Support ticket created: ${ticketId} (${email})`);
+      res.json({ success: true, ticketId, message: 'Support ticket created.' });
+    } catch (error) {
+      console.error('❌ Create support ticket error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to create support ticket.' });
+    }
+  }
+);
+
+// Request refund (authenticated users, by order owner)
+app.post(
+  '/api/request-refund',
+  supportLimiter,
+  requireAnyAuth,
+  [
+    body('orderId').notEmpty().withMessage('orderId is required'),
+    body('reason').trim().isLength({ min: 10 }).withMessage('Reason must be at least 10 characters'),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: errors.array()[0].msg });
+      }
+
+      const email = normalizeEmail(req.userEmail);
+      const orderId = req.body.orderId.trim();
+      const order = await db.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      if (normalizeEmail(order.email) !== email) {
+        return res.status(403).json({ success: false, message: 'Order does not belong to this account.' });
+      }
+      if (order.status !== 'SUCCESS') {
+        return res.status(400).json({ success: false, message: 'Only successful payments can be refunded.' });
+      }
+      if (order.refund_status === 'requested' || order.refund_status === 'approved' || order.refund_status === 'processed') {
+        return res.status(400).json({ success: false, message: 'Refund is already in progress for this order.' });
+      }
+
+      const reason = req.body.reason.trim();
+      const ticketId = await db.createSupportTicket({
+        email,
+        order_id: orderId,
+        subject: `Refund request for ${orderId}`,
+        message: reason,
+        category: 'refund',
+        status: 'open',
+      });
+      await db.updateOrder(orderId, {
+        refund_status: 'requested',
+        refund_requested_at: new Date().toISOString(),
+        refund_reason: reason,
+        refund_ticket_id: ticketId,
+      });
+      await createPaymentEvent(orderId, 'REFUND_REQUESTED', { email, reason, ticketId });
+      console.log(`💸 Refund requested: ${orderId} (${email})`);
+
+      res.json({
+        success: true,
+        message: 'Refund request received. Our team will review it.',
+        orderId,
+        ticketId,
+      });
+    } catch (error) {
+      console.error('❌ Refund request error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to submit refund request.' });
+    }
+  }
+);
+
+// Get own support tickets
+app.get('/api/my-support-tickets', requireAnyAuth, async (req, res) => {
+  try {
+    const email = normalizeEmail(req.userEmail);
+    const tickets = await db.getSupportTicketsByEmail(email);
+    res.json({ success: true, tickets, count: tickets.length });
+  } catch (error) {
+    console.error('❌ Get my support tickets error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch tickets.' });
   }
 });
 

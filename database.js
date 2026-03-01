@@ -105,6 +105,31 @@ class Database {
     await this.db.ref(`orders/${order_id}`).update(updateData);
   }
 
+  async createPaymentEvent(orderId, eventType, payload = {}) {
+    const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const event = {
+      id: eventId,
+      order_id: orderId,
+      event_type: eventType,
+      payload,
+      created_at: new Date().toISOString(),
+    };
+    await this.db.ref(`payment_events/${eventId}`).set(event);
+    return eventId;
+  }
+
+  async getPaymentEventsByOrderId(orderId) {
+    const snapshot = await this.db.ref('payment_events')
+      .orderByChild('order_id')
+      .equalTo(orderId)
+      .once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    const events = Object.values(data);
+    events.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    return events;
+  }
+
   async getOrderByPaymentRequestId(paymentRequestId) {
     const snapshot = await this.db.ref('orders')
       .orderByChild('payment_request_id')
@@ -603,6 +628,60 @@ class Database {
     if (!snapshot.exists()) return { deleted: false };
     await this.db.ref(`polls/${pollId}`).remove();
     return { deleted: true };
+  }
+
+  // ==================== SUPPORT & REFUND METHODS ====================
+
+  async createSupportTicket(ticketData) {
+    const ticketId = ticketData.id || `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const ticket = {
+      id: ticketId,
+      email: (ticketData.email || '').toLowerCase().trim(),
+      order_id: ticketData.order_id || null,
+      subject: ticketData.subject || 'Support request',
+      message: ticketData.message || '',
+      category: ticketData.category || 'general',
+      status: ticketData.status || 'open',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      meta: ticketData.meta || {},
+    };
+    await this.db.ref(`support_tickets/${ticketId}`).set(ticket);
+    return ticketId;
+  }
+
+  async getSupportTicket(ticketId) {
+    const snapshot = await this.db.ref(`support_tickets/${ticketId}`).once('value');
+    return snapshot.val();
+  }
+
+  async updateSupportTicket(ticketId, updates) {
+    await this.db.ref(`support_tickets/${ticketId}`).update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async getAllSupportTickets() {
+    const snapshot = await this.db.ref('support_tickets').once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    const tickets = Object.values(data);
+    tickets.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+    return tickets;
+  }
+
+  async getSupportTicketsByEmail(email) {
+    const emailLower = (email || '').toLowerCase().trim();
+    const snapshot = await this.db.ref('support_tickets')
+      .orderByChild('email')
+      .equalTo(emailLower)
+      .once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    const tickets = Object.values(data);
+    tickets.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+    return tickets;
   }
 
   // ==================== DEV MAIL METHODS ====================
