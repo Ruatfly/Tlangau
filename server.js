@@ -78,6 +78,17 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:10000',
 ];
+const allowedOriginSet = new Set(
+  allowedOrigins
+    .map((originValue) => {
+      try {
+        return new URL(originValue).origin;
+      } catch (_) {
+        return null;
+      }
+    })
+    .filter(Boolean)
+);
 
 // ==================== SECURITY MIDDLEWARE ====================
 
@@ -127,7 +138,14 @@ app.use((req, res, next) => {
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
+    let normalizedOrigin = null;
+    try {
+      normalizedOrigin = new URL(origin).origin;
+    } catch (_) {
+      normalizedOrigin = null;
+    }
+
+    if (normalizedOrigin && allowedOriginSet.has(normalizedOrigin)) {
       return callback(null, true);
     }
     if (!IS_PROD) {
@@ -1533,6 +1551,7 @@ app.post(
 app.post(
   '/api/get-code-info',
   codeValidationLimiter,
+  requireAnyAuth,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
     try {
@@ -1542,7 +1561,16 @@ app.post(
       }
 
       const { email } = req.body;
-      const emailLower = email.toLowerCase().trim();
+      const requestedEmail = normalizeEmail(email);
+      const authenticatedEmail = normalizeEmail(req.userEmail);
+      if (!requestedEmail || !authenticatedEmail || requestedEmail !== authenticatedEmail) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only access code info for your own account.',
+        });
+      }
+
+      const emailLower = authenticatedEmail;
       const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, emailLower);
       let accessCode = resolveEffectiveEntitlement(usedEntitlements);
       if (!accessCode) {
@@ -1593,7 +1621,8 @@ function hashPassword(password) {
 const ADMIN_PASSWORD_HASH = hashPassword(ADMIN_PASSWORD_FINAL);
 
 const checkAdminAuth = (req, res, next) => {
-  const providedPassword = req.headers['x-admin-password'] || req.body.password || req.query.password;
+  const headerValue = req.headers['x-admin-password'];
+  const providedPassword = Array.isArray(headerValue) ? headerValue[0] : headerValue;
   if (!providedPassword) {
     return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Admin password required' });
   }
