@@ -181,7 +181,7 @@ if (paymentForm) {
         const submitButton = paymentForm.querySelector('button[type="submit"]');
         const originalHTML = submitButton.innerHTML;
         submitButton.disabled = true;
-        submitButton.innerHTML = '<span>Redirecting to Instamojo...</span>';
+        submitButton.innerHTML = '<span>Proceed for Payment</span>';
 
         try {
             const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
