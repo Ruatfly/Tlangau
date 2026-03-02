@@ -566,123 +566,6 @@ section {
     font-size: 0.9rem;
 }
 
-.checkout-experience {
-    margin-top: 1.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: #f8fafc;
-    padding: 1rem;
-}
-
-.checkout-stepper {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.checkout-step {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: white;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 0.55rem 0.6rem;
-    color: var(--text-light);
-    font-size: 0.85rem;
-}
-
-.checkout-step span {
-    width: 1.3rem;
-    height: 1.3rem;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: #e2e8f0;
-    color: #1a202c;
-    font-size: 0.78rem;
-    font-weight: 700;
-}
-
-.checkout-step.active {
-    border-color: #667eea;
-    color: #2d3748;
-}
-
-.checkout-step.active span {
-    background: #667eea;
-    color: white;
-}
-
-.checkout-step small {
-    font-size: 0.74rem;
-    line-height: 1.1;
-}
-
-.checkout-card {
-    background: white;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1rem;
-}
-
-.checkout-card h3 {
-    margin-bottom: 0.4rem;
-    color: var(--text-dark);
-}
-
-.checkout-card p {
-    color: var(--text-light);
-    font-size: 0.92rem;
-}
-
-.checkout-actions {
-    margin-top: 0.85rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-}
-
-.checkout-actions .btn,
-.checkout-verify-actions .btn {
-    width: 100%;
-    justify-content: center;
-}
-
-.checkout-qr-wrap {
-    margin-top: 1rem;
-    text-align: center;
-    border: 1px dashed #cbd5e0;
-    border-radius: 10px;
-    padding: 0.75rem;
-    background: #f8fafc;
-}
-
-.checkout-qr-title {
-    margin-bottom: 0.4rem;
-    font-size: 0.85rem;
-}
-
-.checkout-qr-image {
-    width: 220px;
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    background: white;
-    padding: 8px;
-    border: 1px solid var(--border-color);
-}
-
-.checkout-verify-actions {
-    margin-top: 1rem;
-}
-
-.checkout-hint {
-    margin-top: 0.7rem;
-    font-size: 0.82rem;
-}
 
 /* QR Code Container */
 .qr-code-container {
@@ -950,10 +833,6 @@ section {
     }
 
     .payment-methods {
-        grid-template-columns: 1fr;
-    }
-
-    .checkout-actions {
         grid-template-columns: 1fr;
     }
 
