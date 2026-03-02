@@ -149,6 +149,67 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // ==================== PAYMENT FORM ====================
 const paymentForm = document.getElementById('paymentForm');
+const PAYMENT_STORAGE_KEY = 'tlangau_last_payment';
+
+function buildSuccessUrl(orderId) {
+    return `success.html?order_id=${encodeURIComponent(orderId)}`;
+}
+
+function saveLastPaymentSession(session) {
+    try {
+        sessionStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(session));
+    } catch (_) {
+        // Non-fatal: continue even if storage is unavailable.
+    }
+}
+
+function showCheckoutExperience(data, context) {
+    const checkoutWrap = document.getElementById('checkoutExperience');
+    const metaText = document.getElementById('checkoutMetaText');
+    const hintText = document.getElementById('checkoutHintText');
+    const openUpiBtn = document.getElementById('openUpiCheckoutBtn');
+    const openWebBtn = document.getElementById('openCheckoutWebBtn');
+    const verifyBtn = document.getElementById('verifyPaymentNowBtn');
+    const qrImg = document.getElementById('checkoutQrImage');
+
+    if (!checkoutWrap || !openUpiBtn || !openWebBtn || !verifyBtn || !qrImg) {
+        throw new Error('Checkout UI is not available.');
+    }
+
+    const successUrl = buildSuccessUrl(data.orderId);
+    const amountLabel = Number(data.amount || 0).toFixed(2);
+    if (metaText) {
+        metaText.textContent = `Order ${data.orderId} • Amount ₹${amountLabel} • Plan: ${(data.planDuration || 'monthly')}`;
+    }
+    if (hintText) {
+        hintText.textContent = 'Tip: If auto-return does not happen from your UPI app, open this page again and tap "I\'ve Paid - Verify Now".';
+    }
+
+    openUpiBtn.onclick = (e) => {
+        e.preventDefault();
+        window.location.href = data.paymentUrl;
+    };
+
+    openWebBtn.href = data.paymentUrl;
+    verifyBtn.href = successUrl;
+
+    const qrPayload = encodeURIComponent(data.paymentUrl);
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${qrPayload}`;
+
+    checkoutWrap.style.display = 'block';
+    checkoutWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    saveLastPaymentSession({
+        orderId: data.orderId,
+        email: context.email,
+        services: context.services,
+        planDuration: context.planDuration,
+        paymentUrl: data.paymentUrl,
+        amount: data.amount,
+        createdAt: new Date().toISOString(),
+    });
+}
+
 if (paymentForm) {
     paymentForm.addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -172,7 +233,7 @@ if (paymentForm) {
         const submitButton = paymentForm.querySelector('button[type="submit"]');
         const originalHTML = submitButton.innerHTML;
         submitButton.disabled = true;
-        submitButton.innerHTML = '<span>Creating Payment Link...</span>';
+        submitButton.innerHTML = '<span>Creating Secure Checkout...</span>';
 
         try {
             const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
@@ -208,16 +269,9 @@ if (paymentForm) {
             }
 
             console.log('Payment link created:', data.orderId, 'Services:', data.services);
-
-            sessionStorage.setItem('tlangau_last_payment', JSON.stringify({
-                orderId: data.orderId,
-                email,
-                services,
-                planDuration,
-            }));
-
-            // Redirect directly to Instamojo payment page
-            window.location.href = data.paymentUrl;
+            showCheckoutExperience(data, { email, services, planDuration });
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalHTML;
 
         } catch (error) {
             console.error('Payment error:', error);

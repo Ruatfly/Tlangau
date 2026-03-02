@@ -24,6 +24,11 @@
                     </div>
                     <p class="progress-text" id="progressText">Checking payment status...</p>
                 </div>
+
+                <div class="success-actions" id="pendingActions">
+                    <button type="button" class="btn btn-primary" id="verifyNowBtn">I've Paid - Verify Now</button>
+                    <a href="payment.html" class="btn btn-secondary" id="backToPaymentBtn">Back to Payment</a>
+                </div>
                 
                 <div class="success-info" id="successInfo" style="display: none;">
                     <div class="info-card">
@@ -97,14 +102,16 @@
     <script>
         (async function () {
             const urlParams = new URLSearchParams(window.location.search);
-            const orderId = urlParams.get('order_id');
             const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+            const MAX_RETRIES = 12;
+            const POLL_INTERVAL = 5000;
+            const PAYMENT_STORAGE_KEY = 'tlangau_last_payment';
 
-            const MAX_RETRIES = 12;    // Max polling attempts
-            const POLL_INTERVAL = 5000; // 5 seconds between each poll
             let retryCount = 0;
+            let isPolling = false;
+            let terminalState = false;
 
-            const lastPaymentRaw = sessionStorage.getItem('tlangau_last_payment');
+            const lastPaymentRaw = sessionStorage.getItem(PAYMENT_STORAGE_KEY);
             let lastPayment = null;
             try {
                 lastPayment = lastPaymentRaw ? JSON.parse(lastPaymentRaw) : null;
@@ -112,24 +119,51 @@
                 lastPayment = null;
             }
 
+            const orderId = urlParams.get('order_id') || lastPayment?.orderId || null;
+            const pendingActions = document.getElementById('pendingActions');
+            const verifyNowBtn = document.getElementById('verifyNowBtn');
+            const backToPaymentBtn = document.getElementById('backToPaymentBtn');
+            const statusMessageEl = document.getElementById('statusMessage');
+
+            if (backToPaymentBtn && lastPayment?.paymentUrl) {
+                backToPaymentBtn.href = lastPayment.paymentUrl;
+                backToPaymentBtn.textContent = 'Reopen Checkout';
+            }
+
+            if (verifyNowBtn) {
+                verifyNowBtn.addEventListener('click', async () => {
+                    if (terminalState || isPolling) return;
+                    retryCount = Math.max(0, retryCount - 1);
+                    await pollPaymentStatus(true);
+                });
+            }
+
             if (!orderId) {
                 showFinalStatus('❌', 'Payment Verification Failed',
-                    'No order ID found. If you completed the payment, please contact support.');
+                    'No order ID found. If you completed payment, please reopen checkout from payment page.', false, true);
                 return;
             }
 
             if (!backendUrl || backendUrl.includes('your-backend-url')) {
                 showFinalStatus('⚠️', 'Configuration Error',
-                    'Backend URL not configured. Please contact support.');
+                    'Backend URL not configured. Please contact support.', false, true);
                 return;
             }
 
-            // Start polling
+            if (statusMessageEl) {
+                statusMessageEl.textContent = `Order: ${orderId}. Please wait while we confirm your payment.`;
+            }
+
             await pollPaymentStatus();
 
-            async function pollPaymentStatus() {
+            async function pollPaymentStatus(manualTrigger = false) {
+                if (isPolling || terminalState) return;
+                isPolling = true;
                 retryCount++;
                 updateProgress(retryCount, MAX_RETRIES);
+                updateProgressText(manualTrigger
+                    ? 'Checking latest payment status...'
+                    : `Verifying... (attempt ${retryCount}/${MAX_RETRIES})`);
 
                 try {
                     const response = await fetch(`${backendUrl}/api/verify-payment`, {
@@ -141,51 +175,60 @@
                     const data = await response.json();
 
                     if (data.success && data.paymentStatus === 'SUCCESS') {
+                        terminalState = true;
                         showFinalStatus('✅', 'Payment Successful!',
-                            'Your access code has been sent to your email address.', true);
+                            'Payment verified. Your access code details are ready below.', true, true);
                         showPurchasedServices(data.services);
                         showFulfillmentInfo(data);
                         return;
                     }
 
                     if (data.paymentStatus === 'FAILED') {
+                        terminalState = true;
                         showFinalStatus('❌', 'Payment Failed',
-                            'Your payment was not successful. No charges were made. Please try again.');
+                            'Your payment was not successful. No charge should be captured. Please try again.',
+                            false, true);
                         return;
                     }
 
                     if (data.paymentStatus === 'EXPIRED') {
+                        terminalState = true;
                         showFinalStatus('⏰', 'Payment Session Expired',
-                            'Your payment session has expired. Please start a new payment.');
+                            'Your payment session expired. Please start a new payment session.',
+                            false, true);
                         return;
                     }
 
-                    // Still pending – retry if within limits
                     if (retryCount < MAX_RETRIES) {
-                        updateProgressText(`Verifying... (attempt ${retryCount}/${MAX_RETRIES})`);
-                        setTimeout(pollPaymentStatus, POLL_INTERVAL);
+                        if (!manualTrigger) {
+                            setTimeout(() => { pollPaymentStatus(false); }, POLL_INTERVAL);
+                        }
                     } else {
                         showFinalStatus('⏳', 'Payment Processing',
-                            'Your payment is still being processed. You will receive an email once it is confirmed. This may take a few minutes.',
-                            false, true);
+                            'Payment may still be processing. You can tap "I\'ve Paid - Verify Now" to check again.',
+                            false, true, true);
                     }
                 } catch (error) {
                     console.error('Verification error:', error);
                     if (retryCount < MAX_RETRIES) {
-                        updateProgressText(`Connection error. Retrying... (${retryCount}/${MAX_RETRIES})`);
-                        setTimeout(pollPaymentStatus, POLL_INTERVAL);
+                        updateProgressText(`Connection issue. Retrying... (${retryCount}/${MAX_RETRIES})`);
+                        if (!manualTrigger) {
+                            setTimeout(() => { pollPaymentStatus(false); }, POLL_INTERVAL);
+                        }
                     } else {
                         showFinalStatus('⚠️', 'Verification Error',
-                            'Unable to verify payment status. Please check your email or contact support.',
-                            false, true);
+                            'Unable to verify right now. Please try again using "I\'ve Paid - Verify Now".',
+                            false, true, true);
                     }
+                } finally {
+                    isPolling = false;
                 }
             }
 
             function updateProgress(current, total) {
                 const fill = document.getElementById('progressFill');
                 if (fill) {
-                    fill.style.width = `${(current / total) * 100}%`;
+                    fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
                 }
             }
 
@@ -217,12 +260,10 @@
                 card.style.display = 'block';
             }
 
-            function showFinalStatus(icon, title, message, showSuccess = false, showHelp = false) {
-                // Hide progress
+            function showFinalStatus(icon, title, message, showSuccess = false, showHelp = false, keepPendingActions = false) {
                 const progress = document.getElementById('verifyProgress');
                 if (progress) progress.style.display = 'none';
 
-                // Hide loading spinner, show icon
                 const spinner = document.getElementById('loadingSpinner');
                 if (spinner) spinner.style.display = 'none';
 
@@ -238,6 +279,10 @@
                 if (showSuccess) {
                     document.getElementById('successInfo').style.display = 'grid';
                     document.getElementById('helpBox').style.display = 'block';
+                }
+
+                if (pendingActions) {
+                    pendingActions.style.display = keepPendingActions ? 'flex' : 'none';
                 }
 
                 document.getElementById('successActions').style.display = 'flex';
@@ -287,7 +332,7 @@
                                 } else {
                                     alert(result.message || 'Failed to resend email.');
                                 }
-                            } catch (err) {
+                            } catch (_) {
                                 alert('Failed to resend email right now.');
                             } finally {
                                 resendBtn.disabled = false;
