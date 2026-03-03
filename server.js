@@ -234,6 +234,18 @@ const supportLimiter = rateLimit({
 
 app.use('/api/', generalLimiter);
 
+// Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
+const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260303b';
+app.get(['/payment', '/pay', '/payr'], (req, res) => {
+  return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
+});
+app.get('/payment.html', (req, res, next) => {
+  if (req.query.v === PAYMENT_PAGE_VERSION) {
+    return next();
+  }
+  return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
+});
+
 // ==================== STATIC FILES (from public/ folder only) ====================
 const noCachePublicFiles = new Set([
   'payment.html',
