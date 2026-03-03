@@ -235,9 +235,24 @@ const supportLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 
 // ==================== STATIC FILES (from public/ folder only) ====================
+const noCachePublicFiles = new Set([
+  'payment.html',
+  'success.html',
+  'script.js',
+  'config.js',
+  'styles.css',
+]);
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: IS_PROD ? '1d' : 0,
   etag: true,
+  setHeaders: (res, filePath) => {
+    if (!noCachePublicFiles.has(path.basename(filePath))) {
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  },
 }));
 
 // ==================== DATABASE ====================
