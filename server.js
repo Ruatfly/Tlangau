@@ -1494,20 +1494,60 @@ app.post(
         });
       }
 
-      if (accessCode.used) {
-        return res.json({
-          success: false,
-          valid: false,
-          message: 'This access code has already been used',
-        });
-      }
-
       const codeEmail = accessCode.email.toLowerCase().trim();
       if (codeEmail !== emailLower) {
         return res.json({
           success: false,
           valid: false,
           message: 'This access code is not associated with your email. Please use the email address you used to purchase the code.',
+        });
+      }
+
+      if (accessCode.used) {
+        const usedByEmail = normalizeEmail(accessCode.used_by_email || accessCode.email);
+        const usedByAccount = (accessCode.used_by_account || '').toString().trim();
+        const normalizedAccountId = (userAccountId || '').toString().trim();
+        const sameIdentity =
+          (usedByEmail && usedByEmail === emailLower) ||
+          (normalizedAccountId && usedByAccount && usedByAccount === normalizedAccountId);
+
+        if (!sameIdentity) {
+          return res.json({
+            success: false,
+            valid: false,
+            message: 'This access code has already been used',
+          });
+        }
+
+        // Code was already redeemed by this same user/account.
+        // Treat this as re-login and return currently effective entitlement.
+        const nowTs = Date.now();
+        const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+        const effectiveCode = resolveEffectiveEntitlement(usedEntitlements, nowTs);
+        if (!effectiveCode) {
+          return res.json({
+            success: false,
+            valid: false,
+            message: 'Your access entitlement has expired. Please purchase a new code.',
+          });
+        }
+
+        const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
+        const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+        const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
+
+        return res.json({
+          success: true,
+          valid: true,
+          message: 'Access restored using your existing entitlement.',
+          code: effectiveCode.code || codeUpper,
+          expiresAt: getGraceWindowEnd(effectiveRawExpiry),
+          accessExpiryAt: effectiveRawExpiry,
+          gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
+          gracePeriodMinutes: ACCESS_GRACE_PERIOD_MINUTES,
+          graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
+          services: allServices,
+          validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
         });
       }
 
