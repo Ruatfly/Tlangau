@@ -435,15 +435,15 @@ function getRingTypeLabel(ringTypeRaw) {
   const ringType = (ringTypeRaw || 'wet').toString().trim().toLowerCase();
   switch (ringType) {
     case 'wet':
-      return 'Ṭawihthei';
+      return 'Ṭawihthei (Wet)';
     case 'dry':
-      return 'Ṭawihthei lo';
+      return 'Ṭawihthei lo (Dry)';
     case 'sanitary_item':
-      return 'Hriselna thil';
+      return 'Hriselna thil (Sanitary Item)';
     case 'special_care':
-      return 'Uluk Ngai';
+      return 'Uluk Ngai (Special Care)';
     default:
-      return 'Ṭawihthei';
+      return 'Ṭawihthei (Wet)';
   }
 }
 
