@@ -14,7 +14,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 const SERVICE_PRICE = 10; // ₹10 per service (monthly plan)
 const YEARLY_FLAT_PRICE = 100; // Rs 100 flat
 const SERVICE_NAMES = {
-    ring: 'Ring Notification',
+    ring: 'Bawlhhlawh Paih tur hriatirna',
     message: 'Message Notification',
     broadcast: 'Broadcast Message',
 };

@@ -21,7 +21,7 @@ const IS_PROD = NODE_ENV === 'production';
 // ==================== SERVICE DEFINITIONS ====================
 // Services available for purchase – statistics is always free
 const PAID_SERVICES = {
-  ring: { name: 'Ring Notification', price: 10 },
+  ring: { name: 'Bawlhhlawh Paih tur hriatirna', price: 10 },
   message: { name: 'Message Notification', price: 10 },
   broadcast: { name: 'Broadcast Message', price: 10 },
 };
