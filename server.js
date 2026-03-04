@@ -233,8 +233,21 @@ app.get('/payment.html', (req, res, next) => {
   return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
 });
 
+// Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260304a';
+app.get('/admin', (req, res) => {
+  return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
+});
+app.get('/admin.html', (req, res, next) => {
+  if (req.query.v === ADMIN_PAGE_VERSION) {
+    return next();
+  }
+  return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
+});
+
 // ==================== STATIC FILES (from public/ folder only) ====================
 const noCachePublicFiles = new Set([
+  'admin.html',
   'payment.html',
   'success.html',
   'script.js',
