@@ -51,23 +51,9 @@ const RECONCILE_MAX_ORDERS_PER_RUN = process.env.RECONCILE_MAX_ORDERS_PER_RUN
   ? parseInt(process.env.RECONCILE_MAX_ORDERS_PER_RUN, 10)
   : 100;
 
-// Temporary QA override: force all access code validity windows to 5 minutes.
-const ACCESS_VALIDITY_OVERRIDE_MINUTES = 5;
-// Temporary QA override: force grace period to 2 minutes.
-const ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES = 2;
-
-const ACCESS_GRACE_PERIOD_HOURS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? (ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES / 60)
-  : 24;
-const ACCESS_GRACE_PERIOD_MINUTES = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES
-  : (ACCESS_GRACE_PERIOD_HOURS * 60);
-const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? (ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES * 60 * 1000)
-  : (ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000);
-const ACCESS_GRACE_PERIOD_LABEL = ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0
-  ? `${ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES} minutes`
-  : `${ACCESS_GRACE_PERIOD_HOURS} hours`;
+const ACCESS_GRACE_PERIOD_HOURS = 24;
+const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
+const ACCESS_GRACE_PERIOD_LABEL = `${ACCESS_GRACE_PERIOD_HOURS} hours`;
 
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -439,9 +425,6 @@ function getPlanInfo(planId) {
 }
 
 function getValidityText(validityDays) {
-  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
-    return `${ACCESS_VALIDITY_OVERRIDE_MINUTES} minutes`;
-  }
   if (validityDays >= 365) return '1 year';
   return `${validityDays} days`;
 }
@@ -458,9 +441,6 @@ function toTimestamp(dateLike) {
 }
 
 function getValidityDurationMs(validityDays) {
-  if (ACCESS_VALIDITY_OVERRIDE_MINUTES > 0) {
-    return ACCESS_VALIDITY_OVERRIDE_MINUTES * 60 * 1000;
-  }
   const safeDays = Math.max(1, Number(validityDays) || 30);
   return safeDays * 24 * 60 * 60 * 1000;
 }
@@ -708,8 +688,8 @@ console.log(`  Webhook MAC:   ${INSTAMOJO_PRIVATE_SALT ? 'Enabled' : 'DISABLED (
 console.log(`  Email:         ${process.env.EMAIL_USER ? EMAIL_SERVICE : 'Not configured'}`);
 console.log(`  Admin:         ${ADMIN_PASSWORD ? 'Configured' : 'NOT SET!'}`);
 console.log(`  Session TTL:   ${PAYMENT_SESSION_MINUTES} minutes`);
-console.log(`  Validity Mode: ${ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? `TEST (${ACCESS_VALIDITY_OVERRIDE_MINUTES} minutes)` : 'production (days)'}`);
-console.log(`  Grace Mode:    ${ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES > 0 ? `TEST (${ACCESS_GRACE_PERIOD_OVERRIDE_MINUTES} minutes)` : `production (${ACCESS_GRACE_PERIOD_HOURS} hours)`}`);
+console.log(`  Validity Mode: production (days)`);
+console.log(`  Grace Mode:    production (${ACCESS_GRACE_PERIOD_HOURS} hours)`);
 console.log(`  Reconcile Job: ${AUTO_RECONCILE_ENABLED ? `enabled/${AUTO_RECONCILE_INTERVAL_MINUTES}m` : 'disabled'}`);
 console.log(`  Email Retry:   ${AUTO_EMAIL_RETRY_ENABLED ? `enabled/${AUTO_EMAIL_RETRY_INTERVAL_MINUTES}m` : 'disabled'}`);
 console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (₹${SERVICE_PRICE} each)`);
@@ -869,7 +849,6 @@ app.post(
             services: uniqueServices,
             planDuration: plan.id,
             validityDays: plan.validityDays,
-            validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
             currency: 'INR',
           });
         } else {
@@ -1281,7 +1260,6 @@ app.post(
           expiresAt: order.access_code_expires_at || codeByOrder?.expiresAt || codeByOrder?.expires_at || null,
           planDuration: order.plan_duration || codeByOrder?.plan_duration || plan.id,
           validityDays: order.validity_days || codeByOrder?.validity_days || plan.validityDays,
-          validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
           codeEmailSent: order.code_email_sent === true,
           message: 'Payment verified successfully',
         });
@@ -1359,7 +1337,6 @@ app.post(
             expiresAt: result.expiresAt || null,
             planDuration: result.planDuration || order.plan_duration || 'monthly',
             validityDays: result.validityDays || order.validity_days || ACCESS_PLANS.monthly.validityDays,
-            validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
             codeEmailSent: result.codeEmailSent === true,
             message: 'Payment verified successfully',
           });
@@ -1434,7 +1411,6 @@ app.post(
           services,
           planDuration: (codeByOrder?.plan_duration || order.plan_duration || 'monthly'),
           validityDays,
-          validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
         });
       }
 
@@ -1446,7 +1422,6 @@ app.post(
         services,
         planDuration: (codeByOrder?.plan_duration || order.plan_duration || 'monthly'),
         validityDays,
-        validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
       });
     } catch (error) {
       console.error('❌ Resend access code error:', error.message);
@@ -1544,10 +1519,8 @@ app.post(
           expiresAt: getGraceWindowEnd(effectiveRawExpiry),
           accessExpiryAt: effectiveRawExpiry,
           gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-          gracePeriodMinutes: ACCESS_GRACE_PERIOD_MINUTES,
           graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
           services: allServices,
-          validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
         });
       }
 
@@ -1598,10 +1571,8 @@ app.post(
         expiresAt: getGraceWindowEnd(effectiveRawExpiry),
         accessExpiryAt: effectiveRawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-        gracePeriodMinutes: ACCESS_GRACE_PERIOD_MINUTES,
         graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
         services: allServices,
-        validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
       });
     } catch (error) {
       console.error('❌ Error validating code:', error.message);
@@ -1696,13 +1667,11 @@ app.post(
         expiresAt: getGraceWindowEnd(rawExpiry),
         accessExpiryAt: rawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-        gracePeriodMinutes: ACCESS_GRACE_PERIOD_MINUTES,
         graceEndsAt: getGraceWindowEnd(rawExpiry),
         used: accessCode.used,
         services: allServices,
         planDuration: accessCode.plan_duration || 'monthly',
         validityDays: accessCode.validity_days || ACCESS_PLANS.monthly.validityDays,
-        validityMinutes: ACCESS_VALIDITY_OVERRIDE_MINUTES > 0 ? ACCESS_VALIDITY_OVERRIDE_MINUTES : null,
         message: 'Access code info retrieved',
       });
     } catch (error) {

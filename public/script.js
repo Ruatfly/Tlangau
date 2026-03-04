@@ -18,11 +18,9 @@ const SERVICE_NAMES = {
     message: 'Message Notification',
     broadcast: 'Broadcast Message',
 };
-const TEST_VALIDITY_MINUTES = 5;
-
 const PLAN_META = {
-    monthly: { validityLabel: `${TEST_VALIDITY_MINUTES} Minutes (Test)` },
-    yearly: { validityLabel: `${TEST_VALIDITY_MINUTES} Minutes (Test)` },
+    monthly: { validityLabel: '30 Days' },
+    yearly: { validityLabel: '1 Year' },
 };
 
 function getSelectedServices() {
@@ -78,7 +76,9 @@ function updateOrderSummary() {
     }
     const validityInfoLine = document.getElementById('validityInfoLine');
     if (validityInfoLine) {
-        validityInfoLine.textContent = `Valid for ${TEST_VALIDITY_MINUTES} minutes from purchase (testing mode)`;
+        validityInfoLine.textContent = planDuration === 'yearly'
+            ? 'Valid for 1 year from purchase'
+            : 'Valid for 30 days from purchase';
     }
 
     // Update total

@@ -294,16 +294,11 @@
 
             function showFulfillmentInfo(data) {
                 const validityDays = Number(data.validityDays || 30);
-                const validityMinutes = Number(data.validityMinutes || 0);
                 const validityEl = document.getElementById('validityText');
                 if (validityEl) {
-                    if (validityMinutes > 0) {
-                        validityEl.textContent = `Your access code is valid for ${validityMinutes} minutes from now (testing mode).`;
-                    } else {
-                        validityEl.textContent = validityDays >= 365
-                            ? 'Your access code is valid for 1 year from now.'
-                            : `Your access code is valid for ${validityDays} days from now.`;
-                    }
+                    validityEl.textContent = validityDays >= 365
+                        ? 'Your access code is valid for 1 year from now.'
+                        : `Your access code is valid for ${validityDays} days from now.`;
                 }
 
                 if (data.accessCode) {
