@@ -431,6 +431,22 @@ function getPlanInfo(planId) {
   return ACCESS_PLANS[planId] || ACCESS_PLANS.monthly;
 }
 
+function getRingTypeLabel(ringTypeRaw) {
+  const ringType = (ringTypeRaw || 'wet').toString().trim().toLowerCase();
+  switch (ringType) {
+    case 'wet':
+      return 'Ṭawihthei';
+    case 'dry':
+      return 'Ṭawihthei lo';
+    case 'sanitary_item':
+      return 'Hriselna thil';
+    case 'special_care':
+      return 'Uluk Ngai';
+    default:
+      return 'Ṭawihthei';
+  }
+}
+
 function getValidityText(validityDays) {
   if (validityDays >= 365) return '1 year';
   return `${validityDays} days`;
@@ -2376,6 +2392,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
     }
 
     const ringTypeValue = ringType || 'wet';
+    const ringTypeLabel = getRingTypeLabel(ringTypeValue);
     console.log(`📤 Ring: ${bundleName}/${topicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
@@ -2395,7 +2412,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
           aps: {
             alert: {
               title: `Ring Alert: ${bundleName}`,
-              body: `${topicName} - ${ringTypeValue === 'dry' ? 'Ṭawihthei lo' : 'Ṭawihthei'}`,
+              body: `${topicName} - ${ringTypeLabel}`,
             },
             sound: 'default',
             'content-available': 1,
