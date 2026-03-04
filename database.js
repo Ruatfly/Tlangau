@@ -105,6 +105,25 @@ class Database {
     await this.db.ref(`orders/${order_id}`).update(updateData);
   }
 
+  async getOrdersByStatus(status, limit = 500) {
+    const snapshot = await this.db.ref('orders')
+      .orderByChild('status')
+      .equalTo(status)
+      .once('value');
+
+    const data = snapshot.val();
+    if (!data) return [];
+
+    const orders = Object.values(data).map(o => {
+      if (!o.order_id && o.orderId) o.order_id = o.orderId;
+      if (!o.created_at) o.created_at = o.updated_at || new Date(0).toISOString();
+      return o;
+    });
+
+    orders.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    return orders.slice(0, Math.max(1, limit));
+  }
+
   async createPaymentEvent(orderId, eventType, payload = {}) {
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const event = {
@@ -380,6 +399,83 @@ class Database {
       ...updates,
       updated_at: new Date().toISOString(),
     });
+  }
+
+  async claimAccessCodeMailFlag(code, flagField) {
+    const ref = this.db.ref(`access_codes/${code}`);
+    let claimed = false;
+    const nowIso = new Date().toISOString();
+
+    await ref.transaction((current) => {
+      if (!current) return current;
+      if (current[flagField]) return;
+      claimed = true;
+      return {
+        ...current,
+        [flagField]: nowIso,
+        updated_at: nowIso,
+      };
+    });
+
+    return claimed;
+  }
+
+  async getUsedAccessCodes(limit = 2000) {
+    const snapshot = await this.db.ref('access_codes')
+      .orderByChild('used')
+      .equalTo(true)
+      .once('value');
+
+    const data = snapshot.val();
+    if (!data) return [];
+
+    const codes = Object.values(data).map(c => {
+      if (!c.expires_at && c.expiresAt) c.expires_at = c.expiresAt;
+      if (!c.expiresAt && c.expires_at) c.expiresAt = c.expires_at;
+      if (!c.created_at) c.created_at = c.updated_at || new Date(0).toISOString();
+      return c;
+    });
+
+    codes.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+    return codes.slice(0, Math.max(1, limit));
+  }
+
+  async acquireLock(lockKey, ttlMs = 60000, ownerId = null) {
+    const safeKey = String(lockKey).replace(/[.#$/\[\]]/g, '_');
+    const ref = this.db.ref(`locks/${safeKey}`);
+    const owner = ownerId || `lock_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const now = Date.now();
+    let acquired = false;
+
+    await ref.transaction((current) => {
+      if (current && current.expires_at && current.expires_at > now) {
+        return;
+      }
+      acquired = true;
+      return {
+        owner,
+        created_at: now,
+        expires_at: now + Math.max(1000, ttlMs),
+      };
+    });
+
+    return acquired ? owner : null;
+  }
+
+  async releaseLock(lockKey, ownerId) {
+    if (!ownerId) return false;
+    const safeKey = String(lockKey).replace(/[.#$/\[\]]/g, '_');
+    const ref = this.db.ref(`locks/${safeKey}`);
+    let released = false;
+
+    await ref.transaction((current) => {
+      if (!current) return current;
+      if (current.owner !== ownerId) return;
+      released = true;
+      return null;
+    });
+
+    return released;
   }
 
   async hasAccountUsedCode(accountId) {

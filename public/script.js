@@ -219,6 +219,7 @@ if (paymentForm) {
             console.log('Payment link created:', data.orderId, 'Services:', data.services);
             saveLastPaymentSession({
                 orderId: data.orderId,
+                verifyToken: data.verifyToken || null,
                 email,
                 services,
                 planDuration,

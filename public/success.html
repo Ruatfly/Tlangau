@@ -169,7 +169,10 @@
                     const response = await fetch(`${backendUrl}/api/verify-payment`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ orderId }),
+                        body: JSON.stringify({
+                            orderId,
+                            verifyToken: lastPayment?.verifyToken || null,
+                        }),
                     });
 
                     const data = await response.json();

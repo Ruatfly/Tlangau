@@ -54,6 +54,7 @@ const RECONCILE_MAX_ORDERS_PER_RUN = process.env.RECONCILE_MAX_ORDERS_PER_RUN
 const ACCESS_GRACE_PERIOD_HOURS = 24;
 const ACCESS_GRACE_PERIOD_MS = ACCESS_GRACE_PERIOD_HOURS * 60 * 60 * 1000;
 const ACCESS_GRACE_PERIOD_LABEL = `${ACCESS_GRACE_PERIOD_HOURS} hours`;
+const VERIFY_TOKEN_TTL_HOURS = 24;
 
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -260,6 +261,12 @@ db.init().catch(err => {
   console.error('❌ Database initialization failed:', err.message);
 });
 
+const INSTANCE_ID = process.env.INSTANCE_ID || `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+const PAYMENT_FULFILL_LOCK_MS = 45 * 1000;
+const RECONCILE_LOCK_MS = 10 * 60 * 1000;
+const EMAIL_RETRY_LOCK_MS = 10 * 60 * 1000;
+const MAIL_SCAN_LOCK_MS = 20 * 60 * 1000;
+
 // ==================== EMAIL SERVICE ====================
 
 const EMAIL_SERVICE = process.env.EMAIL_SERVICE || 'gmail';
@@ -449,6 +456,14 @@ function getGraceWindowEnd(expiresAt) {
   const expiryTs = toTimestamp(expiresAt);
   if (expiryTs === null) return null;
   return new Date(expiryTs + ACCESS_GRACE_PERIOD_MS).toISOString();
+}
+
+function generateVerifyToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function hashVerifyToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
 function isWithinAccessWindow(expiresAt, nowTs = Date.now()) {
@@ -785,6 +800,9 @@ app.post(
       const amount = computePlanAmount(uniqueServices, plan.id);
       const orderId = `order_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
       const emailLower = email.toLowerCase().trim();
+      const verifyToken = generateVerifyToken();
+      const verifyTokenHash = hashVerifyToken(verifyToken);
+      const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
       const serviceNames = uniqueServices.map(s => PAID_SERVICES[s].name).join(', ');
       console.log(`📝 New payment: ${emailLower} | ₹${amount} | ${orderId} | Plan: ${plan.id} | Services: ${serviceNames}`);
@@ -798,6 +816,8 @@ app.post(
         services: uniqueServices,
         plan_duration: plan.id,
         validity_days: plan.validityDays,
+        verify_token_hash: verifyTokenHash,
+        verify_token_expires_at: verifyTokenExpiresAt,
         payment_session_expires_at: new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000).toISOString(),
       });
 
@@ -849,6 +869,7 @@ app.post(
             services: uniqueServices,
             planDuration: plan.id,
             validityDays: plan.validityDays,
+            verifyToken,
             currency: 'INR',
           });
         } else {
@@ -993,6 +1014,13 @@ async function createPaymentEvent(orderId, eventType, payload = {}) {
 // Helper: verify payment and fulfill order (reusable for webhook + verify-payment)
 async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) {
   const orderId = order.order_id;
+  const lockOwner = await db.acquireLock(`fulfill:${orderId}`, PAYMENT_FULFILL_LOCK_MS, INSTANCE_ID);
+  if (!lockOwner) {
+    await createPaymentEvent(orderId, 'FULFILLMENT_LOCK_BUSY', { paymentId });
+    return { verified: false, status: 'LOCK_BUSY' };
+  }
+
+  try {
   const expectedAmount = order.amount / 100;
   const paymentAmount = parseFloat(payment.amount);
   const paymentStatus = payment.status;
@@ -1114,6 +1142,9 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
     services: orderServices,
     codeEmailSent,
   };
+  } finally {
+    await db.releaseLock(`fulfill:${orderId}`, lockOwner);
+  }
 }
 
 async function fetchGatewayPaymentForOrder(order) {
@@ -1179,13 +1210,19 @@ async function runPaymentReconciliation(options = {}) {
   const source = options.source || 'manual';
   const maxOrders = Math.max(1, Number(options.maxOrders) || RECONCILE_MAX_ORDERS_PER_RUN);
 
-  const allOrders = await db.getAllOrders();
-  const candidates = allOrders.filter((order) => {
-    if (!order) return false;
-    if (order.status === 'PENDING' || order.status === 'FAILED') return true;
-    if (order.status === 'SUCCESS' && order.code_email_sent !== true) return true;
-    return false;
-  }).slice(0, maxOrders);
+  const pendingOrders = await db.getOrdersByStatus('PENDING', maxOrders);
+  const failedOrders = await db.getOrdersByStatus('FAILED', maxOrders);
+  const successOrders = await db.getOrdersByStatus('SUCCESS', maxOrders * 2);
+  const successMissingEmail = successOrders.filter((order) => order && order.code_email_sent !== true);
+  const mergedCandidates = [...pendingOrders, ...failedOrders, ...successMissingEmail];
+  const seenOrderIds = new Set();
+  const candidates = [];
+  for (const order of mergedCandidates) {
+    if (!order || !order.order_id || seenOrderIds.has(order.order_id)) continue;
+    seenOrderIds.add(order.order_id);
+    candidates.push(order);
+    if (candidates.length >= maxOrders) break;
+  }
 
   const report = {
     source,
@@ -1233,7 +1270,7 @@ async function runPaymentReconciliation(options = {}) {
 // Verify payment (for frontend callback / success page polling)
 app.post(
   '/api/verify-payment',
-  [body('orderId').notEmpty()],
+  [body('orderId').notEmpty(), body('verifyToken').optional().isString().trim()],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -1242,11 +1279,31 @@ app.post(
       }
 
       const { orderId } = req.body;
+      const providedVerifyToken = (req.body.verifyToken || '').toString().trim();
       console.log(`🔍 Verifying payment: ${orderId}`);
 
       const order = await db.getOrder(orderId);
       if (!order) {
         return res.json({ success: false, message: 'Order not found' });
+      }
+
+      // Harden access: require verify token when available, keep backward compatibility for legacy orders.
+      if (order.verify_token_hash) {
+        if (!providedVerifyToken) {
+          return res.status(403).json({ success: false, message: 'Verification token required.' });
+        }
+        const providedHash = hashVerifyToken(providedVerifyToken);
+        const tokenMatches = crypto.timingSafeEqual(
+          Buffer.from(providedHash),
+          Buffer.from(order.verify_token_hash)
+        );
+        if (!tokenMatches) {
+          return res.status(403).json({ success: false, message: 'Invalid verification token.' });
+        }
+        const tokenExpiryTs = toTimestamp(order.verify_token_expires_at);
+        if (tokenExpiryTs !== null && Date.now() > tokenExpiryTs) {
+          return res.status(403).json({ success: false, message: 'Verification token expired.' });
+        }
       }
 
       if (order.status === 'SUCCESS') {
@@ -2078,6 +2135,17 @@ function toSafeEmailKey(email) {
   return normalizeEmail(email).replace(/[.#$/\[\]]/g, '_');
 }
 
+async function withDistributedLock(lockKey, ttlMs, fn) {
+  const owner = await db.acquireLock(lockKey, ttlMs, INSTANCE_ID);
+  if (!owner) return { acquired: false, value: null };
+  try {
+    const value = await fn();
+    return { acquired: true, value };
+  } finally {
+    await db.releaseLock(lockKey, owner);
+  }
+}
+
 async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}) {
   try {
     const normalizedEmail = normalizeEmail(email);
@@ -2102,10 +2170,11 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
     const isInGracePeriod = diffMs <= 0 && graceEndsAtTs !== null && nowTs <= graceEndsAtTs;
     const isGracePeriodOver = graceEndsAtTs !== null && nowTs > graceEndsAtTs;
     const purchaseLink = process.env.PURCHASE_WEB_LINK || 'https://tlangau.onrender.com';
-    const updates = {};
 
     // Welcome mail: send once when user first activates/logs in with a valid code.
-    if (options.sendWelcome === true && !accessCode.welcome_mail_sent_at) {
+    const shouldSendWelcome = options.sendWelcome === true &&
+      await db.claimAccessCodeMailFlag(codeKey, 'welcome_mail_sent_at');
+    if (shouldSendWelcome) {
       await db.createDevMail({
         title: 'Welcome to Tlangau',
         body:
@@ -2115,11 +2184,12 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         category: 'system_welcome',
         system_generated: true,
       });
-      updates.welcome_mail_sent_at = new Date().toISOString();
     }
 
     // Expiry warnings: each milestone sends once.
-    if (diffMs > 0 && diffMs <= sevenDaysMs && !accessCode.expiry_warning_7d_sent_at) {
+    const shouldSend7d = diffMs > 0 && diffMs <= sevenDaysMs &&
+      await db.claimAccessCodeMailFlag(codeKey, 'expiry_warning_7d_sent_at');
+    if (shouldSend7d) {
       await db.createDevMail({
         title: 'Access code expires in 7 days',
         body:
@@ -2129,10 +2199,11 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         category: 'system_expiry_7d',
         system_generated: true,
       });
-      updates.expiry_warning_7d_sent_at = new Date().toISOString();
     }
 
-    if (diffMs > 0 && diffMs <= oneDayMs && !accessCode.expiry_warning_1d_sent_at) {
+    const shouldSend1d = diffMs > 0 && diffMs <= oneDayMs &&
+      await db.claimAccessCodeMailFlag(codeKey, 'expiry_warning_1d_sent_at');
+    if (shouldSend1d) {
       await db.createDevMail({
         title: 'Access code expires tomorrow',
         body:
@@ -2142,15 +2213,14 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         category: 'system_expiry_1d',
         system_generated: true,
       });
-      updates.expiry_warning_1d_sent_at = new Date().toISOString();
     }
 
     // Grace notice: send once after code expiry, during grace window.
-    if (
+    const shouldSendGraceNotice =
       isInGracePeriod &&
       accessCode.used === true &&
-      !accessCode.grace_notice_sent_at
-    ) {
+      await db.claimAccessCodeMailFlag(codeKey, 'grace_notice_sent_at');
+    if (shouldSendGraceNotice) {
       await db.createDevMail({
         title: `You are on grace period (${ACCESS_GRACE_PERIOD_LABEL})`,
         body:
@@ -2162,16 +2232,15 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         category: 'system_grace_period',
         system_generated: true,
       });
-      updates.grace_notice_sent_at = new Date().toISOString();
     }
 
     // Expired notice: sent when user is moved back to client dashboard due to expiry.
-    if (
+    const shouldSendExpired =
       options.sendExpiredNotice === true &&
       isGracePeriodOver &&
       accessCode.used === true &&
-      !accessCode.expired_notice_sent_at
-    ) {
+      await db.claimAccessCodeMailFlag(codeKey, 'expired_notice_sent_at');
+    if (shouldSendExpired) {
       await db.createDevMail({
         title: 'Your access code has expired',
         body:
@@ -2182,13 +2251,6 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
         category: 'system_expired',
         system_generated: true,
       });
-      updates.expired_notice_sent_at = new Date().toISOString();
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await db.updateAccessCode(codeKey, updates);
-      Object.assign(accessCode, updates);
-      accessCodeCache.set(normalizedEmail, { accessCode, cachedAt: Date.now() });
     }
   } catch (error) {
     console.error('⚠️ Automated mail check failed:', error.message);
@@ -2505,7 +2567,10 @@ let paymentReconciliationRunning = false;
 async function runScheduledPaymentReconciliation() {
   if (paymentReconciliationRunning) return;
   paymentReconciliationRunning = true;
+  let lockOwner = null;
   try {
+    lockOwner = await db.acquireLock('job:payment-reconcile', RECONCILE_LOCK_MS, INSTANCE_ID);
+    if (!lockOwner) return;
     const report = await runPaymentReconciliation({ source: 'scheduler' });
     if (report.recovered > 0 || report.failed > 0) {
       console.log(`🔁 Reconciliation: scanned=${report.scanned}, recovered=${report.recovered}, failed=${report.failed}`);
@@ -2513,6 +2578,7 @@ async function runScheduledPaymentReconciliation() {
   } catch (error) {
     console.error('⚠️ Scheduled payment reconciliation failed:', error.message);
   } finally {
+    if (lockOwner) await db.releaseLock('job:payment-reconcile', lockOwner);
     paymentReconciliationRunning = false;
   }
 }
@@ -2521,15 +2587,19 @@ let codeEmailRetryRunning = false;
 async function runCodeEmailRetryScan() {
   if (codeEmailRetryRunning) return;
   codeEmailRetryRunning = true;
+  let lockOwner = null;
   try {
-    const orders = await db.getAllOrders();
+    lockOwner = await db.acquireLock('job:email-retry', EMAIL_RETRY_LOCK_MS, INSTANCE_ID);
+    if (!lockOwner) return;
+
+    const successOrders = await db.getOrdersByStatus('SUCCESS', RECONCILE_MAX_ORDERS_PER_RUN * 4);
     const nowTs = Date.now();
     const cooldownMs = Math.max(1, CODE_EMAIL_RESEND_COOLDOWN_MINUTES) * 60 * 1000;
     let retried = 0;
     let sent = 0;
     let failed = 0;
 
-    for (const order of orders) {
+    for (const order of successOrders) {
       if (!order || order.status !== 'SUCCESS' || order.code_email_sent === true) continue;
 
       const lastAttemptTs = toTimestamp(order.code_email_last_attempt_at) || 0;
@@ -2565,6 +2635,7 @@ async function runCodeEmailRetryScan() {
   } catch (error) {
     console.error('⚠️ Scheduled email retry scan failed:', error.message);
   } finally {
+    if (lockOwner) await db.releaseLock('job:email-retry', lockOwner);
     codeEmailRetryRunning = false;
   }
 }
@@ -2573,8 +2644,12 @@ let automatedMailScanRunning = false;
 async function runAutomatedAccessCodeMailScan() {
   if (automatedMailScanRunning) return;
   automatedMailScanRunning = true;
+  let lockOwner = null;
   try {
-    const codes = await db.getAllAccessCodes();
+    lockOwner = await db.acquireLock('job:automated-mail-scan', MAIL_SCAN_LOCK_MS, INSTANCE_ID);
+    if (!lockOwner) return;
+
+    const codes = await db.getUsedAccessCodes(2000);
     for (const code of codes) {
       const codeEmail = normalizeEmail(code.email || code.used_by_email);
       if (!codeEmail) continue;
@@ -2586,6 +2661,7 @@ async function runAutomatedAccessCodeMailScan() {
   } catch (error) {
     console.error('⚠️ Automated access-code scan failed:', error.message);
   } finally {
+    if (lockOwner) await db.releaseLock('job:automated-mail-scan', lockOwner);
     automatedMailScanRunning = false;
   }
 }
