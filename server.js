@@ -2131,6 +2131,189 @@ app.delete('/api/admin/bundles/:bundleId/topics/:topicId', checkAdminAuth, async
   }
 });
 
+app.get('/api/admin/deletion-requests', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    const snapshot = await admin.database().ref('deletion_requests').once('value');
+    const data = snapshot.val() || {};
+    const requests = Object.entries(data).map(([id, value]) => ({
+      id,
+      ...(value || {}),
+    }));
+    requests.sort((a, b) => {
+      const aPending = (a.status || 'pending') === 'pending' ? 0 : 1;
+      const bPending = (b.status || 'pending') === 'pending' ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return new Date(b.requested_at || 0).getTime() - new Date(a.requested_at || 0).getTime();
+    });
+    res.json({ success: true, requests });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/admin/deletion-requests/:requestId/approve', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    const requestId = req.params.requestId;
+    const ref = admin.database().ref(`deletion_requests/${requestId}`);
+    const snapshot = await ref.once('value');
+    if (!snapshot.exists()) {
+      return res.status(404).json({ success: false, message: 'Deletion request not found.' });
+    }
+    const requestData = snapshot.val() || {};
+    if ((requestData.status || 'pending') !== 'pending') {
+      return res.json({
+        success: true,
+        message: `Request already ${requestData.status || 'processed'}.`,
+        request: { id: requestId, ...requestData },
+      });
+    }
+
+    if (requestData.target_type === 'bundle') {
+      await admin.database().ref(`bundles/${requestData.bundle_id}`).remove();
+    } else if (requestData.target_type === 'topic') {
+      await admin.database().ref(`bundles/${requestData.bundle_id}/topics/${requestData.topic_id}`).remove();
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid target type in request.' });
+    }
+
+    const updated = {
+      ...requestData,
+      status: 'approved',
+      approved_at: new Date().toISOString(),
+      approved_by: 'admin_panel',
+    };
+    await ref.update(updated);
+    res.json({ success: true, message: 'Deletion request approved and applied.', request: { id: requestId, ...updated } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    const requestId = req.params.requestId;
+    const ref = admin.database().ref(`deletion_requests/${requestId}`);
+    const snapshot = await ref.once('value');
+    if (!snapshot.exists()) {
+      return res.status(404).json({ success: false, message: 'Deletion request not found.' });
+    }
+    const requestData = snapshot.val() || {};
+    if ((requestData.status || 'pending') !== 'pending') {
+      return res.json({
+        success: true,
+        message: `Request already ${requestData.status || 'processed'}.`,
+        request: { id: requestId, ...requestData },
+      });
+    }
+    const updated = {
+      ...requestData,
+      status: 'rejected',
+      rejected_at: new Date().toISOString(),
+      rejected_by: 'admin_panel',
+    };
+    await ref.update(updated);
+    res.json({ success: true, message: 'Deletion request rejected.', request: { id: requestId, ...updated } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/request-deletion', requireServerAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, message: 'Server not ready. Please try again.' });
+    }
+
+    const targetType = (req.body.targetType || '').toString().trim().toLowerCase();
+    const bundleId = (req.body.bundleId || '').toString().trim();
+    const bundleName = (req.body.bundleName || '').toString().trim();
+    const topicId = (req.body.topicId || '').toString().trim();
+    const topicName = (req.body.topicName || '').toString().trim();
+
+    if (!['bundle', 'topic'].includes(targetType)) {
+      return res.status(400).json({ success: false, message: 'Invalid target type.' });
+    }
+    if (!bundleId || !bundleName) {
+      return res.status(400).json({ success: false, message: 'Missing bundle details.' });
+    }
+    if (targetType === 'topic' && (!topicId || !topicName)) {
+      return res.status(400).json({ success: false, message: 'Missing topic details.' });
+    }
+
+    const dbRef = admin.database().ref();
+    const bundleSnapshot = await dbRef.child(`bundles/${bundleId}`).once('value');
+    if (!bundleSnapshot.exists()) {
+      return res.status(404).json({ success: false, message: 'Bundle not found.' });
+    }
+    if (targetType === 'topic') {
+      const topicSnapshot = await dbRef.child(`bundles/${bundleId}/topics/${topicId}`).once('value');
+      if (!topicSnapshot.exists()) {
+        return res.status(404).json({ success: false, message: 'Topic not found.' });
+      }
+    }
+
+    const pendingSnapshot = await dbRef
+      .child('deletion_requests')
+      .orderByChild('status')
+      .equalTo('pending')
+      .once('value');
+    if (pendingSnapshot.exists()) {
+      const pendingData = pendingSnapshot.val() || {};
+      for (const [existingId, existingReq] of Object.entries(pendingData)) {
+        if (!existingReq) continue;
+        if (
+          existingReq.target_type === targetType &&
+          existingReq.bundle_id === bundleId &&
+          (targetType === 'bundle' || existingReq.topic_id === topicId)
+        ) {
+          return res.json({
+            success: true,
+            message: 'Deletion request already pending admin approval.',
+            requestId: existingId,
+            alreadyPending: true,
+          });
+        }
+      }
+    }
+
+    const requestRef = dbRef.child('deletion_requests').push();
+    const requestId = requestRef.key;
+    const payload = {
+      target_type: targetType,
+      bundle_id: bundleId,
+      bundle_name: bundleName,
+      topic_id: targetType === 'topic' ? topicId : null,
+      topic_name: targetType === 'topic' ? topicName : null,
+      requested_by: req.userEmail,
+      status: 'pending',
+      requested_at: new Date().toISOString(),
+    };
+    await requestRef.set(payload);
+
+    res.json({
+      success: true,
+      message: 'Deletion request sent for admin approval.',
+      requestId,
+    });
+  } catch (error) {
+    console.error('❌ Request deletion error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to send deletion request.' });
+  }
+});
+
 // ==================== FCM NOTIFICATION ENDPOINTS ====================
 
 const tokenCache = new Map();

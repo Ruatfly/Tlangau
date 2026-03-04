@@ -371,6 +371,7 @@
                 <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="bundles">Bundles & Topics</button>
+                <button class="tab" data-tab="deletionRequests">Deletion Requests</button>
                 <button class="tab" data-tab="polls">📊 Polls</button>
                 <button class="tab" data-tab="mails">📧 Dev Mails</button>
             </div>
@@ -451,6 +452,16 @@
                     <div id="bundlesLoading" class="loading">Loading bundles and topics...</div>
                     <div id="bundlesContainer" style="display: none;">
                         <div id="bundlesList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deletion Requests Tab -->
+            <div id="deletionRequestsTab" class="tab-content">
+                <div class="table-container">
+                    <div id="deletionRequestsLoading" class="loading">Loading deletion requests...</div>
+                    <div id="deletionRequestsContainer" style="display: none;">
+                        <div id="deletionRequestsList"></div>
                     </div>
                 </div>
             </div>
@@ -650,6 +661,17 @@
                 deleteTopic(delTopic.dataset.bundleId, delTopic.dataset.deleteTopic, delTopic.dataset.topicName);
             }
         });
+        document.getElementById('deletionRequestsList').addEventListener('click', function (e) {
+            const approveBtn = e.target.closest('[data-approve-delete-request]');
+            if (approveBtn) {
+                approveDeletionRequest(approveBtn.dataset.approveDeleteRequest);
+                return;
+            }
+            const rejectBtn = e.target.closest('[data-reject-delete-request]');
+            if (rejectBtn) {
+                rejectDeletionRequest(rejectBtn.dataset.rejectDeleteRequest);
+            }
+        });
         document.getElementById('pollsList').addEventListener('click', function (e) {
             const delBtn = e.target.closest('[data-delete-poll]');
             if (delBtn) {
@@ -725,6 +747,7 @@
                 loadAccessCodes(),
                 loadUsers(),
                 loadBundles(),
+                loadDeletionRequests(),
                 loadAdminPolls(),
                 loadDevMails(),
             ]);
@@ -992,6 +1015,66 @@
             }
         }
 
+        async function loadDeletionRequests() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/deletion-requests`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                const loading = document.getElementById('deletionRequestsLoading');
+                const container = document.getElementById('deletionRequestsContainer');
+                const list = document.getElementById('deletionRequestsList');
+                list.innerHTML = '';
+
+                if (!data.success) {
+                    loading.textContent = 'Error loading deletion requests: ' + (data.message || data.error || 'Unknown error');
+                    return;
+                }
+
+                const requests = data.requests || [];
+                if (requests.length === 0) {
+                    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗑️</div><p>No deletion requests found</p></div>';
+                } else {
+                    requests.forEach(req => {
+                        const card = document.createElement('div');
+                        card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0;';
+                        const status = (req.status || 'pending').toLowerCase();
+                        const statusColor = status === 'approved' ? '#155724' : status === 'rejected' ? '#721c24' : '#8a6d3b';
+                        const statusBg = status === 'approved' ? '#d4edda' : status === 'rejected' ? '#f8d7da' : '#fff3cd';
+                        const targetLabel = req.target_type === 'topic'
+                            ? `Topic: ${esc(req.topic_name || req.topic_id || '')}`
+                            : `Bundle: ${esc(req.bundle_name || req.bundle_id || '')}`;
+                        const canAct = status === 'pending';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                                <div style="flex:1;">
+                                    <p style="margin:0 0 8px 0; font-size:12px;">
+                                        <span class="badge" style="background:${statusBg}; color:${statusColor};">${esc(status.toUpperCase())}</span>
+                                        <span style="margin-left:8px; color:#666;">Requested: ${esc(new Date(req.requested_at || Date.now()).toLocaleString())}</span>
+                                    </p>
+                                    <h4 style="margin:0 0 6px 0; color:#333;">${targetLabel}</h4>
+                                    <p style="margin:0; color:#666; font-size:13px;">
+                                        Bundle: <strong>${esc(req.bundle_name || req.bundle_id || '')}</strong><br>
+                                        Requested by: <strong>${esc(req.requested_by || 'Unknown')}</strong>
+                                    </p>
+                                </div>
+                                <div style="display:flex; flex-direction:column; gap:8px; min-width:120px;">
+                                    ${canAct ? `<button class="btn" data-approve-delete-request="${esc(req.id)}" style="width:auto; padding:8px 12px; font-size:13px; background:#2e7d32;">Approve</button>` : ''}
+                                    ${canAct ? `<button class="btn-danger" data-reject-delete-request="${esc(req.id)}" style="width:auto; padding:8px 12px; font-size:13px; background:#c62828;">Reject</button>` : ''}
+                                </div>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+
+                loading.style.display = 'none';
+                container.style.display = 'block';
+            } catch (error) {
+                document.getElementById('deletionRequestsLoading').textContent = 'Error loading deletion requests: ' + error.message;
+            }
+        }
+
         // ==================== DELETE ACTIONS ====================
 
         async function deleteCode(code) {
@@ -1094,6 +1177,45 @@
                 }
             } catch (error) {
                 alert('❌ Error deleting topic: ' + error.message);
+            }
+        }
+
+        async function approveDeletionRequest(requestId) {
+            if (!confirm('Approve this deletion request now?\n\nThis will remove the target throughout the platform.')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/deletion-requests/${requestId}/approve`, {
+                    method: 'POST',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Deletion request approved and applied');
+                    loadDeletionRequests();
+                    loadBundles();
+                } else {
+                    alert('❌ Error: ' + (data.message || data.error || 'Failed to approve request'));
+                }
+            } catch (error) {
+                alert('❌ Error approving request: ' + error.message);
+            }
+        }
+
+        async function rejectDeletionRequest(requestId) {
+            if (!confirm('Reject this deletion request?')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/deletion-requests/${requestId}/reject`, {
+                    method: 'POST',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Deletion request rejected');
+                    loadDeletionRequests();
+                } else {
+                    alert('❌ Error: ' + (data.message || data.error || 'Failed to reject request'));
+                }
+            } catch (error) {
+                alert('❌ Error rejecting request: ' + error.message);
             }
         }
 
@@ -1461,8 +1583,9 @@
                 codes:   { index: 1, contentId: 'codesTab' },
                 users:   { index: 2, contentId: 'usersTab' },
                 bundles: { index: 3, contentId: 'bundlesTab' },
-                polls:   { index: 4, contentId: 'pollsTab' },
-                mails:   { index: 5, contentId: 'mailsTab' },
+                deletionRequests: { index: 4, contentId: 'deletionRequestsTab' },
+                polls:   { index: 5, contentId: 'pollsTab' },
+                mails:   { index: 6, contentId: 'mailsTab' },
             };
 
             const info = tabMap[tab];
@@ -1472,6 +1595,7 @@
             if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
             document.getElementById(info.contentId).classList.add('active');
             if (tab === 'bundles') loadBundles();
+            if (tab === 'deletionRequests') loadDeletionRequests();
             if (tab === 'polls') loadAdminPolls();
             if (tab === 'mails') loadDevMails();
         }
