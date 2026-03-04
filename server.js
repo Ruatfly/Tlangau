@@ -2204,6 +2204,26 @@ app.post('/api/admin/deletion-requests/:requestId/approve', checkAdminAuth, asyn
       approved_by: 'admin_panel',
     };
     await ref.update(updated);
+    try {
+      const targetLabel = requestData.target_type === 'topic'
+        ? `topic "${requestData.topic_name || requestData.topic_id || 'Unknown'}" in "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`
+        : `bundle "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`;
+      const targetEmail = normalizeEmail(requestData.requested_by);
+      if (targetEmail) {
+        await db.createDevMail({
+          title: 'Deletion Request Approved',
+          body:
+            `Congratulations! Your request to delete ${targetLabel} has been approved and applied successfully.\n\n` +
+            'The deleted item is now removed across the platform.',
+          pinned: false,
+          target_email: targetEmail,
+          category: 'deletion_request',
+          system_generated: true,
+        });
+      }
+    } catch (mailError) {
+      console.error('⚠️ Failed to send deletion approval mail:', mailError.message);
+    }
     res.json({ success: true, message: 'Deletion request approved and applied.', request: { id: requestId, ...updated } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2237,6 +2257,26 @@ app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async
       rejected_by: 'admin_panel',
     };
     await ref.update(updated);
+    try {
+      const targetLabel = requestData.target_type === 'topic'
+        ? `topic "${requestData.topic_name || requestData.topic_id || 'Unknown'}" in "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`
+        : `bundle "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`;
+      const targetEmail = normalizeEmail(requestData.requested_by);
+      if (targetEmail) {
+        await db.createDevMail({
+          title: 'Deletion Request Rejected',
+          body:
+            `Sorry, we cannot approve your request to delete ${targetLabel} at this time.\n\n` +
+            'No changes were made, and the item remains active on the platform.',
+          pinned: false,
+          target_email: targetEmail,
+          category: 'deletion_request',
+          system_generated: true,
+        });
+      }
+    } catch (mailError) {
+      console.error('⚠️ Failed to send deletion rejection mail:', mailError.message);
+    }
     res.json({ success: true, message: 'Deletion request rejected.', request: { id: requestId, ...updated } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
