@@ -1567,6 +1567,7 @@ app.post(
         const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
         const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
         const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
+        accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
 
         return res.json({
           success: true,
@@ -1619,6 +1620,7 @@ app.post(
       // Always include free services
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
       const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
+      accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
 
       res.json({
         success: true,
@@ -1717,6 +1719,7 @@ app.post(
         sendWelcome: false,
         sendExpiredNotice: accessStillValid === false,
       });
+      accessCodeCache.set(emailLower, { accessCode, cachedAt: Date.now() });
 
       res.json({
         success: true,
