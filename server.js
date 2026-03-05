@@ -219,6 +219,14 @@ const supportLimiter = rateLimit({
   message: { success: false, message: 'Too many support requests. Please try again later.' },
 });
 
+const deletionRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many deletion requests. Please try again later.' },
+});
+
 app.use('/api/', generalLimiter);
 
 // Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
@@ -493,6 +501,17 @@ function generateVerifyToken() {
 
 function hashVerifyToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function safeConstantTimeEqual(valueA, valueB) {
+  const left = Buffer.from(String(valueA || ''), 'utf8');
+  const right = Buffer.from(String(valueB || ''), 'utf8');
+  if (left.length === 0 || left.length !== right.length) return false;
+  try {
+    return crypto.timingSafeEqual(left, right);
+  } catch {
+    return false;
+  }
 }
 
 function isWithinAccessWindow(expiresAt, nowTs = Date.now()) {
@@ -1322,10 +1341,7 @@ app.post(
           return res.status(403).json({ success: false, message: 'Verification token required.' });
         }
         const providedHash = hashVerifyToken(providedVerifyToken);
-        const tokenMatches = crypto.timingSafeEqual(
-          Buffer.from(providedHash),
-          Buffer.from(order.verify_token_hash)
-        );
+        const tokenMatches = safeConstantTimeEqual(providedHash, order.verify_token_hash);
         if (!tokenMatches) {
           return res.status(403).json({ success: false, message: 'Invalid verification token.' });
         }
@@ -2283,27 +2299,48 @@ app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async
   }
 });
 
-app.post('/api/request-deletion', requireServerAuth, async (req, res) => {
+app.post('/api/request-deletion',
+  deletionRequestLimiter,
+  requireServerAuth,
+  [
+    body('targetType')
+      .trim()
+      .isIn(['bundle', 'topic'])
+      .withMessage('Invalid target type.'),
+    body('bundleId')
+      .trim()
+      .isLength({ min: 1, max: 120 })
+      .withMessage('Invalid bundle ID.'),
+    body('topicId')
+      .optional({ nullable: true })
+      .trim()
+      .isLength({ min: 1, max: 120 })
+      .withMessage('Invalid topic ID.'),
+  ],
+  async (req, res) => {
   try {
     checkFirebaseReady();
     if (!firebaseInitialized || !admin) {
       return res.status(503).json({ success: false, message: 'Server not ready. Please try again.' });
     }
 
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
     const targetType = (req.body.targetType || '').toString().trim().toLowerCase();
     const bundleId = (req.body.bundleId || '').toString().trim();
-    const bundleName = (req.body.bundleName || '').toString().trim();
     const topicId = (req.body.topicId || '').toString().trim();
-    const topicName = (req.body.topicName || '').toString().trim();
 
     if (!['bundle', 'topic'].includes(targetType)) {
       return res.status(400).json({ success: false, message: 'Invalid target type.' });
     }
-    if (!bundleId || !bundleName) {
-      return res.status(400).json({ success: false, message: 'Missing bundle details.' });
+    if (!bundleId) {
+      return res.status(400).json({ success: false, message: 'Missing bundle ID.' });
     }
-    if (targetType === 'topic' && (!topicId || !topicName)) {
-      return res.status(400).json({ success: false, message: 'Missing topic details.' });
+    if (targetType === 'topic' && !topicId) {
+      return res.status(400).json({ success: false, message: 'Missing topic ID.' });
     }
 
     const dbRef = admin.database().ref();
@@ -2311,11 +2348,17 @@ app.post('/api/request-deletion', requireServerAuth, async (req, res) => {
     if (!bundleSnapshot.exists()) {
       return res.status(404).json({ success: false, message: 'Bundle not found.' });
     }
+    const bundleData = bundleSnapshot.val() || {};
+    const bundleName = (bundleData.name || '').toString().trim() || bundleId;
+
+    let topicName = null;
     if (targetType === 'topic') {
       const topicSnapshot = await dbRef.child(`bundles/${bundleId}/topics/${topicId}`).once('value');
       if (!topicSnapshot.exists()) {
         return res.status(404).json({ success: false, message: 'Topic not found.' });
       }
+      const topicData = topicSnapshot.val() || {};
+      topicName = (topicData.name || '').toString().trim() || topicId;
     }
 
     const pendingSnapshot = await dbRef
@@ -2350,7 +2393,7 @@ app.post('/api/request-deletion', requireServerAuth, async (req, res) => {
       bundle_name: bundleName,
       topic_id: targetType === 'topic' ? topicId : null,
       topic_name: targetType === 'topic' ? topicName : null,
-      requested_by: req.userEmail,
+      requested_by: normalizeEmail(req.userEmail),
       status: 'pending',
       requested_at: new Date().toISOString(),
     };
