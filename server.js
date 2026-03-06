@@ -2224,7 +2224,7 @@ app.post('/api/admin/deletion-requests/:requestId/approve', checkAdminAuth, asyn
       const targetLabel = requestData.target_type === 'topic'
         ? `topic "${requestData.topic_name || requestData.topic_id || 'Unknown'}" in "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`
         : `bundle "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`;
-      const targetEmail = normalizeEmail(requestData.requested_by);
+      const targetEmail = resolveDeletionRequesterEmail(requestData);
       if (targetEmail) {
         await db.createDevMail({
           title: 'Deletion Request Approved',
@@ -2233,9 +2233,12 @@ app.post('/api/admin/deletion-requests/:requestId/approve', checkAdminAuth, asyn
             'The deleted item is now removed across the platform.',
           pinned: false,
           target_email: targetEmail,
+          requester_email: targetEmail,
           category: 'deletion_request',
           system_generated: true,
         });
+      } else {
+        console.warn(`⚠️ Skipped deletion approval mail for ${requestId}: requester email missing`);
       }
     } catch (mailError) {
       console.error('⚠️ Failed to send deletion approval mail:', mailError.message);
@@ -2277,7 +2280,7 @@ app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async
       const targetLabel = requestData.target_type === 'topic'
         ? `topic "${requestData.topic_name || requestData.topic_id || 'Unknown'}" in "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`
         : `bundle "${requestData.bundle_name || requestData.bundle_id || 'Unknown'}"`;
-      const targetEmail = normalizeEmail(requestData.requested_by);
+      const targetEmail = resolveDeletionRequesterEmail(requestData);
       if (targetEmail) {
         await db.createDevMail({
           title: 'Deletion Request Rejected',
@@ -2286,9 +2289,12 @@ app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async
             'No changes were made, and the item remains active on the platform.',
           pinned: false,
           target_email: targetEmail,
+          requester_email: targetEmail,
           category: 'deletion_request',
           system_generated: true,
         });
+      } else {
+        console.warn(`⚠️ Skipped deletion rejection mail for ${requestId}: requester email missing`);
       }
     } catch (mailError) {
       console.error('⚠️ Failed to send deletion rejection mail:', mailError.message);
@@ -2387,13 +2393,15 @@ app.post('/api/request-deletion',
 
     const requestRef = dbRef.child('deletion_requests').push();
     const requestId = requestRef.key;
+    const requesterEmail = normalizeEmail(req.userEmail);
     const payload = {
       target_type: targetType,
       bundle_id: bundleId,
       bundle_name: bundleName,
       topic_id: targetType === 'topic' ? topicId : null,
       topic_name: targetType === 'topic' ? topicName : null,
-      requested_by: normalizeEmail(req.userEmail),
+      requested_by: requesterEmail,
+      requested_by_email: requesterEmail,
       status: 'pending',
       requested_at: new Date().toISOString(),
     };
@@ -2427,6 +2435,20 @@ const ACCESS_CODE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function normalizeEmail(email) {
   return (email || '').toString().toLowerCase().trim();
+}
+
+function resolveDeletionRequesterEmail(requestData) {
+  const candidates = [
+    requestData?.requested_by_email,
+    requestData?.requester_email,
+    requestData?.requested_by,
+    requestData?.requester,
+  ];
+  for (const value of candidates) {
+    const normalized = normalizeEmail(value);
+    if (normalized) return normalized;
+  }
+  return '';
 }
 
 function toSafeEmailKey(email) {
@@ -3545,6 +3567,10 @@ app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
     const userEmail = normalizeEmail(req.userEmail);
     const visibleMails = mails.filter((mail) => {
       const targetEmail = normalizeEmail(mail.target_email);
+      if ((mail.category || '') === 'deletion_request') {
+        // Deletion decision mails are private by design; never broadcast them.
+        return !!targetEmail && targetEmail === userEmail;
+      }
       return !targetEmail || targetEmail === userEmail;
     });
     res.json({ success: true, mails: visibleMails });
