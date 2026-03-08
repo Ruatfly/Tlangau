@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -32,23 +32,23 @@
                 
                 <div class="success-info" id="successInfo" style="display: none;">
                     <div class="info-card">
-                        <h3>📧 Check Your Email</h3>
+                        <h3>ðŸ“§ Check Your Email</h3>
                         <p>We've sent your unique access code to the email address you provided.</p>
                     </div>
                     <div class="info-card" id="codeCard" style="display: none;">
-                        <h3>🔐 Your Access Code</h3>
+                        <h3>ðŸ” Your Access Code</h3>
                         <p id="accessCodeText" style="font-family: monospace; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px;"></p>
                     </div>
                     <div class="info-card" id="servicesCard" style="display: none;">
-                        <h3>📦 Your Services</h3>
+                        <h3>ðŸ“¦ Your Services</h3>
                         <div id="purchasedServices"></div>
                     </div>
                     <div class="info-card">
-                        <h3>⏰ Code Validity</h3>
+                        <h3>â° Code Validity</h3>
                         <p id="validityText">Your access code is valid for 30 days from now.</p>
                     </div>
                     <div class="info-card">
-                        <h3>📱 Next Steps</h3>
+                        <h3>ðŸ“± Next Steps</h3>
                         <p>Open the Tlangau app and enter your access code to unlock your selected services.</p>
                     </div>
                 </div>
@@ -72,7 +72,7 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-section">
-                    <h3>🚀 Tlangau</h3>
+                    <h3>ðŸš€ Tlangau</h3>
                     <p>Secure access code purchase platform.</p>
                 </div>
                 <div class="footer-section">
@@ -139,13 +139,13 @@
             }
 
             if (!orderId) {
-                showFinalStatus('❌', 'Payment Verification Failed',
+                showFinalStatus('âŒ', 'Payment Verification Failed',
                     'No order ID found. If you completed payment, please reopen checkout from payment page.', false, true);
                 return;
             }
 
             if (!backendUrl || backendUrl.includes('your-backend-url')) {
-                showFinalStatus('⚠️', 'Configuration Error',
+                showFinalStatus('âš ï¸', 'Configuration Error',
                     'Backend URL not configured. Please contact support.', false, true);
                 return;
             }
@@ -179,7 +179,7 @@
 
                     if (data.success && data.paymentStatus === 'SUCCESS') {
                         terminalState = true;
-                        showFinalStatus('✅', 'Payment Successful!',
+                        showFinalStatus('âœ…', 'Payment Successful!',
                             'Payment verified. Your access code details are ready below.', true, true);
                         showPurchasedServices(data.services);
                         showFulfillmentInfo(data);
@@ -188,7 +188,7 @@
 
                     if (data.paymentStatus === 'FAILED') {
                         terminalState = true;
-                        showFinalStatus('❌', 'Payment Failed',
+                        showFinalStatus('âŒ', 'Payment Failed',
                             'Your payment was not successful. No charge should be captured. Please try again.',
                             false, true);
                         return;
@@ -196,7 +196,7 @@
 
                     if (data.paymentStatus === 'EXPIRED') {
                         terminalState = true;
-                        showFinalStatus('⏰', 'Payment Session Expired',
+                        showFinalStatus('â°', 'Payment Session Expired',
                             'Your payment session expired. Please start a new payment session.',
                             false, true);
                         return;
@@ -207,7 +207,7 @@
                             setTimeout(() => { pollPaymentStatus(false); }, POLL_INTERVAL);
                         }
                     } else {
-                        showFinalStatus('⏳', 'Payment Processing',
+                        showFinalStatus('â³', 'Payment Processing',
                             'Payment may still be processing. You can tap "I\'ve Paid - Verify Now" to check again.',
                             false, true, true);
                     }
@@ -219,7 +219,7 @@
                             setTimeout(() => { pollPaymentStatus(false); }, POLL_INTERVAL);
                         }
                     } else {
-                        showFinalStatus('⚠️', 'Verification Error',
+                        showFinalStatus('âš ï¸', 'Verification Error',
                             'Unable to verify right now. Please try again using "I\'ve Paid - Verify Now".',
                             false, true, true);
                     }
@@ -241,10 +241,10 @@
             }
 
             const SERVICE_LABELS = {
-                ring: { icon: '♻️', name: 'Bawlhhlawh Paih tur hriatirna' },
-                message: { icon: '💬', name: 'Message Notification' },
-                broadcast: { icon: '📢', name: 'Broadcast Message' },
-                statistics: { icon: '📊', name: 'Statistics & Insights' },
+                ring: { icon: 'â™»ï¸', name: 'Bawlhhlawh paih tur hriattirna' },
+                message: { icon: 'ðŸ’¬', name: 'Message Notification' },
+                broadcast: { icon: 'ðŸ“¢', name: 'Broadcast Message' },
+                statistics: { icon: 'ðŸ“Š', name: 'Statistics & Insights' },
             };
 
             function showPurchasedServices(services) {
@@ -254,7 +254,7 @@
                 if (!card || !container) return;
 
                 const html = services.map(s => {
-                    const label = SERVICE_LABELS[s] || { icon: '✅', name: s };
+                    const label = SERVICE_LABELS[s] || { icon: 'âœ…', name: s };
                     const isFree = s === 'statistics';
                     return `<p style="margin: 4px 0; font-size: 0.95rem; color: #4a5568;">${label.icon} ${label.name}${isFree ? ' <span style="background:#48bb78;color:white;padding:1px 6px;border-radius:8px;font-size:0.7rem;">FREE</span>' : ''}</p>`;
                 }).join('');
@@ -349,3 +349,4 @@
     </script>
 </body>
 </html>
+

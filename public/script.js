@@ -1,4 +1,4 @@
-// ==================== SMOOTH SCROLLING ====================
+﻿// ==================== SMOOTH SCROLLING ====================
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -11,10 +11,10 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // ==================== SERVICE SELECTION ====================
 
-const SERVICE_PRICE = 10; // ₹10 per service (monthly plan)
+const SERVICE_PRICE = 10; // â‚¹10 per service (monthly plan)
 const YEARLY_FLAT_PRICE = 100; // Rs 100 flat
 const SERVICE_NAMES = {
-    ring: 'Bawlhhlawh Paih tur hriatirna',
+    ring: 'Bawlhhlawh paih tur hriattirna',
     message: 'Message Notification',
     broadcast: 'Broadcast Message',
 };
@@ -60,10 +60,10 @@ function updateOrderSummary() {
         } else {
             const linePrice = planDuration === 'yearly'
                 ? `Included in yearly plan`
-                : `₹${SERVICE_PRICE}.00`;
+                : `â‚¹${SERVICE_PRICE}.00`;
             lineItemsEl.innerHTML = selected.map(s => `
                 <div class="summary-item summary-line-item">
-                    <span>• ${SERVICE_NAMES[s] || s}</span>
+                    <span>â€¢ ${SERVICE_NAMES[s] || s}</span>
                     <span>${linePrice}</span>
                 </div>
             `).join('');
@@ -83,7 +83,7 @@ function updateOrderSummary() {
 
     // Update total
     const totalEl = document.getElementById('totalAmount');
-    if (totalEl) totalEl.textContent = `₹${total}.00`;
+    if (totalEl) totalEl.textContent = `â‚¹${total}.00`;
 
     // Update button
     const paymentBtn = document.getElementById('paymentBtn');
@@ -99,7 +99,7 @@ function updateOrderSummary() {
             : 'Proceed to Payment';
     }
     if (btnAmount) {
-        btnAmount.textContent = `₹${total}`;
+        btnAmount.textContent = `â‚¹${total}`;
     }
 
     // Hide error
@@ -116,7 +116,7 @@ function updateOrderSummary() {
             ? 'Deselect All'
             : (planDuration === 'yearly'
                 ? 'Select All (included in yearly)'
-                : `Select All (₹${allServices.length * SERVICE_PRICE})`);
+                : `Select All (â‚¹${allServices.length * SERVICE_PRICE})`);
     }
 }
 
@@ -291,3 +291,4 @@ document.addEventListener('DOMContentLoaded', function () {
         observer.observe(el);
     });
 });
+
