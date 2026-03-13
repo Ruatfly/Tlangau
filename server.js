@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -19,7 +19,7 @@ const NODE_ENV = process.env.NODE_ENV || 'production';
 const IS_PROD = NODE_ENV === 'production';
 
 // ==================== SERVICE DEFINITIONS ====================
-// Services available for purchase â€“ statistics is always free
+// Services available for purchase � statistics is always free
 const PAID_SERVICES = {
   ring: { name: 'Bawlhhlawh paih tur hriattirna', price: 10 },
   message: { name: 'Message Notification', price: 10 },
@@ -27,7 +27,7 @@ const PAID_SERVICES = {
 };
 const FREE_SERVICES = ['statistics', 'poll'];
 const VALID_SERVICE_IDS = Object.keys(PAID_SERVICES);
-const SERVICE_PRICE = 10; // â‚¹10 per service (configurable)
+const SERVICE_PRICE = 10; // ��10 per service (configurable)
 const ACCESS_PLANS = {
   monthly: { id: 'monthly', label: '1 Month', validityDays: 30 },
   yearly: { id: 'yearly', label: '1 Year', validityDays: 365, flatPrice: 100 },
@@ -59,13 +59,13 @@ const VERIFY_TOKEN_TTL_HOURS = 24;
 // ==================== ADMIN PASSWORD ====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 if (!ADMIN_PASSWORD) {
-  console.error('âŒ FATAL: ADMIN_PASSWORD environment variable is not set!');
+  console.error('�R FATAL: ADMIN_PASSWORD environment variable is not set!');
   console.error('   Set ADMIN_PASSWORD in your .env file or environment variables.');
   if (IS_PROD) {
     console.error('   Server will NOT start without ADMIN_PASSWORD in production.');
     process.exit(1);
   } else {
-    console.warn('   âš ï¸  Using insecure default for development ONLY.');
+    console.warn('   �a�️  Using insecure default for development ONLY.');
   }
 }
 const ADMIN_PASSWORD_FINAL = ADMIN_PASSWORD || 'dev-only-change-me';
@@ -107,7 +107,7 @@ if (IS_PROD) {
   });
 }
 
-// Helmet â€“ secure HTTP headers with proper CSP
+// Helmet � secure HTTP headers with proper CSP
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -151,10 +151,10 @@ const corsOptions = {
       return callback(null, true);
     }
     if (!IS_PROD) {
-      console.warn(`âš ï¸  CORS: allowing unlisted origin in dev mode: ${origin}`);
+      console.warn(`�a�️  CORS: allowing unlisted origin in dev mode: ${origin}`);
       return callback(null, true);
     }
-    console.warn(`ðŸš« CORS blocked origin: ${origin}`);
+    console.warn(`�xa� CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
@@ -279,7 +279,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 const db = new Database();
 db.init().catch(err => {
-  console.error('âŒ Database initialization failed:', err.message);
+  console.error('�R Database initialization failed:', err.message);
 });
 
 const INSTANCE_ID = process.env.INSTANCE_ID || `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
@@ -299,7 +299,7 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
   const sgMail = require('@sendgrid/mail');
   sgMail.setApiKey(SENDGRID_API_KEY);
   transporter = { type: 'sendgrid', client: sgMail };
-  console.log('ðŸ“§ Email service: SendGrid');
+  console.log('�x� Email service: SendGrid');
 } else if (EMAIL_SERVICE === 'brevo') {
   const BREVO_PORT = parseInt(process.env.EMAIL_PORT) || 2525;
   transporter = nodemailer.createTransport({
@@ -321,7 +321,7 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
     debug: false,
     connectionTimeout: 15000,
   });
-  console.log(`ðŸ“§ Email service: Brevo (port ${BREVO_PORT})`);
+  console.log(`�x� Email service: Brevo (port ${BREVO_PORT})`);
 } else {
   transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -337,9 +337,9 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
     maxConnections: 1,
     maxMessages: 3,
   });
-  console.log('ðŸ“§ Email service: Gmail SMTP');
+  console.log('�x� Email service: Gmail SMTP');
   if (!process.env.EMAIL_USER) {
-    console.warn('   âš ï¸  EMAIL_USER not set â€“ emails will fail.');
+    console.warn('   �a�️  EMAIL_USER not set � emails will fail.');
   }
 }
 
@@ -347,10 +347,10 @@ if (EMAIL_SERVICE === 'sendgrid' && SENDGRID_API_KEY) {
 async function verifyEmailConfig() {
   if (EMAIL_SERVICE === 'sendgrid') {
     if (!SENDGRID_API_KEY) {
-      console.error('âŒ SENDGRID_API_KEY not set â€“ emails will NOT work!');
+      console.error('�R SENDGRID_API_KEY not set � emails will NOT work!');
       return false;
     }
-    console.log('âœ… SendGrid configured');
+    console.log('�S& SendGrid configured');
     return true;
   }
 
@@ -358,31 +358,31 @@ async function verifyEmailConfig() {
   const emailPass = (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim();
 
   if (!emailUser || !emailPass) {
-    console.error('âŒ EMAIL_USER / EMAIL_PASS not set â€“ emails will NOT work!');
+    console.error('�R EMAIL_USER / EMAIL_PASS not set � emails will NOT work!');
     return false;
   }
 
   try {
-    console.log(`ðŸ“§ Verifying ${EMAIL_SERVICE} SMTP connection...`);
+    console.log(`�x� Verifying ${EMAIL_SERVICE} SMTP connection...`);
     await Promise.race([
       transporter.verify(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Verification timeout (>15s)')), 15000)),
     ]);
-    console.log('âœ… Email service verified and ready');
+    console.log('�S& Email service verified and ready');
     return true;
   } catch (error) {
-    console.warn('âš ï¸  Email verification failed (non-critical):', error.message);
+    console.warn('�a�️  Email verification failed (non-critical):', error.message);
     if (error.code === 'EAUTH') {
-      console.error('   â†’ Check EMAIL_USER and EMAIL_PASS');
+      console.error('   �  Check EMAIL_USER and EMAIL_PASS');
     } else if (error.message.includes('timeout')) {
-      console.error('   â†’ Connection timeout â€“ try EMAIL_PORT=2525 for Brevo');
+      console.error('   �  Connection timeout � try EMAIL_PORT=2525 for Brevo');
     }
     return true;
   }
 }
 
 verifyEmailConfig().catch(err => {
-  console.error('âš ï¸  Email verification error:', err.message);
+  console.error('�a�️  Email verification error:', err.message);
 });
 
 // ==================== FIREBASE ====================
@@ -405,17 +405,17 @@ async function waitForFirebaseReady(maxWaitMs = 15000) {
   while (Date.now() - startTime < maxWaitMs) {
     await new Promise(resolve => setTimeout(resolve, 500));
     if (checkFirebaseReady()) {
-      console.log(`âœ… Firebase ready after ${Date.now() - startTime}ms`);
+      console.log(`�S& Firebase ready after ${Date.now() - startTime}ms`);
       return true;
     }
   }
-  console.error(`âŒ Firebase not ready after ${maxWaitMs}ms`);
+  console.error(`�R Firebase not ready after ${maxWaitMs}ms`);
   return false;
 }
 
 const firebaseCheckInterval = setInterval(() => {
   if (checkFirebaseReady()) {
-    console.log('âœ… Firebase Admin confirmed ready');
+    console.log('�S& Firebase Admin confirmed ready');
     clearInterval(firebaseCheckInterval);
   }
 }, 2000);
@@ -425,7 +425,7 @@ setTimeout(() => {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON &&
       !process.env.FIREBASE_SERVICE_ACCOUNT_PATH &&
       !require('fs').existsSync(path.join(__dirname, 'service-account-key.json'))) {
-    console.warn('âš ï¸  FIREBASE WARNING: No service account found. Database will NOT work!');
+    console.warn('�a�️  FIREBASE WARNING: No service account found. Database will NOT work!');
   }
 }, 3000);
 
@@ -456,15 +456,15 @@ function getRingTypeLabel(ringTypeRaw) {
   const ringType = (ringTypeRaw || 'wet').toString().trim().toLowerCase();
   switch (ringType) {
     case 'wet':
-      return 'á¹¬awihthei (Wet)';
+      return 'Ṭawihthei (Wet)';
     case 'dry':
-      return 'á¹¬awihthei lo (Dry)';
+      return 'Ṭawihthei lo (Dry)';
     case 'sanitary_item':
       return 'Hriselna thil (Sanitary Item)';
     case 'special_care':
       return 'Uluk Ngai (Special Care)';
     default:
-      return 'á¹¬awihthei (Wet)';
+      return 'Ṭawihthei (Wet)';
   }
 }
 
@@ -560,7 +560,7 @@ function resolveEffectiveEntitlement(codes, nowTs = Date.now()) {
 // Build email HTML with service info
 function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
-  const servicesHtml = serviceNames.map(s => `<li style="padding: 4px 0;">âœ… ${s}</li>`).join('');
+  const servicesHtml = serviceNames.map(s => `<li style="padding: 4px 0;">�S& ${s}</li>`).join('');
   const totalAmount = (services && services.length > 0) ? services.length * SERVICE_PRICE : SERVICE_PRICE;
   const validityText = getValidityText(validityDays);
 
@@ -583,10 +583,10 @@ function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
     <body>
       <div class="container">
         <div class="header">
-          <h1>ðŸŽ‰ Welcome to Tlangau</h1>
+          <h1>�x}0 Welcome to Tlangau</h1>
         </div>
         <div class="content">
-          <p>Thank you for your purchase of <strong>â‚¹${totalAmount}</strong>!</p>
+          <p>Thank you for your purchase of <strong>��${totalAmount}</strong>!</p>
           <p>Your access code has been generated successfully.</p>
           
           <div class="code-box">
@@ -595,10 +595,10 @@ function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
           </div>
 
           <div class="services-box">
-            <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">ðŸ“¦ Your Purchased Services:</p>
+            <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">�x� Your Purchased Services:</p>
             <ul style="list-style: none; padding: 0; margin: 0;">
               ${servicesHtml}
-              <li style="padding: 4px 0;">ðŸ“Š Statistics & Insights <span class="free-badge">FREE</span></li>
+              <li style="padding: 4px 0;">Statistics & Insights <span class="free-badge">FREE</span></li>
             </ul>
           </div>
           
@@ -629,12 +629,12 @@ async function sendAccessCodeEmail(email, code, services, validityDays = 30, ret
 
   if (EMAIL_SERVICE === 'sendgrid') {
     if (!SENDGRID_API_KEY) {
-      console.error('âŒ SendGrid API key not configured');
+      console.error('�R SendGrid API key not configured');
       return false;
     }
   } else {
     if (!emailUser || !emailPass) {
-      console.error('âŒ Email service not configured (EMAIL_USER/EMAIL_PASS missing)');
+      console.error('�R Email service not configured (EMAIL_USER/EMAIL_PASS missing)');
       return false;
     }
   }
@@ -650,7 +650,7 @@ async function sendAccessCodeEmail(email, code, services, validityDays = 30, ret
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`ðŸ“§ Sending access code to ${email} (attempt ${attempt}/${retries})`);
+      console.log(`�x� Sending access code to ${email} (attempt ${attempt}/${retries})`);
 
       if (EMAIL_SERVICE === 'sendgrid' && transporter && transporter.type === 'sendgrid') {
         const msg = {
@@ -663,28 +663,28 @@ async function sendAccessCodeEmail(email, code, services, validityDays = 30, ret
           transporter.client.send(msg),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout (30s)')), 30000)),
         ]);
-        console.log(`âœ… Email sent via SendGrid to ${email}`);
+        console.log(`�S& Email sent via SendGrid to ${email}`);
         return true;
       } else {
         const info = await Promise.race([
           transporter.sendMail(mailOptions),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout (30s)')), 30000)),
         ]);
-        console.log(`âœ… Email sent to ${email} (ID: ${info.messageId})`);
+        console.log(`�S& Email sent to ${email} (ID: ${info.messageId})`);
         return true;
       }
     } catch (error) {
-      console.error(`âŒ Email failed (attempt ${attempt}/${retries}): ${error.message}`);
+      console.error(`�R Email failed (attempt ${attempt}/${retries}): ${error.message}`);
       if (error.code === 'EAUTH') {
-        console.error('   â†’ Authentication failed â€“ check EMAIL_USER/EMAIL_PASS');
+        console.error('   �  Authentication failed � check EMAIL_USER/EMAIL_PASS');
         return false;
       }
       if (attempt < retries) {
         const waitTime = attempt * 2000;
-        console.log(`   â³ Retrying in ${waitTime / 1000}s...`);
+        console.log(`   ⏳ Retrying in ${waitTime / 1000}s...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
-        console.error('   âŒ All retries exhausted. Email NOT sent.');
+        console.error('   �R All retries exhausted. Email NOT sent.');
       }
     }
   }
@@ -703,16 +703,16 @@ const INSTAMOJO_PRIVATE_SALT = process.env.INSTAMOJO_PRIVATE_SALT;
 function verifyWebhookMAC(data) {
   if (!INSTAMOJO_PRIVATE_SALT) {
     if (IS_PROD) {
-      console.error('âŒ INSTAMOJO_PRIVATE_SALT not set â€“ rejecting webhook in production');
+      console.error('�R INSTAMOJO_PRIVATE_SALT not set � rejecting webhook in production');
       return false;
     }
-    console.warn('âš ï¸  INSTAMOJO_PRIVATE_SALT not set â€“ skipping MAC verification (dev only)');
+    console.warn('�a�️  INSTAMOJO_PRIVATE_SALT not set � skipping MAC verification (dev only)');
     return true;
   }
 
   const mac = data.mac;
   if (!mac) {
-    console.error('âŒ Webhook missing MAC signature');
+    console.error('�R Webhook missing MAC signature');
     return false;
   }
 
@@ -741,9 +741,9 @@ function verifyWebhookMAC(data) {
 // ==================== STARTUP LOG ====================
 
 console.log('');
-console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
-console.log('  ðŸš€ Tlangau Server â€“ Starting Up');
-console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+console.log('�"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�');
+console.log('  �xa� Tlangau Server � Starting Up');
+console.log('�"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�');
 console.log(`  Environment:   ${NODE_ENV}`);
 console.log(`  Port:          ${PORT}`);
 console.log(`  Payment:       ${INSTAMOJO_API_KEY ? `Instamojo (${INSTAMOJO_ENV})` : 'Not configured'}`);
@@ -755,9 +755,9 @@ console.log(`  Validity Mode: production (days)`);
 console.log(`  Grace Mode:    production (${ACCESS_GRACE_PERIOD_HOURS} hours)`);
 console.log(`  Reconcile Job: ${AUTO_RECONCILE_ENABLED ? `enabled/${AUTO_RECONCILE_INTERVAL_MINUTES}m` : 'disabled'}`);
 console.log(`  Email Retry:   ${AUTO_EMAIL_RETRY_ENABLED ? `enabled/${AUTO_EMAIL_RETRY_INTERVAL_MINUTES}m` : 'disabled'}`);
-console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (â‚¹${SERVICE_PRICE} each)`);
-console.log(`  Plans:         monthly(30d), yearly(365d, â‚¹100 flat)`);
-console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+console.log(`  Services:      ${VALID_SERVICE_IDS.join(', ')} (��${SERVICE_PRICE} each)`);
+console.log(`  Plans:         monthly(30d), yearly(365d, ��100 flat)`);
+console.log('�"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�');
 console.log('');
 
 // ==================== API ROUTES ====================
@@ -853,7 +853,7 @@ app.post(
       const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
       const serviceNames = uniqueServices.map(s => PAID_SERVICES[s].name).join(', ');
-      console.log(`ðŸ“ New payment: ${emailLower} | â‚¹${amount} | ${orderId} | Plan: ${plan.id} | Services: ${serviceNames}`);
+      console.log(`�x� New payment: ${emailLower} | ��${amount} | ${orderId} | Plan: ${plan.id} | Services: ${serviceNames}`);
 
       // Create order in database with services
       await db.createOrder({
@@ -902,7 +902,7 @@ app.post(
 
         if (instamojoResponse.data.success) {
           const paymentLink = instamojoResponse.data.payment_request;
-          console.log(`âœ… Payment link created: ${paymentLink.id}`);
+          console.log(`�S& Payment link created: ${paymentLink.id}`);
 
           await db.updateOrder(orderId, {
             payment_request_id: paymentLink.id,
@@ -924,7 +924,7 @@ app.post(
           throw new Error(instamojoResponse.data.message || 'Failed to create payment link');
         }
       } catch (error) {
-        console.error('âŒ Instamojo error:', error.response?.data || error.message);
+        console.error('�R Instamojo error:', error.response?.data || error.message);
         await db.updateOrder(orderId, { status: 'FAILED' });
 
         let errorMessage = 'Failed to create payment link';
@@ -952,21 +952,21 @@ app.post(
         });
       }
     } catch (error) {
-      console.error('âŒ Error in create-payment:', error.message);
+      console.error('�R Error in create-payment:', error.message);
       res.status(500).json({ success: false, error: 'An unexpected error occurred. Please try again.' });
     }
   }
 );
 
-// Payment webhook (Instamojo) â€“ with MAC verification
+// Payment webhook (Instamojo) � with MAC verification
 app.post('/api/payment-webhook', async (req, res) => {
   try {
     const webhookData = req.body;
-    console.log('ðŸ“¥ Payment webhook received:', webhookData.payment_request_id || 'unknown');
+    console.log('�x� Payment webhook received:', webhookData.payment_request_id || 'unknown');
 
     // Verify webhook MAC signature
     if (!verifyWebhookMAC(webhookData)) {
-      console.error('âŒ Webhook MAC verification FAILED â€“ possible forgery!');
+      console.error('�R Webhook MAC verification FAILED � possible forgery!');
       await createPaymentEvent('unknown', 'WEBHOOK_REJECTED_INVALID_MAC', {
         payment_request_id: webhookData?.payment_request_id || null,
         payment_id: webhookData?.payment_id || null,
@@ -1003,12 +1003,12 @@ app.post('/api/payment-webhook', async (req, res) => {
           }
         }
       } catch (error) {
-        console.error('âŒ Error fetching payment details:', error.message);
+        console.error('�R Error fetching payment details:', error.message);
       }
     }
 
     if (!order) {
-      console.error('âŒ Order not found for payment_request_id:', payment_request_id);
+      console.error('�R Order not found for payment_request_id:', payment_request_id);
       await createPaymentEvent('unknown', 'WEBHOOK_ORDER_NOT_FOUND', {
         payment_request_id: payment_request_id || null,
         payment_id: payment_id || null,
@@ -1034,19 +1034,19 @@ app.post('/api/payment-webhook', async (req, res) => {
           const payment = paymentResponse.data.payment;
           const result = await verifyAndFulfillPayment(order, payment, payment_id);
           if (result.verified) {
-            console.log('âœ… Webhook: Payment verified and fulfilled');
+            console.log('�S& Webhook: Payment verified and fulfilled');
           } else {
-            console.log(`ðŸ“‹ Webhook: Payment status = ${result.status}`);
+            console.log(`�x9 Webhook: Payment status = ${result.status}`);
           }
         }
       } catch (error) {
-        console.error('âŒ Error checking payment status:', error.message);
+        console.error('�R Error checking payment status:', error.message);
       }
     }
 
     res.json({ success: true, message: 'Webhook processed' });
   } catch (error) {
-    console.error('âŒ Error processing webhook:', error.message);
+    console.error('�R Error processing webhook:', error.message);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -1055,7 +1055,7 @@ async function createPaymentEvent(orderId, eventType, payload = {}) {
   try {
     await db.createPaymentEvent(orderId, eventType, payload);
   } catch (error) {
-    console.error(`âš ï¸ Failed to write payment event (${eventType}):`, error.message);
+    console.error(`�a�️ Failed to write payment event (${eventType}):`, error.message);
   }
 }
 
@@ -1087,7 +1087,7 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
   }
 
   if (Math.abs(paymentAmount - expectedAmount) > 0.01) {
-    console.error(`âŒ Amount mismatch: expected ${expectedAmount}, got ${paymentAmount}`);
+    console.error(`�R Amount mismatch: expected ${expectedAmount}, got ${paymentAmount}`);
     await createPaymentEvent(orderId, 'PAYMENT_AMOUNT_MISMATCH', {
       paymentId,
       expectedAmount,
@@ -1097,7 +1097,7 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
   }
 
   if (paymentRequestId && order.payment_request_id && paymentRequestId !== order.payment_request_id) {
-    console.error('âŒ Payment request ID mismatch');
+    console.error('�R Payment request ID mismatch');
     await createPaymentEvent(orderId, 'PAYMENT_REQUEST_ID_MISMATCH', {
       paymentId,
       expectedPaymentRequestId: order.payment_request_id,
@@ -1135,7 +1135,7 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
       planDuration: plan.id,
       validityDays,
     });
-    console.log(`âœ… Access code created: ${accessCodeToSend} | Services: ${orderServices.join(', ')}`);
+    console.log(`�S& Access code created: ${accessCodeToSend} | Services: ${orderServices.join(', ')}`);
   }
 
   const orderUpdate = {
@@ -1173,8 +1173,8 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
       code: accessCodeToSend,
     });
     if (!emailSent) {
-      console.error(`âŒ CRITICAL: Email NOT sent to ${order.email} | Code: ${accessCodeToSend}`);
-      console.error('   âš ï¸  Manual intervention required!');
+      console.error(`�R CRITICAL: Email NOT sent to ${order.email} | Code: ${accessCodeToSend}`);
+      console.error('   �a�️  Manual intervention required!');
     }
   } else if (orderAlreadyFulfilled) {
     await createPaymentEvent(orderId, 'FULFILLMENT_IDEMPOTENT_REPLAY', { paymentId });
@@ -1216,7 +1216,7 @@ async function fetchGatewayPaymentForOrder(order) {
         paymentId = payment.id || payment.payment_id || paymentId;
       }
     } catch (error) {
-      console.error('âŒ Error checking payment by payment_id:', error.message);
+      console.error('�R Error checking payment by payment_id:', error.message);
     }
   }
 
@@ -1243,7 +1243,7 @@ async function fetchGatewayPaymentForOrder(order) {
         }
       }
     } catch (error) {
-      console.error('âŒ Error checking payment_request:', error.message);
+      console.error('�R Error checking payment_request:', error.message);
     }
   }
 
@@ -1328,7 +1328,7 @@ app.post(
 
       const { orderId } = req.body;
       const providedVerifyToken = (req.body.verifyToken || '').toString().trim();
-      console.log(`ðŸ” Verifying payment: ${orderId}`);
+      console.log(`�x� Verifying payment: ${orderId}`);
 
       const order = await db.getOrder(orderId);
       if (!order) {
@@ -1396,7 +1396,7 @@ app.post(
             paymentId = payment.id || payment.payment_id || paymentId;
           }
         } catch (error) {
-          console.error('âŒ Error checking payment by payment_id:', error.message);
+          console.error('�R Error checking payment by payment_id:', error.message);
         }
       }
 
@@ -1424,7 +1424,7 @@ app.post(
             }
           }
         } catch (error) {
-          console.error('âŒ Error checking payment_request:', error.message);
+          console.error('�R Error checking payment_request:', error.message);
         }
       }
 
@@ -1457,7 +1457,7 @@ app.post(
         message: order.status === 'PENDING' ? 'Payment is still being processed...' : 'Payment status unknown',
       });
     } catch (error) {
-      console.error('âŒ Error verifying payment:', error.message);
+      console.error('�R Error verifying payment:', error.message);
       res.status(500).json({ success: false, error: 'Failed to verify payment. Please try again.' });
     }
   }
@@ -1526,7 +1526,7 @@ app.post(
         validityDays,
       });
     } catch (error) {
-      console.error('âŒ Resend access code error:', error.message);
+      console.error('�R Resend access code error:', error.message);
       res.status(500).json({ success: false, message: 'Failed to resend access code.' });
     }
   }
@@ -1534,7 +1534,7 @@ app.post(
 
 // ==================== ACCESS CODE ROUTES ====================
 
-// Validate access code (for Flutter app) â€“ returns services array
+// Validate access code (for Flutter app) � returns services array
 app.post(
   '/api/validate-code',
   codeValidationLimiter,
@@ -1554,7 +1554,7 @@ app.post(
       const codeUpper = code.trim().toUpperCase();
       const emailLower = email.toLowerCase().trim();
 
-      console.log(`ðŸ” Validating code: ${codeUpper} for ${emailLower}`);
+      console.log(`�x� Validating code: ${codeUpper} for ${emailLower}`);
 
       const accessCode = await db.getCodeByCode(codeUpper);
 
@@ -1656,7 +1656,7 @@ app.post(
         sendWelcome: true,
         codeKey: codeUpper,
       });
-      console.log(`âœ… Code validated and used: ${codeUpper} by ${userAccountId}`);
+      console.log(`�S& Code validated and used: ${codeUpper} by ${userAccountId}`);
 
       const effectiveEntitlements = [...usedEntitlements, accessCode];
       const effectiveCode = resolveEffectiveEntitlement(effectiveEntitlements, nowTs) || accessCode;
@@ -1679,7 +1679,7 @@ app.post(
         services: allServices,
       });
     } catch (error) {
-      console.error('âŒ Error validating code:', error.message);
+      console.error('�R Error validating code:', error.message);
       res.status(500).json({ success: false, message: 'Failed to validate code. Please try again.' });
     }
   }
@@ -1803,7 +1803,7 @@ const checkAdminAuth = (req, res, next) => {
   if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
     next();
   } else {
-    console.warn(`âš ï¸  Failed admin login from: ${req.ip}`);
+    console.warn(`�a�️  Failed admin login from: ${req.ip}`);
     return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Invalid admin password' });
   }
 };
@@ -1820,10 +1820,10 @@ app.post('/api/admin/login', authLimiter, [
     const { password } = req.body;
     const providedHash = hashPassword(password);
     if (crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(ADMIN_PASSWORD_HASH))) {
-      console.log(`âœ… Admin login from: ${req.ip}`);
+      console.log(`�S& Admin login from: ${req.ip}`);
       res.json({ success: true, message: 'Login successful' });
     } else {
-      console.warn(`âš ï¸  Failed admin login from: ${req.ip}`);
+      console.warn(`�a�️  Failed admin login from: ${req.ip}`);
       res.status(401).json({ success: false, error: 'Invalid password' });
     }
   } catch (error) {
@@ -1863,7 +1863,7 @@ app.post(
         return res.status(400).json({ success: false, errors: errors.array() });
       }
       const emailLower = req.body.email.toLowerCase().trim();
-      console.log(`ðŸ“§ Admin resending email to: ${emailLower}`);
+      console.log(`�x� Admin resending email to: ${emailLower}`);
 
       const accessCode = await db.getCodeByEmail(emailLower);
       if (!accessCode) {
@@ -1899,7 +1899,7 @@ app.delete('/api/admin/access-codes/:code', checkAdminAuth, async (req, res) => 
     const codeUpper = req.params.code.toUpperCase();
     const result = await db.deleteAccessCode(codeUpper);
     if (result.deleted) {
-      console.log(`âœ… Admin deleted code: ${codeUpper}`);
+      console.log(`�S& Admin deleted code: ${codeUpper}`);
       res.json({ success: true, message: 'Access code deleted' });
     } else {
       res.status(404).json({ success: false, message: 'Access code not found' });
@@ -1914,7 +1914,7 @@ app.delete('/api/admin/orders/:orderId', checkAdminAuth, async (req, res) => {
   try {
     const result = await db.deleteOrder(req.params.orderId);
     if (result.deleted) {
-      console.log(`âœ… Admin deleted order: ${req.params.orderId}`);
+      console.log(`�S& Admin deleted order: ${req.params.orderId}`);
       res.json({ success: true, message: 'Order and associated codes deleted' });
     } else {
       res.status(404).json({ success: false, message: 'Order not found' });
@@ -1930,7 +1930,7 @@ app.delete('/api/admin/users/:email', checkAdminAuth, async (req, res) => {
     const emailLower = req.params.email.toLowerCase().trim();
     const result = await db.deleteUserByEmail(emailLower);
     if (result.deleted) {
-      console.log(`âœ… Admin deleted user: ${emailLower}`);
+      console.log(`�S& Admin deleted user: ${emailLower}`);
       res.json({
         success: true,
         message: 'User data deleted',
@@ -2000,7 +2000,7 @@ app.get('/api/admin/support-tickets', checkAdminAuth, async (req, res) => {
     const tickets = await db.getAllSupportTickets();
     res.json({ success: true, tickets, count: tickets.length });
   } catch (error) {
-    console.error('âŒ Admin get support tickets error:', error.message);
+    console.error('�R Admin get support tickets error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch support tickets.' });
   }
 });
@@ -2028,7 +2028,7 @@ app.put('/api/admin/support-tickets/:id', checkAdminAuth, async (req, res) => {
     await db.updateSupportTicket(id, updates);
     res.json({ success: true, message: 'Ticket updated.' });
   } catch (error) {
-    console.error('âŒ Admin update support ticket error:', error.message);
+    console.error('�R Admin update support ticket error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update support ticket.' });
   }
 });
@@ -2074,7 +2074,7 @@ app.post('/api/admin/refunds/:orderId', checkAdminAuth, [
 
     res.json({ success: true, message: `Refund status set to ${status}.`, orderId, refundStatus: status });
   } catch (error) {
-    console.error('âŒ Admin update refund error:', error.message);
+    console.error('�R Admin update refund error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update refund status.' });
   }
 });
@@ -2085,7 +2085,7 @@ app.post('/api/admin/reconcile-payments', checkAdminAuth, async (req, res) => {
     const report = await runPaymentReconciliation({ source: 'admin_api' });
     res.json({ success: true, report });
   } catch (error) {
-    console.error('âŒ Reconcile payments error:', error.message);
+    console.error('�R Reconcile payments error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to reconcile payments.' });
   }
 });
@@ -2140,7 +2140,7 @@ app.delete('/api/admin/bundles/:bundleId', checkAdminAuth, async (req, res) => {
       return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
     }
     await admin.database().ref(`bundles/${req.params.bundleId}`).remove();
-    console.log(`âœ… Admin deleted bundle: ${req.params.bundleId}`);
+    console.log(`�S& Admin deleted bundle: ${req.params.bundleId}`);
     res.json({ success: true, message: 'Bundle and all its topics deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2153,7 +2153,7 @@ app.delete('/api/admin/bundles/:bundleId/topics/:topicId', checkAdminAuth, async
       return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
     }
     await admin.database().ref(`bundles/${req.params.bundleId}/topics/${req.params.topicId}`).remove();
-    console.log(`âœ… Admin deleted topic: ${req.params.topicId} from bundle: ${req.params.bundleId}`);
+    console.log(`�S& Admin deleted topic: ${req.params.topicId} from bundle: ${req.params.bundleId}`);
     res.json({ success: true, message: 'Topic deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2238,10 +2238,10 @@ app.post('/api/admin/deletion-requests/:requestId/approve', checkAdminAuth, asyn
           system_generated: true,
         });
       } else {
-        console.warn(`âš ï¸ Skipped deletion approval mail for ${requestId}: requester email missing`);
+        console.warn(`�a�️ Skipped deletion approval mail for ${requestId}: requester email missing`);
       }
     } catch (mailError) {
-      console.error('âš ï¸ Failed to send deletion approval mail:', mailError.message);
+      console.error('�a�️ Failed to send deletion approval mail:', mailError.message);
     }
     res.json({ success: true, message: 'Deletion request approved and applied.', request: { id: requestId, ...updated } });
   } catch (error) {
@@ -2294,10 +2294,10 @@ app.post('/api/admin/deletion-requests/:requestId/reject', checkAdminAuth, async
           system_generated: true,
         });
       } else {
-        console.warn(`âš ï¸ Skipped deletion rejection mail for ${requestId}: requester email missing`);
+        console.warn(`�a�️ Skipped deletion rejection mail for ${requestId}: requester email missing`);
       }
     } catch (mailError) {
-      console.error('âš ï¸ Failed to send deletion rejection mail:', mailError.message);
+      console.error('�a�️ Failed to send deletion rejection mail:', mailError.message);
     }
     res.json({ success: true, message: 'Deletion request rejected.', request: { id: requestId, ...updated } });
   } catch (error) {
@@ -2413,7 +2413,7 @@ app.post('/api/request-deletion',
       requestId,
     });
   } catch (error) {
-    console.error('âŒ Request deletion error:', error.message);
+    console.error('�R Request deletion error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to send deletion request.' });
   }
 });
@@ -2573,7 +2573,7 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
       });
     }
   } catch (error) {
-    console.error('âš ï¸ Automated mail check failed:', error.message);
+    console.error('�a�️ Automated mail check failed:', error.message);
   }
 }
 
@@ -2597,12 +2597,12 @@ async function verifyGoogleAuth(req) {
     }
     return null;
   } catch (error) {
-    console.error('âŒ Google auth failed:', error.response?.status || error.message);
+    console.error('�R Google auth failed:', error.response?.status || error.message);
     return null;
   }
 }
 
-// Server auth middleware â€“ now also checks service permissions
+// Server auth middleware � now also checks service permissions
 async function requireServerAuth(req, res, next) {
   const fbReady = await waitForFirebaseReady(15000);
   if (!fbReady) {
@@ -2661,7 +2661,7 @@ async function requireServerAuth(req, res, next) {
     req.userServices = accessCode.services || VALID_SERVICE_IDS; // Backward compat
     next();
   } catch (error) {
-    console.error('âŒ Auth check error:', error.message);
+    console.error('�R Auth check error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error during authorization.' });
   }
 }
@@ -2681,7 +2681,7 @@ function requireService(serviceId) {
   };
 }
 
-// Send ring notification â€“ requires 'ring' service
+// Send ring notification � requires 'ring' service
 app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring'), async (req, res) => {
   try {
     const { fcmTopicName, bundleName, topicName, ringType } = req.body;
@@ -2694,7 +2694,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 
     const ringTypeValue = ringType || 'wet';
     const ringTypeLabel = getRingTypeLabel(ringTypeValue);
-    console.log(`ðŸ“¤ Ring: ${bundleName}/${topicName} (${ringTypeValue}) by ${req.userEmail}`);
+    console.log(`�x� Ring: ${bundleName}/${topicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
       topic: fcmTopicName,
@@ -2727,22 +2727,22 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const result = await admin.messaging().send(message);
-        console.log(`âœ… Ring sent: ${result}`);
+        console.log(`�S& Ring sent: ${result}`);
         return res.json({ success: true, messageId: result });
       } catch (error) {
-        console.error(`âŒ Ring failed (${attempt}/2):`, error.code || error.message);
+        console.error(`�R Ring failed (${attempt}/2):`, error.code || error.message);
         if (attempt < 2) await new Promise(r => setTimeout(r, 500));
       }
     }
 
     res.status(500).json({ success: false, message: 'Failed to send ring notification' });
   } catch (error) {
-    console.error('âŒ Error in send-ring:', error.message);
+    console.error('�R Error in send-ring:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Send message notification â€“ requires 'message' OR 'broadcast' depending on mode
+// Send message notification � requires 'message' OR 'broadcast' depending on mode
 app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) => {
   try {
     const {
@@ -2781,7 +2781,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) =>
       });
     }
 
-    console.log(`ðŸ“¤ Message to "${bundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
+    console.log(`�x� Message to "${bundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
 
     const dataPayload = {
       type: 'message',
@@ -2837,12 +2837,12 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) =>
               messageIds.push(resp.messageId);
             } else {
               failCount++;
-              console.error(`  âŒ Topic "${topicNames[idx]}" failed:`, resp.error?.code || resp.error?.message);
+              console.error(`  �R Topic "${topicNames[idx]}" failed:`, resp.error?.code || resp.error?.message);
             }
           });
         }
 
-        console.log(`âœ… Message sent: ${successCount}/${topicNames.length}`);
+        console.log(`�S& Message sent: ${successCount}/${topicNames.length}`);
         return res.json({
           success: successCount > 0,
           messageIds,
@@ -2851,14 +2851,14 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) =>
           total: topicNames.length,
         });
       } catch (error) {
-        console.error(`âŒ Message failed (${attempt}/2):`, error.code || error.message);
+        console.error(`�R Message failed (${attempt}/2):`, error.code || error.message);
         if (attempt < 2) await new Promise(r => setTimeout(r, 500));
       }
     }
 
     res.status(500).json({ success: false, message: 'Failed to send message notification' });
   } catch (error) {
-    console.error('âŒ Error in send-message:', error.message);
+    console.error('�R Error in send-message:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -2877,10 +2877,10 @@ setInterval(async () => {
       }
     }
     if (expiredCount > 0) {
-      console.log(`â° Expired ${expiredCount} stale PENDING order(s)`);
+      console.log(`⏰ Expired ${expiredCount} stale PENDING order(s)`);
     }
   } catch (err) {
-    // Silent fail â€“ cleanup is best-effort
+    // Silent fail � cleanup is best-effort
   }
 }, 15 * 60 * 1000);
 
@@ -2894,10 +2894,10 @@ async function runScheduledPaymentReconciliation() {
     if (!lockOwner) return;
     const report = await runPaymentReconciliation({ source: 'scheduler' });
     if (report.recovered > 0 || report.failed > 0) {
-      console.log(`ðŸ” Reconciliation: scanned=${report.scanned}, recovered=${report.recovered}, failed=${report.failed}`);
+      console.log(`�x� Reconciliation: scanned=${report.scanned}, recovered=${report.recovered}, failed=${report.failed}`);
     }
   } catch (error) {
-    console.error('âš ï¸ Scheduled payment reconciliation failed:', error.message);
+    console.error('�a�️ Scheduled payment reconciliation failed:', error.message);
   } finally {
     if (lockOwner) await db.releaseLock('job:payment-reconcile', lockOwner);
     paymentReconciliationRunning = false;
@@ -2951,10 +2951,10 @@ async function runCodeEmailRetryScan() {
     }
 
     if (retried > 0) {
-      console.log(`ðŸ“§ Email retry scan: retried=${retried}, sent=${sent}, failed=${failed}`);
+      console.log(`�x� Email retry scan: retried=${retried}, sent=${sent}, failed=${failed}`);
     }
   } catch (error) {
-    console.error('âš ï¸ Scheduled email retry scan failed:', error.message);
+    console.error('�a�️ Scheduled email retry scan failed:', error.message);
   } finally {
     if (lockOwner) await db.releaseLock('job:email-retry', lockOwner);
     codeEmailRetryRunning = false;
@@ -2980,7 +2980,7 @@ async function runAutomatedAccessCodeMailScan() {
       });
     }
   } catch (error) {
-    console.error('âš ï¸ Automated access-code scan failed:', error.message);
+    console.error('�a�️ Automated access-code scan failed:', error.message);
   } finally {
     if (lockOwner) await db.releaseLock('job:automated-mail-scan', lockOwner);
     automatedMailScanRunning = false;
@@ -3036,7 +3036,7 @@ app.post('/api/client-welcome', requireAnyAuth, async (req, res) => {
     await flagRef.set(new Date().toISOString());
     return res.json({ success: true, created: false, message: 'Client welcome mail is disabled.' });
   } catch (error) {
-    console.error('âŒ Client welcome mail error:', error.message);
+    console.error('�R Client welcome mail error:', error.message);
     return res.status(500).json({ success: false, message: 'Failed to create client welcome mail.' });
   }
 });
@@ -3076,10 +3076,10 @@ app.post(
         category: req.body.category || 'general',
         status: 'open',
       });
-      console.log(`ðŸŽ« Support ticket created: ${ticketId} (${email})`);
+      console.log(`�x}� Support ticket created: ${ticketId} (${email})`);
       res.json({ success: true, ticketId, message: 'Support ticket created.' });
     } catch (error) {
-      console.error('âŒ Create support ticket error:', error.message);
+      console.error('�R Create support ticket error:', error.message);
       res.status(500).json({ success: false, message: 'Failed to create support ticket.' });
     }
   }
@@ -3133,7 +3133,7 @@ app.post(
         refund_ticket_id: ticketId,
       });
       await createPaymentEvent(orderId, 'REFUND_REQUESTED', { email, reason, ticketId });
-      console.log(`ðŸ’¸ Refund requested: ${orderId} (${email})`);
+      console.log(`�x� Refund requested: ${orderId} (${email})`);
 
       res.json({
         success: true,
@@ -3142,7 +3142,7 @@ app.post(
         ticketId,
       });
     } catch (error) {
-      console.error('âŒ Refund request error:', error.message);
+      console.error('�R Refund request error:', error.message);
       res.status(500).json({ success: false, message: 'Failed to submit refund request.' });
     }
   }
@@ -3155,7 +3155,7 @@ app.get('/api/my-support-tickets', requireAnyAuth, async (req, res) => {
     const tickets = await db.getSupportTicketsByEmail(email);
     res.json({ success: true, tickets, count: tickets.length });
   } catch (error) {
-    console.error('âŒ Get my support tickets error:', error.message);
+    console.error('�R Get my support tickets error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch tickets.' });
   }
 });
@@ -3181,7 +3181,7 @@ app.post('/api/polls', fcmLimiter, requireAnyAuth, [
     } else if (duration_type === '1week') {
       expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     } else {
-      // custom â€” client sends expires_at
+      // custom � client sends expires_at
       if (!expires_at) {
         return res.status(400).json({ success: false, message: 'Custom expiry date required.' });
       }
@@ -3203,11 +3203,11 @@ app.post('/api/polls', fcmLimiter, requireAnyAuth, [
       anonymous: anonymous === true,
     });
 
-    console.log(`ðŸ“Š Poll created by ${req.userEmail}: "${question.trim()}" (${formattedOptions.length} options, ${duration_type})`);
+    console.log(`[poll] Poll created by ${req.userEmail}: "${question.trim()}" (${formattedOptions.length} options, ${duration_type})`);
 
     res.json({ success: true, pollId, message: 'Poll created successfully.' });
   } catch (error) {
-    console.error('âŒ Create poll error:', error.message);
+    console.error('�R Create poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to create poll.' });
   }
 });
@@ -3246,7 +3246,7 @@ app.get('/api/polls', requireAnyAuth, async (req, res) => {
 
     res.json({ success: true, polls });
   } catch (error) {
-    console.error('âŒ Get polls error:', error.message);
+    console.error('�R Get polls error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch polls.' });
   }
 });
@@ -3308,10 +3308,10 @@ app.post('/api/polls/:id/vote', fcmLimiter, requireAnyAuth, async (req, res) => 
       updated.total_votes = 0;
     }
 
-    console.log(`ðŸ—³ï¸ Vote on "${poll.question}" by ${req.userEmail}: option ${optionId}`);
+    console.log(`�x�️ Vote on "${poll.question}" by ${req.userEmail}: option ${optionId}`);
     res.json({ success: true, message: 'Vote recorded!', poll: updated });
   } catch (error) {
-    console.error('âŒ Vote error:', error.message);
+    console.error('�R Vote error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to record vote.' });
   }
 });
@@ -3331,10 +3331,10 @@ app.post('/api/polls/:id/publish', requireAnyAuth, async (req, res) => {
     }
 
     await db.updatePoll(id, { publish_results: publish === true });
-    console.log(`ðŸ“Š Poll "${poll.question}" results ${publish ? 'published' : 'unpublished'} by ${req.userEmail}`);
+    console.log(`[poll] Poll "${poll.question}" results ${publish ? 'published' : 'unpublished'} by ${req.userEmail}`);
     res.json({ success: true, message: publish ? 'Results published.' : 'Results unpublished.' });
   } catch (error) {
-    console.error('âŒ Publish poll error:', error.message);
+    console.error('�R Publish poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update poll.' });
   }
 });
@@ -3352,10 +3352,10 @@ app.post('/api/polls/:id/close', requireAnyAuth, async (req, res) => {
     }
 
     await db.updatePoll(id, { status: 'closed' });
-    console.log(`ðŸ“Š Poll "${poll.question}" closed early by ${req.userEmail}`);
+    console.log(`[poll] Poll "${poll.question}" closed early by ${req.userEmail}`);
     res.json({ success: true, message: 'Poll closed.' });
   } catch (error) {
-    console.error('âŒ Close poll error:', error.message);
+    console.error('�R Close poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to close poll.' });
   }
 });
@@ -3373,10 +3373,10 @@ app.delete('/api/polls/:id', requireAnyAuth, async (req, res) => {
     }
 
     await db.deletePoll(id);
-    console.log(`ðŸ—‘ï¸ Poll "${poll.question}" deleted by ${req.userEmail}`);
+    console.log(`�x️ Poll "${poll.question}" deleted by ${req.userEmail}`);
     res.json({ success: true, message: 'Poll deleted.' });
   } catch (error) {
-    console.error('âŒ Delete poll error:', error.message);
+    console.error('�R Delete poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete poll.' });
   }
 });
@@ -3397,7 +3397,7 @@ app.get('/api/admin/polls', checkAdminAuth, async (req, res) => {
     }
     res.json({ success: true, polls });
   } catch (error) {
-    console.error('âŒ Admin get polls error:', error.message);
+    console.error('�R Admin get polls error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch polls.' });
   }
 });
@@ -3443,10 +3443,10 @@ app.post('/api/admin/polls', checkAdminAuth, [
       anonymous: anonymous === true,
     });
 
-    console.log(`ðŸ“Š Admin created poll: "${question.trim()}" (${pollId})`);
+    console.log(`[poll] Admin created poll: "${question.trim()}" (${pollId})`);
     res.json({ success: true, pollId, message: 'Poll created successfully.' });
   } catch (error) {
-    console.error('âŒ Admin create poll error:', error.message);
+    console.error('�R Admin create poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to create poll.' });
   }
 });
@@ -3474,7 +3474,7 @@ app.put('/api/admin/polls/:id', checkAdminAuth, async (req, res) => {
     await db.updatePoll(id, updates);
     res.json({ success: true, message: 'Poll updated successfully.' });
   } catch (error) {
-    console.error('âŒ Admin update poll error:', error.message);
+    console.error('�R Admin update poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update poll.' });
   }
 });
@@ -3489,7 +3489,7 @@ app.delete('/api/admin/polls/:id', checkAdminAuth, async (req, res) => {
     }
     res.json({ success: true, message: 'Poll deleted successfully.' });
   } catch (error) {
-    console.error('âŒ Admin delete poll error:', error.message);
+    console.error('�R Admin delete poll error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete poll.' });
   }
 });
@@ -3508,10 +3508,10 @@ app.post('/api/admin/dev-mails', checkAdminAuth, [
   try {
     const { title, body: mailBody, pinned } = req.body;
     const mailId = await db.createDevMail({ title, body: mailBody, pinned });
-    console.log(`ðŸ“§ Admin created dev mail: "${title}" (${mailId})`);
+    console.log(`�x� Admin created dev mail: "${title}" (${mailId})`);
     res.json({ success: true, mailId });
   } catch (error) {
-    console.error('âŒ Create dev mail error:', error.message);
+    console.error('�R Create dev mail error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to create mail.' });
   }
 });
@@ -3536,10 +3536,10 @@ app.put('/api/admin/dev-mails/:id', checkAdminAuth, async (req, res) => {
     if (mailBody !== undefined) updates.body = mailBody;
     if (pinned !== undefined) updates.pinned = pinned;
     await db.updateDevMail(id, updates);
-    console.log(`ðŸ“§ Admin updated dev mail: ${id}`);
+    console.log(`�x� Admin updated dev mail: ${id}`);
     res.json({ success: true, message: 'Mail updated.' });
   } catch (error) {
-    console.error('âŒ Update dev mail error:', error.message);
+    console.error('�R Update dev mail error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update mail.' });
   }
 });
@@ -3549,13 +3549,13 @@ app.delete('/api/admin/dev-mails/:id', checkAdminAuth, async (req, res) => {
   try {
     const result = await db.deleteDevMail(req.params.id);
     if (result.deleted) {
-      console.log(`ðŸ—‘ï¸ Admin deleted dev mail: ${req.params.id}`);
+      console.log(`�x️ Admin deleted dev mail: ${req.params.id}`);
       res.json({ success: true, message: 'Mail deleted.' });
     } else {
       res.status(404).json({ success: false, message: 'Mail not found.' });
     }
   } catch (error) {
-    console.error('âŒ Delete dev mail error:', error.message);
+    console.error('�R Delete dev mail error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete mail.' });
   }
 });
@@ -3575,7 +3575,7 @@ app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
     });
     res.json({ success: true, mails: visibleMails });
   } catch (error) {
-    console.error('âŒ Get dev mails error:', error.message);
+    console.error('�R Get dev mails error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch mails.' });
   }
 });
@@ -3589,7 +3589,7 @@ app.use('/api/*', (req, res) => {
 // ==================== ERROR HANDLER ====================
 
 app.use((err, req, res, next) => {
-  console.error('âŒ Unhandled error:', err.message);
+  console.error('�R Unhandled error:', err.message);
   res.status(500).json({
     success: false,
     error: IS_PROD ? 'An unexpected error occurred' : err.message,
@@ -3601,8 +3601,8 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, () => {
   console.log('');
-  console.log(`ðŸš€ Tlangau Server running on port ${PORT}`);
-  console.log(`ðŸŒ http://localhost:${PORT}`);
+  console.log(`�xa� Tlangau Server running on port ${PORT}`);
+  console.log(`�xR� http://localhost:${PORT}`);
   console.log('');
 });
 
@@ -3610,11 +3610,11 @@ const server = app.listen(PORT, () => {
 function gracefulShutdown(signal) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   server.close(() => {
-    console.log('âœ… Server closed');
+    console.log('�S& Server closed');
     process.exit(0);
   });
   setTimeout(() => {
-    console.error('âš ï¸  Forced shutdown after timeout');
+    console.error('�a�️  Forced shutdown after timeout');
     process.exit(1);
   }, 10000);
 }
@@ -3623,11 +3623,11 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (err) => {
-  console.error('âŒ Uncaught Exception:', err.message);
+  console.error('�R Uncaught Exception:', err.message);
   server.close(() => process.exit(1));
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('âŒ Unhandled Rejection:', reason);
+  console.error('�R Unhandled Rejection:', reason);
 });
 

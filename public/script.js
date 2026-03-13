@@ -1,4 +1,4 @@
-﻿// ==================== SMOOTH SCROLLING ====================
+// ==================== SMOOTH SCROLLING ====================
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -11,7 +11,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // ==================== SERVICE SELECTION ====================
 
-const SERVICE_PRICE = 10; // â‚¹10 per service (monthly plan)
+const SERVICE_PRICE = 10; // Rs 10 per service (monthly plan)
 const YEARLY_FLAT_PRICE = 100; // Rs 100 flat
 const SERVICE_NAMES = {
     ring: 'Bawlhhlawh paih tur hriattirna',
@@ -60,10 +60,10 @@ function updateOrderSummary() {
         } else {
             const linePrice = planDuration === 'yearly'
                 ? `Included in yearly plan`
-                : `â‚¹${SERVICE_PRICE}.00`;
+                : `₹${SERVICE_PRICE}.00`;
             lineItemsEl.innerHTML = selected.map(s => `
                 <div class="summary-item summary-line-item">
-                    <span>â€¢ ${SERVICE_NAMES[s] || s}</span>
+                    <span>• ${SERVICE_NAMES[s] || s}</span>
                     <span>${linePrice}</span>
                 </div>
             `).join('');
@@ -83,7 +83,7 @@ function updateOrderSummary() {
 
     // Update total
     const totalEl = document.getElementById('totalAmount');
-    if (totalEl) totalEl.textContent = `â‚¹${total}.00`;
+    if (totalEl) totalEl.textContent = `₹${total}.00`;
 
     // Update button
     const paymentBtn = document.getElementById('paymentBtn');
@@ -99,7 +99,7 @@ function updateOrderSummary() {
             : 'Proceed to Payment';
     }
     if (btnAmount) {
-        btnAmount.textContent = `â‚¹${total}`;
+        btnAmount.textContent = `₹${total}`;
     }
 
     // Hide error
@@ -116,7 +116,7 @@ function updateOrderSummary() {
             ? 'Deselect All'
             : (planDuration === 'yearly'
                 ? 'Select All (included in yearly)'
-                : `Select All (â‚¹${allServices.length * SERVICE_PRICE})`);
+                : `Select All (₹${allServices.length * SERVICE_PRICE})`);
     }
 }
 
