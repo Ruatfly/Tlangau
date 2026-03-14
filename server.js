@@ -2703,6 +2703,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         ringType: ringTypeValue,
         priority: 'high',
         timestamp: Date.now().toString(),
+        fcmTopicName,
         bundleName,
         topicName,
       },
@@ -2783,28 +2784,32 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) =>
 
     console.log(`�x� Message to "${bundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
 
-    const dataPayload = {
+    const baseDataPayload = {
       type: 'message',
       messageText,
       priority: 'high',
       timestamp: Date.now().toString(),
       bundleName,
-      topicName: bundleName,
     };
-    if (attachmentUrl) dataPayload.attachmentUrl = attachmentUrl;
-    if (locationLatitude) dataPayload.locationLatitude = locationLatitude;
-    if (locationLongitude) dataPayload.locationLongitude = locationLongitude;
-    if (documentUrl) dataPayload.documentUrl = documentUrl;
-    if (documentName) dataPayload.documentName = documentName;
-    if (locationAddress) dataPayload.locationAddress = locationAddress;
-    if (audioUrl) dataPayload.audioUrl = audioUrl;
-    if (audioDuration) dataPayload.audioDuration = audioDuration.toString();
+    if (attachmentUrl) baseDataPayload.attachmentUrl = attachmentUrl;
+    if (locationLatitude) baseDataPayload.locationLatitude = locationLatitude;
+    if (locationLongitude) baseDataPayload.locationLongitude = locationLongitude;
+    if (documentUrl) baseDataPayload.documentUrl = documentUrl;
+    if (documentName) baseDataPayload.documentName = documentName;
+    if (locationAddress) baseDataPayload.locationAddress = locationAddress;
+    if (audioUrl) baseDataPayload.audioUrl = audioUrl;
+    if (audioDuration) baseDataPayload.audioDuration = audioDuration.toString();
 
     const previewText = messageText.length > 100 ? messageText.substring(0, 97) + '...' : messageText;
 
     const messages = topicNames.map(topic => ({
       topic,
-      data: { ...dataPayload },
+      data: {
+        ...baseDataPayload,
+        fcmTopicName: topic,
+        // Use explicit UI topic label when provided for single-target sends.
+        topicName: (topicNames.length === 1 && req.body.topicName) ? String(req.body.topicName) : topic,
+      },
       android: { priority: 'high', ttl: 2419200000 },
       apns: {
         headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
