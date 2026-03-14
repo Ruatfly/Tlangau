@@ -3565,7 +3565,12 @@ app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
   try {
     const mails = await db.getAllDevMails();
     const userEmail = normalizeEmail(req.userEmail);
+    const safeKey = toSafeEmailKey(userEmail);
+    const dismissedSnap = await admin.database().ref(`user_flags/${safeKey}/dev_mail_dismissed_ids`).once('value');
+    const dismissedMap = dismissedSnap.val() || {};
+    const dismissedIds = new Set(Object.keys(dismissedMap).filter((id) => dismissedMap[id]));
     const visibleMails = mails.filter((mail) => {
+      if (dismissedIds.has(mail.id)) return false;
       const targetEmail = normalizeEmail(mail.target_email);
       if ((mail.category || '') === 'deletion_request') {
         // Deletion decision mails are private by design; never broadcast them.
@@ -3577,6 +3582,40 @@ app.get('/api/dev-mails', requireAnyAuth, async (req, res) => {
   } catch (error) {
     console.error('�R Get dev mails error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch mails.' });
+  }
+});
+
+// User: dismiss a dev mail for this account (persists across reinstall/login)
+app.post('/api/dev-mails/:id/dismiss', requireAnyAuth, async (req, res) => {
+  try {
+    const userEmail = normalizeEmail(req.userEmail);
+    const mailId = String(req.params.id || '').trim();
+    if (!userEmail || !mailId) {
+      return res.status(400).json({ success: false, message: 'Invalid request.' });
+    }
+    const safeKey = toSafeEmailKey(userEmail);
+    await admin.database().ref(`user_flags/${safeKey}/dev_mail_dismissed_ids/${mailId}`).set(true);
+    return res.json({ success: true, dismissed: true, mailId });
+  } catch (error) {
+    console.error('�R Dismiss dev mail error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to dismiss mail.' });
+  }
+});
+
+// User: undo a dismissed dev mail for this account
+app.delete('/api/dev-mails/:id/dismiss', requireAnyAuth, async (req, res) => {
+  try {
+    const userEmail = normalizeEmail(req.userEmail);
+    const mailId = String(req.params.id || '').trim();
+    if (!userEmail || !mailId) {
+      return res.status(400).json({ success: false, message: 'Invalid request.' });
+    }
+    const safeKey = toSafeEmailKey(userEmail);
+    await admin.database().ref(`user_flags/${safeKey}/dev_mail_dismissed_ids/${mailId}`).remove();
+    return res.json({ success: true, dismissed: false, mailId });
+  } catch (error) {
+    console.error('�R Undo dismiss dev mail error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to undo mail dismissal.' });
   }
 });
 
