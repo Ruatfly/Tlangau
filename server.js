@@ -2699,6 +2699,32 @@ function requireService(serviceId) {
   };
 }
 
+// Service gate for /send-message:
+// - broadcast mode requires 'broadcast'
+// - normal mode requires 'message'
+function requireMessageRouteService(req, res, next) {
+  const userServices = req.userServices || [];
+  const { isBroadcast } = req.body || {};
+
+  if (isBroadcast) {
+    if (!userServices.includes('broadcast')) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to the Broadcast Message service. Please purchase this service to use it.',
+        requiredService: 'broadcast',
+      });
+    }
+  } else if (!userServices.includes('message')) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have access to the Message Notification service. Please purchase this service to use it.',
+      requiredService: 'message',
+    });
+  }
+
+  next();
+}
+
 // Send ring notification � requires 'ring' service
 app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring'), async (req, res) => {
   try {
@@ -2762,7 +2788,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 });
 
 // Send message notification � requires 'message' OR 'broadcast' depending on mode
-app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) => {
+app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRouteService, async (req, res) => {
   try {
     const {
       fcmTopicName, fcmTopicNames, bundleName, messageText,
@@ -2770,27 +2796,6 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, async (req, res) =>
       documentUrl, documentName, audioUrl, audioDuration,
       isBroadcast,
     } = req.body;
-
-    const userServices = req.userServices || [];
-
-    // Service gate: broadcast mode needs 'broadcast', normal mode needs 'message'
-    if (isBroadcast) {
-      if (!userServices.includes('broadcast')) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have access to the Broadcast Message service. Please purchase this service to use it.',
-          requiredService: 'broadcast',
-        });
-      }
-    } else {
-      if (!userServices.includes('message')) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have access to the Message Notification service. Please purchase this service to use it.',
-          requiredService: 'message',
-        });
-      }
-    }
 
     const topicNames = fcmTopicNames || (fcmTopicName ? [fcmTopicName] : []);
     if (topicNames.length === 0 || !bundleName || !messageText) {
