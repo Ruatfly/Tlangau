@@ -557,6 +557,21 @@ function resolveEffectiveEntitlement(codes, nowTs = Date.now()) {
   return activeCodes[0];
 }
 
+// For UI countdown/visibility, show the full stacked access end date
+// across all redeemed entitlements for the identity.
+function getLatestEntitlementExpiry(codes) {
+  if (!Array.isArray(codes) || codes.length === 0) return null;
+  let maxExpiryTs = null;
+  for (const code of codes) {
+    const expiryTs = toTimestamp(code?.expiresAt || code?.expires_at);
+    if (expiryTs === null) continue;
+    if (maxExpiryTs === null || expiryTs > maxExpiryTs) {
+      maxExpiryTs = expiryTs;
+    }
+  }
+  return maxExpiryTs === null ? null : new Date(maxExpiryTs).toISOString();
+}
+
 // Build email HTML with service info
 function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
@@ -1612,6 +1627,7 @@ app.post(
         const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
         const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
         const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
+        const stackedRawExpiry = getLatestEntitlementExpiry(usedEntitlements) || effectiveRawExpiry;
         accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
 
         return res.json({
@@ -1619,10 +1635,10 @@ app.post(
           valid: true,
           message: 'Access restored using your existing entitlement.',
           code: effectiveCode.code || codeUpper,
-          expiresAt: getGraceWindowEnd(effectiveRawExpiry),
-          accessExpiryAt: effectiveRawExpiry,
+          expiresAt: getGraceWindowEnd(stackedRawExpiry),
+          accessExpiryAt: stackedRawExpiry,
           gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-          graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
+          graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
           services: allServices,
         });
       }
@@ -1665,6 +1681,7 @@ app.post(
       // Always include free services
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
       const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
+      const stackedRawExpiry = getLatestEntitlementExpiry(effectiveEntitlements) || effectiveRawExpiry;
       accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
 
       res.json({
@@ -1672,10 +1689,10 @@ app.post(
         valid: true,
         message: 'Access code is valid',
         code: effectiveCode.code || codeUpper,
-        expiresAt: getGraceWindowEnd(effectiveRawExpiry),
-        accessExpiryAt: effectiveRawExpiry,
+        expiresAt: getGraceWindowEnd(stackedRawExpiry),
+        accessExpiryAt: stackedRawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-        graceEndsAt: getGraceWindowEnd(effectiveRawExpiry),
+        graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
         services: allServices,
       });
     } catch (error) {
@@ -1759,6 +1776,7 @@ app.post(
       const codeServices = accessCode.services || VALID_SERVICE_IDS;
       const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
       const rawExpiry = accessCode.expiresAt || accessCode.expires_at;
+      const stackedRawExpiry = getLatestEntitlementExpiry(usedEntitlements) || rawExpiry;
       const accessStillValid = isWithinAccessWindow(rawExpiry);
       await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
         sendWelcome: false,
@@ -1769,10 +1787,10 @@ app.post(
       res.json({
         success: true,
         code: accessCode.code,
-        expiresAt: getGraceWindowEnd(rawExpiry),
-        accessExpiryAt: rawExpiry,
+        expiresAt: getGraceWindowEnd(stackedRawExpiry),
+        accessExpiryAt: stackedRawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
-        graceEndsAt: getGraceWindowEnd(rawExpiry),
+        graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
         used: accessCode.used,
         services: allServices,
         planDuration: accessCode.plan_duration || 'monthly',
