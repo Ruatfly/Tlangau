@@ -2704,7 +2704,12 @@ function requireService(serviceId) {
 // - normal mode requires 'message'
 function requireMessageRouteService(req, res, next) {
   const userServices = req.userServices || [];
-  const { isBroadcast } = req.body || {};
+  const rawIsBroadcast = req.body?.isBroadcast;
+  const isBroadcast =
+    rawIsBroadcast === true ||
+    rawIsBroadcast === 'true' ||
+    rawIsBroadcast === 1 ||
+    rawIsBroadcast === '1';
 
   if (isBroadcast) {
     if (!userServices.includes('broadcast')) {
@@ -2729,7 +2734,10 @@ function requireMessageRouteService(req, res, next) {
 app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring'), async (req, res) => {
   try {
     const { fcmTopicName, bundleName, topicName, ringType } = req.body;
-    if (!fcmTopicName || !bundleName || !topicName) {
+    const normalizedFcmTopicName = String(fcmTopicName || '').trim();
+    const normalizedBundleName = String(bundleName || '').trim();
+    const normalizedTopicName = String(topicName || '').trim();
+    if (!normalizedFcmTopicName || !normalizedBundleName || !normalizedTopicName) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: fcmTopicName, bundleName, topicName',
@@ -2738,18 +2746,18 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 
     const ringTypeValue = ringType || 'wet';
     const ringTypeLabel = getRingTypeLabel(ringTypeValue);
-    console.log(`�x� Ring: ${bundleName}/${topicName} (${ringTypeValue}) by ${req.userEmail}`);
+    console.log(`�x� Ring: ${normalizedBundleName}/${normalizedTopicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
-      topic: fcmTopicName,
+      topic: normalizedFcmTopicName,
       data: {
         type: 'ring',
         ringType: ringTypeValue,
         priority: 'high',
         timestamp: Date.now().toString(),
-        fcmTopicName,
-        bundleName,
-        topicName,
+        fcmTopicName: normalizedFcmTopicName,
+        bundleName: normalizedBundleName,
+        topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
       apns: {
@@ -2757,8 +2765,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         payload: {
           aps: {
             alert: {
-              title: `Ring Alert: ${bundleName}`,
-              body: `${topicName} - ${ringTypeLabel}`,
+              title: `Ring Alert: ${normalizedBundleName}`,
+              body: `${normalizedTopicName} - ${ringTypeLabel}`,
             },
             sound: 'default',
             'content-available': 1,
@@ -2797,22 +2805,32 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
       isBroadcast,
     } = req.body;
 
-    const topicNames = fcmTopicNames || (fcmTopicName ? [fcmTopicName] : []);
-    if (topicNames.length === 0 || !bundleName || !messageText) {
+    const normalizedTopicNames = Array.isArray(fcmTopicNames)
+      ? fcmTopicNames
+      : (fcmTopicName ? [fcmTopicName] : []);
+    const topicNames = [...new Set(
+      normalizedTopicNames
+        .map((t) => String(t || '').trim())
+        .filter(Boolean)
+    )];
+    const normalizedBundleName = String(bundleName || '').trim();
+    const normalizedMessageText = String(messageText || '').trim();
+
+    if (topicNames.length === 0 || !normalizedBundleName || !normalizedMessageText) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: fcmTopicName(s), bundleName, messageText',
       });
     }
 
-    console.log(`�x� Message to "${bundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
+    console.log(`�x� Message to "${normalizedBundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
 
     const baseDataPayload = {
       type: 'message',
-      messageText,
+      messageText: normalizedMessageText,
       priority: 'high',
       timestamp: Date.now().toString(),
-      bundleName,
+      bundleName: normalizedBundleName,
     };
     if (attachmentUrl) baseDataPayload.attachmentUrl = attachmentUrl;
     if (locationLatitude) baseDataPayload.locationLatitude = locationLatitude;
@@ -2823,7 +2841,9 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
     if (audioUrl) baseDataPayload.audioUrl = audioUrl;
     if (audioDuration) baseDataPayload.audioDuration = audioDuration.toString();
 
-    const previewText = messageText.length > 100 ? messageText.substring(0, 97) + '...' : messageText;
+    const previewText = normalizedMessageText.length > 100
+      ? normalizedMessageText.substring(0, 97) + '...'
+      : normalizedMessageText;
 
     const messages = topicNames.map(topic => ({
       topic,
@@ -2831,14 +2851,16 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
         ...baseDataPayload,
         fcmTopicName: topic,
         // Use explicit UI topic label when provided for single-target sends.
-        topicName: (topicNames.length === 1 && req.body.topicName) ? String(req.body.topicName) : topic,
+        topicName: (topicNames.length === 1 && req.body.topicName)
+          ? String(req.body.topicName).trim()
+          : topic,
       },
       android: { priority: 'high', ttl: 2419200000 },
       apns: {
         headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
         payload: {
           aps: {
-            alert: { title: bundleName, body: previewText },
+            alert: { title: normalizedBundleName, body: previewText },
             sound: 'default',
             'content-available': 1,
             'mutable-content': 1,
