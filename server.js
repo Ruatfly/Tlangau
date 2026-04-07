@@ -575,7 +575,7 @@ function getLatestEntitlementExpiry(codes) {
 // Build email HTML with service info
 function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
-  const servicesHtml = serviceNames.map(s => `<li style="padding: 4px 0;">�S& ${s}</li>`).join('');
+  const servicesHtml = serviceNames.map(s => `<li style="padding: 4px 0;">&#9989; ${s}</li>`).join('');
   const totalAmount = (services && services.length > 0) ? services.length * SERVICE_PRICE : SERVICE_PRICE;
   const validityText = getValidityText(validityDays);
 
@@ -583,6 +583,7 @@ function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="UTF-8">
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -598,10 +599,10 @@ function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
     <body>
       <div class="container">
         <div class="header">
-          <h1>�x}0 Welcome to Tlangau</h1>
+          <h1>&#128640; Welcome to Tlangau</h1>
         </div>
         <div class="content">
-          <p>Thank you for your purchase of <strong>��${totalAmount}</strong>!</p>
+          <p>Thank you for your purchase of <strong>&#8377;${totalAmount}</strong>!</p>
           <p>Your access code has been generated successfully.</p>
           
           <div class="code-box">
@@ -610,7 +611,7 @@ function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
           </div>
 
           <div class="services-box">
-            <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">�x� Your Purchased Services:</p>
+            <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">&#128230; Your Purchased Services:</p>
             <ul style="list-style: none; padding: 0; margin: 0;">
               ${servicesHtml}
               <li style="padding: 4px 0;">Statistics & Insights <span class="free-badge">FREE</span></li>
