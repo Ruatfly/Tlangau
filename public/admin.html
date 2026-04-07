@@ -403,6 +403,23 @@
             <div id="codesTab" class="tab-content">
                 <div class="table-container">
                     <input type="text" class="search-box" id="codesSearch" placeholder="Search codes by code, email, or order ID...">
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
+                        <label style="font-size: 12px; color:#666; font-weight:600;">Sort</label>
+                        <select id="codesSort" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="created_desc">Created: Newest first</option>
+                            <option value="created_asc">Created: Oldest first</option>
+                        </select>
+                        <label style="font-size: 12px; color:#666; font-weight:600; margin-left: 6px;">Filter</label>
+                        <select id="codesFilter" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="all">All</option>
+                            <option value="active">Active</option>
+                            <option value="expired">Expired</option>
+                            <option value="unused">Unused</option>
+                            <option value="used">Used</option>
+                        </select>
+                        <button class="btn" id="codesClearFiltersBtn" style="width:auto; padding: 10px 14px; font-size: 12px; background:#6c757d;">Reset</button>
+                        <span style="margin-left:auto; font-size: 12px; color:#666;" id="codesCountLabel"></span>
+                    </div>
                     <div id="codesLoading" class="loading">Loading access codes...</div>
                     <table id="codesTable" style="display: none;">
                         <thead>
@@ -562,6 +579,7 @@
         let adminPassword = '';
         let refreshTimer = null;
         const AUTO_REFRESH_MS = 15000;
+        let _allAccessCodes = [];
 
         function stopAutoRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
@@ -645,6 +663,20 @@
         });
         document.getElementById('codesSearch').addEventListener('keyup', function () {
             filterTable('codesTable', 'codesSearch');
+        });
+        document.getElementById('codesSort').addEventListener('change', function () {
+            renderAccessCodes();
+            filterTable('codesTable', 'codesSearch');
+        });
+        document.getElementById('codesFilter').addEventListener('change', function () {
+            renderAccessCodes();
+            filterTable('codesTable', 'codesSearch');
+        });
+        document.getElementById('codesClearFiltersBtn').addEventListener('click', function () {
+            document.getElementById('codesSort').value = 'created_desc';
+            document.getElementById('codesFilter').value = 'all';
+            document.getElementById('codesSearch').value = '';
+            renderAccessCodes();
         });
         document.getElementById('usersSearch').addEventListener('keyup', function () {
             filterTable('usersTable', 'usersSearch');
@@ -860,67 +892,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const tbody = document.getElementById('codesBody');
-                    tbody.innerHTML = '';
-
-                    if (data.codes.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">🔑</div><p>No access codes found</p></td></tr>';
-                    } else {
-                        data.codes.forEach(code => {
-                            const row = document.createElement('tr');
-                            const expiresAtRaw = code.expires_at || code.expiresAt;
-                            let expiresAt = new Date(expiresAtRaw);
-                            
-                            if (isNaN(expiresAt.getTime()) && code.created_at) {
-                                expiresAt = new Date(new Date(code.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
-                            }
-                            
-                            const now = new Date();
-                            const expiresKnown = !isNaN(expiresAt.getTime());
-                            const isExpired = expiresKnown && expiresAt < now;
-                            const isUsed = !!code.used;
-                            const isActive = isUsed && !isExpired;
-
-                            const statusBadge = isActive
-                                ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32;">Active</span>'
-                                : isExpired
-                                    ? '<span class="badge" style="background:#ffebee;color:#c62828;">Expired</span>'
-                                    : (isUsed
-                                        ? '<span class="badge used">Used</span>'
-                                        : '<span class="badge unused">Unused</span>');
-
-                            const expiresText = isNaN(expiresAt.getTime()) 
-                                ? '<span style="color: #dc3545;">Unknown</span>'
-                                : (isExpired 
-                                    ? `<span style="color: #dc3545;">${esc(expiresAt.toLocaleString())} (Expired)</span>`
-                                    : esc(expiresAt.toLocaleString()));
-                            
-                            const services = code.services || [];
-                            const planDuration = code.plan_duration || 'monthly';
-                            const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(planDuration)}</span>`;
-                            const servicesBadges = services.length > 0
-                                ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
-                                : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
-
-                            row.innerHTML = `
-                                <td><strong>${esc(code.code)}</strong></td>
-                                <td>${esc(code.email)}</td>
-                                <td>${esc(code.order_id)}</td>
-                                <td>${planBadge} ${servicesBadges}</td>
-                                <td>${statusBadge}</td>
-                                <td>${esc(code.used_by_email || '-')}</td>
-                                <td>${expiresText}</td>
-                                <td>${esc(new Date(code.created_at).toLocaleString())}</td>
-                                <td>
-                                    <button class="btn-danger" data-delete-code="${esc(code.code)}">Delete</button>
-                                </td>
-                            `;
-                            if (isActive) {
-                                row.style.background = '#f1fff4';
-                            }
-                            tbody.appendChild(row);
-                        });
-                    }
+                    _allAccessCodes = Array.isArray(data.codes) ? data.codes : [];
+                    renderAccessCodes();
 
                     document.getElementById('codesLoading').style.display = 'none';
                     document.getElementById('codesTable').style.display = 'table';
@@ -929,6 +902,101 @@
                 console.error('Error loading access codes:', error);
                 document.getElementById('codesLoading').textContent = 'Error loading access codes: ' + error.message;
             }
+        }
+
+        function _computeCodeMeta(code) {
+            const now = new Date();
+            const createdAt = new Date(code.created_at || 0);
+            const expiresAtRaw = code.expires_at || code.expiresAt;
+            let expiresAt = new Date(expiresAtRaw);
+            if (isNaN(expiresAt.getTime()) && code.created_at) {
+                expiresAt = new Date(new Date(code.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+            }
+            const expiresKnown = !isNaN(expiresAt.getTime());
+            const isExpired = expiresKnown && expiresAt < now;
+            const isUsed = !!code.used;
+            const isActive = isUsed && !isExpired;
+            return { createdAt, expiresAt, expiresKnown, isExpired, isUsed, isActive };
+        }
+
+        function renderAccessCodes() {
+            const tbody = document.getElementById('codesBody');
+            tbody.innerHTML = '';
+
+            const sortMode = document.getElementById('codesSort')?.value || 'created_desc';
+            const filterMode = document.getElementById('codesFilter')?.value || 'all';
+
+            let codes = (_allAccessCodes || []).slice();
+
+            // Filter first (so counts match what you see)
+            if (filterMode !== 'all') {
+                codes = codes.filter(c => {
+                    const m = _computeCodeMeta(c);
+                    if (filterMode === 'active') return m.isActive;
+                    if (filterMode === 'expired') return m.isExpired;
+                    if (filterMode === 'unused') return !m.isUsed && !m.isExpired;
+                    if (filterMode === 'used') return m.isUsed;
+                    return true;
+                });
+            }
+
+            // Sort by creation time
+            codes.sort((a, b) => {
+                const aT = new Date(a.created_at || 0).getTime();
+                const bT = new Date(b.created_at || 0).getTime();
+                return sortMode === 'created_asc' ? aT - bT : bT - aT;
+            });
+
+            // Count label
+            const label = document.getElementById('codesCountLabel');
+            if (label) label.textContent = `${codes.length} shown`;
+
+            if (codes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">🔑</div><p>No access codes match this filter</p></td></tr>';
+                return;
+            }
+
+            codes.forEach(code => {
+                const row = document.createElement('tr');
+                const m = _computeCodeMeta(code);
+
+                const statusBadge = m.isActive
+                    ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32;">Active</span>'
+                    : m.isExpired
+                        ? '<span class="badge" style="background:#ffebee;color:#c62828;">Expired</span>'
+                        : (m.isUsed
+                            ? '<span class="badge used">Used</span>'
+                            : '<span class="badge unused">Unused</span>');
+
+                const expiresText = !m.expiresKnown
+                    ? '<span style="color: #dc3545;">Unknown</span>'
+                    : (m.isExpired
+                        ? `<span style="color: #dc3545;">${esc(m.expiresAt.toLocaleString())} (Expired)</span>`
+                        : esc(m.expiresAt.toLocaleString()));
+
+                const services = code.services || [];
+                const planDuration = code.plan_duration || 'monthly';
+                const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(planDuration)}</span>`;
+                const servicesBadges = services.length > 0
+                    ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
+                    : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
+
+                row.innerHTML = `
+                    <td><strong>${esc(code.code)}</strong></td>
+                    <td>${esc(code.email)}</td>
+                    <td>${esc(code.order_id)}</td>
+                    <td>${planBadge} ${servicesBadges}</td>
+                    <td>${statusBadge}</td>
+                    <td>${esc(code.used_by_email || '-')}</td>
+                    <td>${expiresText}</td>
+                    <td>${esc(new Date(code.created_at).toLocaleString())}</td>
+                    <td>
+                        <button class="btn-danger" data-delete-code="${esc(code.code)}">Delete</button>
+                    </td>
+                `;
+                if (m.isActive) row.style.background = '#f1fff4';
+                tbody.appendChild(row);
+            });
         }
 
         async function loadUsers() {
