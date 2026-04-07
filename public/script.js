@@ -152,7 +152,9 @@ const PAYMENT_STORAGE_KEY = 'tlangau_last_payment';
 
 function saveLastPaymentSession(session) {
     try {
-        sessionStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(session));
+        // Use localStorage (not sessionStorage) because the Instamojo redirect can
+        // return in a new browsing context on mobile, losing sessionStorage.
+        localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(session));
     } catch (_) {
         // Non-fatal: continue even if storage is unavailable.
     }

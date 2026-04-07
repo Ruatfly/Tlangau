@@ -897,7 +897,9 @@ app.post(
         currency: 'INR',
         buyer_name: emailLower.split('@')[0],
         email: emailLower,
-        redirect_url: `${frontendUrl}/success.html?order_id=${orderId}`,
+        // Include a short-lived verify token in redirect URL so the success page can verify
+        // even when sessionStorage is lost on the Instamojo redirect (common on mobile webviews).
+        redirect_url: `${frontendUrl}/success.html?order_id=${encodeURIComponent(orderId)}&vt=${encodeURIComponent(verifyToken)}`,
         webhook: `${backendUrl}/api/payment-webhook`,
         allow_repeated_payments: false,
       };

@@ -111,7 +111,7 @@
             let isPolling = false;
             let terminalState = false;
 
-            const lastPaymentRaw = sessionStorage.getItem(PAYMENT_STORAGE_KEY);
+            const lastPaymentRaw = localStorage.getItem(PAYMENT_STORAGE_KEY);
             let lastPayment = null;
             try {
                 lastPayment = lastPaymentRaw ? JSON.parse(lastPaymentRaw) : null;
@@ -120,6 +120,7 @@
             }
 
             const orderId = urlParams.get('order_id') || lastPayment?.orderId || null;
+            const verifyTokenFromUrl = urlParams.get('vt') || null;
             const pendingActions = document.getElementById('pendingActions');
             const verifyNowBtn = document.getElementById('verifyNowBtn');
             const backToPaymentBtn = document.getElementById('backToPaymentBtn');
@@ -171,11 +172,20 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             orderId,
-                            verifyToken: lastPayment?.verifyToken || null,
+                            verifyToken: verifyTokenFromUrl || lastPayment?.verifyToken || null,
                         }),
                     });
 
                     const data = await response.json();
+
+                    // If token is missing/invalid, don't spin forever.
+                    if (!data.success && response.status === 403) {
+                        terminalState = true;
+                        showFinalStatus('🔒', 'Verification Required',
+                            data.message || 'Missing verification token. Please reopen checkout from the payment page and try again.',
+                            false, true, true);
+                        return;
+                    }
 
                     if (data.success && data.paymentStatus === 'SUCCESS') {
                         terminalState = true;
