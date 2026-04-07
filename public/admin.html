@@ -560,6 +560,25 @@
     <script>
         const BACKEND_URL = window.BACKEND_URL || 'http://localhost:3001';
         let adminPassword = '';
+        let refreshTimer = null;
+        const AUTO_REFRESH_MS = 15000;
+
+        function stopAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = null;
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh();
+            refreshTimer = setInterval(() => {
+                if (!adminPassword) return;
+                // Keep the codes table and top stats fresh (usage/expiry changes).
+                loadStatistics();
+                loadAccessCodes();
+                // Preserve current filter after refresh.
+                filterTable('codesTable', 'codesSearch');
+            }, AUTO_REFRESH_MS);
+        }
 
         // ==================== EVENT LISTENERS (CSP-safe, no inline handlers) ====================
 
@@ -588,6 +607,7 @@
                     document.getElementById('loginScreen').style.display = 'none';
                     document.getElementById('dashboard').classList.add('active');
                     loadDashboard();
+                    startAutoRefresh();
                 } else {
                     errorDiv.textContent = data.error || 'Invalid password';
                     errorDiv.style.display = 'block';
@@ -605,6 +625,7 @@
         document.getElementById('logoutBtn').addEventListener('click', function () {
             if (confirm('Are you sure you want to logout?')) {
                 adminPassword = '';
+                stopAutoRefresh();
                 document.getElementById('loginScreen').style.display = 'block';
                 document.getElementById('dashboard').classList.remove('active');
                 document.getElementById('password').value = '';
@@ -847,9 +868,6 @@
                     } else {
                         data.codes.forEach(code => {
                             const row = document.createElement('tr');
-                            const statusBadge = code.used 
-                                ? '<span class="badge used">Used</span>'
-                                : '<span class="badge unused">Unused</span>';
                             const expiresAtRaw = code.expires_at || code.expiresAt;
                             let expiresAt = new Date(expiresAtRaw);
                             
@@ -857,7 +875,20 @@
                                 expiresAt = new Date(new Date(code.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
                             }
                             
-                            const isExpired = expiresAt < new Date();
+                            const now = new Date();
+                            const expiresKnown = !isNaN(expiresAt.getTime());
+                            const isExpired = expiresKnown && expiresAt < now;
+                            const isUsed = !!code.used;
+                            const isActive = isUsed && !isExpired;
+
+                            const statusBadge = isActive
+                                ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32;">Active</span>'
+                                : isExpired
+                                    ? '<span class="badge" style="background:#ffebee;color:#c62828;">Expired</span>'
+                                    : (isUsed
+                                        ? '<span class="badge used">Used</span>'
+                                        : '<span class="badge unused">Unused</span>');
+
                             const expiresText = isNaN(expiresAt.getTime()) 
                                 ? '<span style="color: #dc3545;">Unknown</span>'
                                 : (isExpired 
@@ -884,6 +915,9 @@
                                     <button class="btn-danger" data-delete-code="${esc(code.code)}">Delete</button>
                                 </td>
                             `;
+                            if (isActive) {
+                                row.style.background = '#f1fff4';
+                            }
                             tbody.appendChild(row);
                         });
                     }
