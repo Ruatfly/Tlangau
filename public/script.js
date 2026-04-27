@@ -166,6 +166,7 @@ if (paymentForm) {
         hideError();
 
         const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone')?.value.trim() || '';
         const services = getSelectedServices();
         const planDuration = getSelectedPlanDuration();
 
@@ -177,6 +178,11 @@ if (paymentForm) {
 
         if (!email || !isValidEmail(email)) {
             showError('Please enter a valid email address.');
+            return;
+        }
+
+        if (!phone || !isValidIndianPhone(phone)) {
+            showError('Please enter a valid 10-digit Indian mobile number.');
             return;
         }
 
@@ -197,7 +203,7 @@ if (paymentForm) {
             const response = await fetch(`${backendUrl}/api/create-payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, services, planDuration }),
+                body: JSON.stringify({ email, phone, services, planDuration }),
             });
 
             if (!response.ok) {
@@ -223,6 +229,7 @@ if (paymentForm) {
                 orderId: data.orderId,
                 verifyToken: data.verifyToken || null,
                 email,
+                phone,
                 services,
                 planDuration,
                 paymentUrl: data.paymentUrl,
@@ -266,6 +273,10 @@ function hideError() {
 
 function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidIndianPhone(phone) {
+    return /^[6-9]\d{9}$/.test(phone);
 }
 
 // ==================== SCROLL ANIMATIONS ====================

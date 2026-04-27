@@ -121,6 +121,14 @@
 
             const orderId = urlParams.get('order_id') || lastPayment?.orderId || null;
             const verifyTokenFromUrl = urlParams.get('vt') || null;
+
+            // Strip the one-time verify token from the URL immediately after reading it.
+            // This prevents the token from leaking via browser history, copy-paste, or Referer headers.
+            if (verifyTokenFromUrl && window.history.replaceState) {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('vt');
+                window.history.replaceState({}, '', cleanUrl.toString());
+            }
             const pendingActions = document.getElementById('pendingActions');
             const verifyNowBtn = document.getElementById('verifyNowBtn');
             const backToPaymentBtn = document.getElementById('backToPaymentBtn');

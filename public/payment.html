@@ -148,6 +148,22 @@
                                 <small class="form-help">Your access code will be sent to this email</small>
                             </div>
 
+                            <div class="form-group">
+                                <label for="phone">Mobile Number *</label>
+                                <input
+                                    type="tel"
+                                    id="phone"
+                                    name="phone"
+                                    placeholder="10-digit mobile number"
+                                    required
+                                    autocomplete="tel"
+                                    maxlength="10"
+                                    pattern="[6-9][0-9]{9}"
+                                    inputmode="numeric"
+                                >
+                                <small class="form-help">Used to pre-fill checkout &amp; open UPI app directly on mobile</small>
+                            </div>
+
                             <div class="payment-info">
                                 <div class="info-box">
                                     <h4>&#128203; What You'll Get</h4>
