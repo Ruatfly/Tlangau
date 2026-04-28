@@ -112,7 +112,8 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://sdk.cashfree.com"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://sdk.cashfree.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://tlangau.onrender.com", "https://api.cashfree.com", "https://sandbox.cashfree.com", "http://localhost:*"],
