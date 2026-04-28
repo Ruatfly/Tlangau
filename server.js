@@ -859,11 +859,10 @@ app.post(
       }
 
       if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-    return res.status(500).json({
-      success: false,
-      error: 'Payment gateway not configured.',
-    });
-  });
+        return res.status(500).json({
+          success: false,
+          error: 'Payment gateway not configured.',
+        });
       }
 
       const { email, services } = req.body;
@@ -917,57 +916,57 @@ app.post(
         : serviceNames;
 
       const expiryTime = new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000).toISOString();
-  const cashfreeOrderData = {
-    order_id: orderId,
-    order_amount: amount,
-    order_currency: 'INR',
-    order_expiry_time: expiryTime,
-    customer_details: {
-      customer_id: `cust_${crypto.createHash('md5').update(emailLower).digest('hex').slice(0, 16)}`,
-      customer_email: emailLower,
-      customer_phone: phone || '9999999999',
-      customer_name: emailLower.split('@')[0],
-    },
-    order_meta: {
-      return_url: `${frontendUrl}/success.html?order_id=${encodeURIComponent(orderId)}&vt=${encodeURIComponent(verifyToken)}`,
-      notify_url: `${backendUrl}/api/payment-webhook`,
-      payment_methods: 'upi,cc,dc,nb',
-    },
-    order_note: `Tlangau (${plan.label}): ${purposeDetail}`,
-  };
+      const cashfreeOrderData = {
+        order_id: orderId,
+        order_amount: amount,
+        order_currency: 'INR',
+        order_expiry_time: expiryTime,
+        customer_details: {
+          customer_id: `cust_${crypto.createHash('md5').update(emailLower).digest('hex').slice(0, 16)}`,
+          customer_email: emailLower,
+          customer_phone: phone || '9999999999',
+          customer_name: emailLower.split('@')[0],
+        },
+        order_meta: {
+          return_url: `${frontendUrl}/success.html?order_id=${encodeURIComponent(orderId)}&vt=${encodeURIComponent(verifyToken)}`,
+          notify_url: `${backendUrl}/api/payment-webhook`,
+          payment_methods: 'upi,cc,dc,nb',
+        },
+        order_note: `Tlangau (${plan.label}): ${purposeDetail}`,
+      };
 
-  try {
-    const cfResponse = await axios.post(
-      `${CASHFREE_API_BASE}/orders`,
-      cashfreeOrderData,
-      { headers: getCashfreeHeaders(), timeout: 15000 }
-    );
-    const cfOrder = cfResponse.data;
-    console.log(`Cashfree order created: ${cfOrder.cf_order_id}`);
+      try {
+        const cfResponse = await axios.post(
+          `${CASHFREE_API_BASE}/orders`,
+          cashfreeOrderData,
+          { headers: getCashfreeHeaders(), timeout: 15000 }
+        );
+        const cfOrder = cfResponse.data;
+        console.log(`Cashfree order created: ${cfOrder.cf_order_id}`);
 
-    res.json({
-      success: true,
-      orderId: orderId,
-      paymentSessionId: cfOrder.payment_session_id,
-      cashfreeEnv: CASHFREE_ENV,
-      amount: amount,
-      services: uniqueServices,
-      planDuration: plan.id,
-      validityDays: plan.validityDays,
-      verifyToken,
-      currency: 'INR',
-    });
-  } catch (error) {
-    console.error('Cashfree error:', error.response?.data || error.message);
-    await db.updateOrder(orderId, { status: 'FAILED' });
-    const cfError = error.response?.data;
-    const errorMessage = cfError?.message || error.message || 'Failed to create payment order';
-    res.status(error.response?.status || 500).json({
-      success: false,
-      error: errorMessage,
-      message: `Payment gateway error: ${errorMessage}`,
-    });
-  }
+        res.json({
+          success: true,
+          orderId: orderId,
+          paymentSessionId: cfOrder.payment_session_id,
+          cashfreeEnv: CASHFREE_ENV,
+          amount: amount,
+          services: uniqueServices,
+          planDuration: plan.id,
+          validityDays: plan.validityDays,
+          verifyToken,
+          currency: 'INR',
+        });
+      } catch (error) {
+        console.error('Cashfree error:', error.response?.data || error.message);
+        await db.updateOrder(orderId, { status: 'FAILED' });
+        const cfError = error.response?.data;
+        const errorMessage = cfError?.message || error.message || 'Failed to create payment order';
+        res.status(error.response?.status || 500).json({
+          success: false,
+          error: errorMessage,
+          message: `Payment gateway error: ${errorMessage}`,
+        });
+      }
     } catch (error) {
       console.error('ï¿½R Error in create-payment:', error.message);
       res.status(500).json({ success: false, error: 'An unexpected error occurred. Please try again.' });
@@ -1344,11 +1343,6 @@ app.post(
           }
         } catch (error) {
           console.error('Error checking Cashfree payments:', error.message);
-        }
-      }
-          }
-        } catch (error) {
-          console.error('ï¿½R Error checking payment_request:', error.message);
         }
       }
 
