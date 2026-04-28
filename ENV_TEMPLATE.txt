@@ -11,15 +11,13 @@ EMAIL_FROM=your_email@gmail.com
 EMAIL_PORT=2525
 # For Gmail, use App Password: https://support.google.com/accounts/answer/185833
 
-# Instamojo Payment Gateway Configuration
-INSTAMOJO_API_KEY=your_instamojo_api_key
-INSTAMOJO_AUTH_TOKEN=your_instamojo_auth_token
-INSTAMOJO_PRIVATE_SALT=your_instamojo_private_salt
-INSTAMOJO_ENV=production
-# Options: test (for testing) or production (for live payments)
-# INSTAMOJO_PRIVATE_SALT: Found in Instamojo Dashboard > API & Plugins > Private Salt
-# This is REQUIRED for webhook MAC verification (security)
-# Get your API credentials from: https://www.instamojo.com/developers/
+# Cashfree Payment Gateway Configuration
+CASHFREE_APP_ID=your_cashfree_app_id
+CASHFREE_SECRET_KEY=your_cashfree_secret_key
+CASHFREE_ENV=production
+# Options: sandbox (for testing) or production (for live payments)
+# CASHFREE_SECRET_KEY: Required for webhook HMAC-SHA256 signature verification (security)
+# Get your API credentials from: https://merchant.cashfree.com/merchants/login
 
 # Frontend and Backend URLs
 FRONTEND_URL=https://ruatfly.github.io/Tlangau

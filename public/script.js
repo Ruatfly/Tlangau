@@ -152,7 +152,7 @@ const PAYMENT_STORAGE_KEY = 'tlangau_last_payment';
 
 function saveLastPaymentSession(session) {
     try {
-        // Use localStorage (not sessionStorage) because the Instamojo redirect can
+        // Use localStorage (not sessionStorage) because the Cashfree checkout may
         // return in a new browsing context on mobile, losing sessionStorage.
         localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(session));
     } catch (_) {
@@ -220,11 +220,11 @@ if (paymentForm) {
                 throw new Error(data.error || 'Failed to create payment link');
             }
 
-            if (!data.paymentUrl) {
-                throw new Error('Payment URL not received from server');
+            if (!data.paymentSessionId) {
+                throw new Error('Payment session not received from server');
             }
 
-            console.log('Payment link created:', data.orderId, 'Services:', data.services);
+            console.log('Payment order created:', data.orderId, 'Services:', data.services);
             saveLastPaymentSession({
                 orderId: data.orderId,
                 verifyToken: data.verifyToken || null,
@@ -232,13 +232,20 @@ if (paymentForm) {
                 phone,
                 services,
                 planDuration,
-                paymentUrl: data.paymentUrl,
                 amount: data.amount,
                 createdAt: new Date().toISOString(),
             });
 
-            // Redirect directly to Instamojo payment page
-            window.location.href = data.paymentUrl;
+            // Open Cashfree checkout (supports UPI app-launch on mobile)
+            const cashfreeMode = data.cashfreeEnv === 'production' ? 'production' : 'sandbox';
+            const cashfree = Cashfree({ mode: cashfreeMode });
+            cashfree.checkout({
+                paymentSessionId: data.paymentSessionId,
+                redirectTarget: '_self',
+            });
+
+            // Note: button stays disabled while Cashfree checkout is loading
+            // The page redirect will reset state on return
 
         } catch (error) {
             console.error('Payment error:', error);

@@ -115,7 +115,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://tlangau.onrender.com", "https://www.instamojo.com", "http://localhost:*"],
+      connectSrc: ["'self'", "https://tlangau.onrender.com", "https://api.cashfree.com", "https://sandbox.cashfree.com", "http://localhost:*"],
       fontSrc: ["'self'"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
@@ -165,8 +165,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Body parsers
-app.use(bodyParser.json({ limit: '1mb' }));
+// Body parsers — save raw body for webhook signature verification
+app.use(bodyParser.json({ limit: '1mb', verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
 
 // ==================== RATE LIMITING ====================
@@ -707,51 +707,69 @@ async function sendAccessCodeEmail(email, code, services, validityDays = 30, ret
   return false;
 }
 
-// ==================== INSTAMOJO CONFIG ====================
+// ==================== CASHFREE CONFIG ====================
 
-const INSTAMOJO_ENV = process.env.INSTAMOJO_ENV || 'test';
-const INSTAMOJO_API_BASE = 'https://www.instamojo.com/api/1.1';
-const INSTAMOJO_API_KEY = process.env.INSTAMOJO_API_KEY;
-const INSTAMOJO_AUTH_TOKEN = process.env.INSTAMOJO_AUTH_TOKEN;
-const INSTAMOJO_PRIVATE_SALT = process.env.INSTAMOJO_PRIVATE_SALT;
+const CASHFREE_ENV = process.env.CASHFREE_ENV || 'sandbox';
+const CASHFREE_API_BASE = CASHFREE_ENV === 'production'
+  ? 'https://api.cashfree.com/pg'
+  : 'https://sandbox.cashfree.com/pg';
+const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
+const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
+const CASHFREE_API_VERSION = '2023-08-01';
 
-// Verify Instamojo webhook MAC signature
-function verifyWebhookMAC(data) {
-  if (!INSTAMOJO_PRIVATE_SALT) {
+function getCashfreeHeaders() {
+  return {
+    'x-api-version': CASHFREE_API_VERSION,
+    'x-client-id': CASHFREE_APP_ID,
+    'x-client-secret': CASHFREE_SECRET_KEY,
+    'Content-Type': 'application/json',
+  };
+}
+
+// Verify Cashfree webhook signature
+// Signature = base64(HMAC-SHA256(timestamp + rawBody, secretKey))
+function verifyCashfreeWebhookSignature(rawBody, signature, timestamp) {
+  if (!CASHFREE_SECRET_KEY) {
     if (IS_PROD) {
-      console.error('ï¿½R INSTAMOJO_PRIVATE_SALT not set ï¿½ rejecting webhook in production');
+      console.error('CASHFREE_SECRET_KEY not set -- rejecting webhook in production');
       return false;
     }
-    console.warn('ï¿½aï¿½ï¸  INSTAMOJO_PRIVATE_SALT not set ï¿½ skipping MAC verification (dev only)');
+    console.warn('CASHFREE_SECRET_KEY not set -- skipping webhook verification (dev only)');
     return true;
   }
-
-  const mac = data.mac;
-  if (!mac) {
-    console.error('ï¿½R Webhook missing MAC signature');
+  if (!signature || !timestamp) {
+    console.error('Webhook missing x-webhook-signature or x-webhook-timestamp');
     return false;
   }
-
-  // Build message: sort all field keys (except mac), join values with |
-  const fieldsToSign = { ...data };
-  delete fieldsToSign.mac;
-
-  const sortedKeys = Object.keys(fieldsToSign).sort();
-  const message = sortedKeys.map(key => fieldsToSign[key]).join('|');
-
-  const expectedMac = crypto
-    .createHmac('sha1', INSTAMOJO_PRIVATE_SALT)
+  const message = String(timestamp) + rawBody;
+  const expectedSig = crypto
+    .createHmac('sha256', CASHFREE_SECRET_KEY)
     .update(message)
-    .digest('hex');
-
+    .digest('base64');
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(mac, 'hex'),
-      Buffer.from(expectedMac, 'hex')
-    );
+    const sigBuf = Buffer.from(signature, 'base64');
+    const expectedBuf = Buffer.from(expectedSig, 'base64');
+    if (sigBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(sigBuf, expectedBuf);
   } catch {
     return false;
   }
+}
+
+// Normalize a Cashfree payment object to the shape expected by verifyAndFulfillPayment
+function normalizeCashfreePayment(cfPayment) {
+  const statusMap = {
+    SUCCESS: 'Credit',
+    FAILED: 'Failed',
+    CANCELLED: 'Failed',
+    USER_DROPPED: 'Failed',
+    VOID: 'Failed',
+  };
+  return {
+    status: statusMap[cfPayment.payment_status] || cfPayment.payment_status,
+    amount: cfPayment.payment_amount,
+    payment_request_id: cfPayment.order_id,
+  };
 }
 
 // ==================== STARTUP LOG ====================
@@ -762,8 +780,8 @@ console.log('  ï¿½xaï¿½ Tlangau Server ï¿½ Starting Up');
 console.log('ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½');
 console.log(`  Environment:   ${NODE_ENV}`);
 console.log(`  Port:          ${PORT}`);
-console.log(`  Payment:       ${INSTAMOJO_API_KEY ? `Instamojo (${INSTAMOJO_ENV})` : 'Not configured'}`);
-console.log(`  Webhook MAC:   ${INSTAMOJO_PRIVATE_SALT ? 'Enabled' : 'DISABLED (set INSTAMOJO_PRIVATE_SALT)'}`);
+console.log(`  Payment:       ${CASHFREE_APP_ID ? `Cashfree (${CASHFREE_ENV})` : 'Not configured'}`);
+console.log(`  Webhook Sig:   ${CASHFREE_SECRET_KEY ? 'Enabled (HMAC-SHA256)' : 'DISABLED (set CASHFREE_SECRET_KEY)'}`);
 console.log(`  Email:         ${process.env.EMAIL_USER ? EMAIL_SERVICE : 'Not configured'}`);
 console.log(`  Admin:         ${ADMIN_PASSWORD ? 'Configured' : 'NOT SET!'}`);
 console.log(`  Session TTL:   ${PAYMENT_SESSION_MINUTES} minutes`);
@@ -840,11 +858,12 @@ app.post(
         });
       }
 
-      if (!INSTAMOJO_API_KEY || !INSTAMOJO_AUTH_TOKEN) {
-        return res.status(500).json({
-          success: false,
-          error: 'Payment gateway not configured.',
-        });
+      if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+    return res.status(500).json({
+      success: false,
+      error: 'Payment gateway not configured.',
+    });
+  });
       }
 
       const { email, services } = req.body;
@@ -897,85 +916,58 @@ app.post(
         ? 'All Services'
         : serviceNames;
 
-      const paymentData = {
-        purpose: `Tlangau (${plan.label}): ${purposeDetail}`,
-        amount: amount,
-        currency: 'INR',
-        buyer_name: emailLower.split('@')[0],
-        email: emailLower,
-        // phone pre-fills the Instamojo checkout so mobile users reach the UPI screen faster
-        ...(phone ? { phone } : {}),
-        // Include a short-lived verify token in redirect URL so the success page can verify
-        // even when sessionStorage is lost on the Instamojo redirect (common on mobile webviews).
-        redirect_url: `${frontendUrl}/success.html?order_id=${encodeURIComponent(orderId)}&vt=${encodeURIComponent(verifyToken)}`,
-        webhook: `${backendUrl}/api/payment-webhook`,
-        allow_repeated_payments: false,
-      };
+      const expiryTime = new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000).toISOString();
+  const cashfreeOrderData = {
+    order_id: orderId,
+    order_amount: amount,
+    order_currency: 'INR',
+    order_expiry_time: expiryTime,
+    customer_details: {
+      customer_id: `cust_${crypto.createHash('md5').update(emailLower).digest('hex').slice(0, 16)}`,
+      customer_email: emailLower,
+      customer_phone: phone || '9999999999',
+      customer_name: emailLower.split('@')[0],
+    },
+    order_meta: {
+      return_url: `${frontendUrl}/success.html?order_id=${encodeURIComponent(orderId)}&vt=${encodeURIComponent(verifyToken)}`,
+      notify_url: `${backendUrl}/api/payment-webhook`,
+      payment_methods: 'upi,cc,dc,nb',
+    },
+    order_note: `Tlangau (${plan.label}): ${purposeDetail}`,
+  };
 
-      try {
-        const instamojoResponse = await axios.post(
-          `${INSTAMOJO_API_BASE}/payment-requests/`,
-          paymentData,
-          {
-            headers: {
-              'X-Api-Key': INSTAMOJO_API_KEY,
-              'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-            },
-            timeout: 15000,
-          }
-        );
+  try {
+    const cfResponse = await axios.post(
+      `${CASHFREE_API_BASE}/orders`,
+      cashfreeOrderData,
+      { headers: getCashfreeHeaders(), timeout: 15000 }
+    );
+    const cfOrder = cfResponse.data;
+    console.log(`Cashfree order created: ${cfOrder.cf_order_id}`);
 
-        if (instamojoResponse.data.success) {
-          const paymentLink = instamojoResponse.data.payment_request;
-          console.log(`ï¿½S& Payment link created: ${paymentLink.id}`);
-
-          await db.updateOrder(orderId, {
-            payment_request_id: paymentLink.id,
-          });
-
-          res.json({
-            success: true,
-            orderId: orderId,
-            paymentId: paymentLink.id,
-            paymentUrl: paymentLink.longurl,
-            amount: amount,
-            services: uniqueServices,
-            planDuration: plan.id,
-            validityDays: plan.validityDays,
-            verifyToken,
-            currency: 'INR',
-          });
-        } else {
-          throw new Error(instamojoResponse.data.message || 'Failed to create payment link');
-        }
-      } catch (error) {
-        console.error('ï¿½R Instamojo error:', error.response?.data || error.message);
-        await db.updateOrder(orderId, { status: 'FAILED' });
-
-        let errorMessage = 'Failed to create payment link';
-        const instamojoError = error.response?.data;
-        if (instamojoError) {
-          if (instamojoError.message && typeof instamojoError.message === 'object') {
-            const errorFields = Object.keys(instamojoError.message);
-            const firstError = instamojoError.message[errorFields[0]];
-            errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
-          } else if (typeof instamojoError.message === 'string') {
-            errorMessage = instamojoError.message;
-          } else if (instamojoError.error) {
-            errorMessage = typeof instamojoError.error === 'string'
-              ? instamojoError.error
-              : JSON.stringify(instamojoError.error);
-          }
-        } else {
-          errorMessage = error.message || errorMessage;
-        }
-
-        res.status(error.response?.status || 500).json({
-          success: false,
-          error: errorMessage,
-          message: `Payment gateway error: ${errorMessage}`,
-        });
-      }
+    res.json({
+      success: true,
+      orderId: orderId,
+      paymentSessionId: cfOrder.payment_session_id,
+      cashfreeEnv: CASHFREE_ENV,
+      amount: amount,
+      services: uniqueServices,
+      planDuration: plan.id,
+      validityDays: plan.validityDays,
+      verifyToken,
+      currency: 'INR',
+    });
+  } catch (error) {
+    console.error('Cashfree error:', error.response?.data || error.message);
+    await db.updateOrder(orderId, { status: 'FAILED' });
+    const cfError = error.response?.data;
+    const errorMessage = cfError?.message || error.message || 'Failed to create payment order';
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: errorMessage,
+      message: `Payment gateway error: ${errorMessage}`,
+    });
+  }
     } catch (error) {
       console.error('ï¿½R Error in create-payment:', error.message);
       res.status(500).json({ success: false, error: 'An unexpected error occurred. Please try again.' });
@@ -986,71 +978,53 @@ app.post(
 // Payment webhook (Instamojo) ï¿½ with MAC verification
 app.post('/api/payment-webhook', async (req, res) => {
   try {
-    const webhookData = req.body;
-    console.log('ï¿½xï¿½ Payment webhook received:', webhookData.payment_request_id || 'unknown');
+    const rawBody = req.rawBody || '';
+    const signature = req.headers['x-webhook-signature'];
+    const timestamp = req.headers['x-webhook-timestamp'];
 
-    // Verify webhook MAC signature
-    if (!verifyWebhookMAC(webhookData)) {
-      console.error('ï¿½R Webhook MAC verification FAILED ï¿½ possible forgery!');
-      await createPaymentEvent('unknown', 'WEBHOOK_REJECTED_INVALID_MAC', {
-        payment_request_id: webhookData?.payment_request_id || null,
-        payment_id: webhookData?.payment_id || null,
+    console.log('Payment webhook received');
+
+    if (!verifyCashfreeWebhookSignature(rawBody, signature, timestamp)) {
+      console.error('Webhook signature verification FAILED -- possible forgery!');
+      await createPaymentEvent('unknown', 'WEBHOOK_REJECTED_INVALID_SIGNATURE', {
+        cf_order_id: req.body?.data?.order?.order_id || null,
       });
       return res.status(403).json({ success: false, message: 'Invalid webhook signature' });
     }
 
-    const { payment_request_id, payment_id } = webhookData;
+    const webhookData = req.body;
+    const cfOrderId = webhookData?.data?.order?.order_id;
+    const cfPayment = webhookData?.data?.payment;
 
-    if (!payment_request_id) {
-      return res.status(400).json({ success: false, message: 'Missing payment_request_id' });
+    if (!cfOrderId) {
+      return res.status(400).json({ success: false, message: 'Missing order_id in webhook' });
     }
 
-    let order = await db.getOrderByPaymentRequestId(payment_request_id);
-
-    // NOTE: Email-based fallback intentionally removed â€” matching an order by buyer
-    // email is unsafe when a user has multiple PENDING orders (could fulfill the wrong one).
-    // The reconciliation job recovers any missed webhooks on the next scheduled run.
-
+    const order = await db.getOrder(cfOrderId);
     if (!order) {
-      console.error('ï¿½R Order not found for payment_request_id:', payment_request_id);
-      await createPaymentEvent('unknown', 'WEBHOOK_ORDER_NOT_FOUND', {
-        payment_request_id: payment_request_id || null,
-        payment_id: payment_id || null,
-      });
+      console.error('Order not found for order_id:', cfOrderId);
+      await createPaymentEvent('unknown', 'WEBHOOK_ORDER_NOT_FOUND', { order_id: cfOrderId });
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Verify payment with Instamojo
-    if (payment_id) {
+    if (cfPayment) {
       try {
-        const paymentResponse = await axios.get(
-          `${INSTAMOJO_API_BASE}/payments/${payment_id}/`,
-          {
-            headers: {
-              'X-Api-Key': INSTAMOJO_API_KEY,
-              'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-            },
-            timeout: 10000,
-          }
-        );
-
-        if (paymentResponse.data.success) {
-          const payment = paymentResponse.data.payment;
-          const result = await verifyAndFulfillPayment(order, payment, payment_id);
-          if (result.verified) {
-            console.log('ï¿½S& Webhook: Payment verified and fulfilled');
-          } else {
-            console.log(`ï¿½x9 Webhook: Payment status = ${result.status}`);
-          }
+        const payment = normalizeCashfreePayment(cfPayment);
+        const paymentId = String(cfPayment.cf_payment_id || cfOrderId);
+        const result = await verifyAndFulfillPayment(order, payment, paymentId);
+        if (result.verified) {
+          console.log('Webhook: Payment verified and fulfilled');
+        } else {
+          console.log(`Webhook: Payment status = ${result.status}`);
         }
       } catch (error) {
-        console.error('ï¿½R Error checking payment status:', error.message);
+        console.error('Error processing webhook payment:', error.message);
       }
     }
 
     res.json({ success: true, message: 'Webhook processed' });
   } catch (error) {
-    console.error('ï¿½R Error processing webhook:', error.message);
+    console.error('Error processing webhook:', error.message);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -1202,60 +1176,30 @@ async function verifyAndFulfillPayment(order, payment, paymentId, options = {}) 
 async function fetchGatewayPaymentForOrder(order) {
   let payment = null;
   let paymentId = order.payment_id || null;
+  const orderId = order.order_id;
 
-  if (paymentId) {
-    try {
-      const paymentResponse = await axios.get(
-        `${INSTAMOJO_API_BASE}/payments/${paymentId}/`,
-        {
-          headers: {
-            'X-Api-Key': INSTAMOJO_API_KEY,
-            'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-          },
-          timeout: 10000,
-        }
-      );
-      if (paymentResponse.data.success) {
-        payment = paymentResponse.data.payment;
-        paymentId = payment.id || payment.payment_id || paymentId;
+  try {
+    const cfResponse = await axios.get(
+      `${CASHFREE_API_BASE}/orders/${encodeURIComponent(orderId)}/payments`,
+      { headers: getCashfreeHeaders(), timeout: 10000 }
+    );
+    const payments = cfResponse.data;
+    if (Array.isArray(payments) && payments.length > 0) {
+      const successfulPayment = payments.find(p => p.payment_status === 'SUCCESS') || payments[0];
+      if (successfulPayment) {
+        payment = normalizeCashfreePayment(successfulPayment);
+        paymentId = String(successfulPayment.cf_payment_id || orderId);
       }
-    } catch (error) {
-      console.error('ï¿½R Error checking payment by payment_id:', error.message);
     }
-  }
-
-  if (!payment && order.payment_request_id) {
-    try {
-      const prResponse = await axios.get(
-        `${INSTAMOJO_API_BASE}/payment-requests/${order.payment_request_id}/`,
-        {
-          headers: {
-            'X-Api-Key': INSTAMOJO_API_KEY,
-            'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-          },
-          timeout: 10000,
-        }
-      );
-      if (prResponse.data.success) {
-        const pr = prResponse.data.payment_request;
-        if (pr.payments && pr.payments.length > 0) {
-          const successfulPayment = pr.payments.find((p) => p.status === 'Credit') || pr.payments[0];
-          if (successfulPayment) {
-            payment = successfulPayment;
-            paymentId = successfulPayment.payment_id || successfulPayment.id || paymentId;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('ï¿½R Error checking payment_request:', error.message);
-    }
+  } catch (error) {
+    console.error('Error fetching Cashfree payments for order:', error.response?.data || error.message);
   }
 
   return { payment, paymentId };
 }
 
 async function runPaymentReconciliation(options = {}) {
-  if (!INSTAMOJO_API_KEY || !INSTAMOJO_AUTH_TOKEN) {
+  if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
     throw new Error('Payment gateway not configured.');
   }
 
@@ -1379,53 +1323,29 @@ app.post(
         return res.json({ success: true, paymentStatus: 'FAILED', message: 'Payment failed.' });
       }
 
-      // Try to verify via payment_id
+      // Try to get payment status via Cashfree
       let payment = null;
       let paymentId = order.payment_id;
 
-      if (paymentId) {
+      // Try to get payment status via Cashfree
+      if (orderId) {
         try {
-          const paymentResponse = await axios.get(
-            `${INSTAMOJO_API_BASE}/payments/${paymentId}/`,
-            {
-              headers: {
-                'X-Api-Key': INSTAMOJO_API_KEY,
-                'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-              },
-              timeout: 10000,
-            }
+          const cfResponse = await axios.get(
+            `${CASHFREE_API_BASE}/orders/${encodeURIComponent(orderId)}/payments`,
+            { headers: getCashfreeHeaders(), timeout: 10000 }
           );
-          if (paymentResponse.data.success) {
-            payment = paymentResponse.data.payment;
-            paymentId = payment.id || payment.payment_id || paymentId;
+          const payments = cfResponse.data;
+          if (Array.isArray(payments) && payments.length > 0) {
+            const successfulPayment = payments.find(p => p.payment_status === 'SUCCESS');
+            if (successfulPayment) {
+              payment = normalizeCashfreePayment(successfulPayment);
+              paymentId = String(successfulPayment.cf_payment_id || orderId);
+            }
           }
         } catch (error) {
-          console.error('ï¿½R Error checking payment by payment_id:', error.message);
+          console.error('Error checking Cashfree payments:', error.message);
         }
       }
-
-      // Fallback: try via payment_request_id
-      if (!payment && order.payment_request_id) {
-        try {
-          const prResponse = await axios.get(
-            `${INSTAMOJO_API_BASE}/payment-requests/${order.payment_request_id}/`,
-            {
-              headers: {
-                'X-Api-Key': INSTAMOJO_API_KEY,
-                'X-Auth-Token': INSTAMOJO_AUTH_TOKEN,
-              },
-              timeout: 10000,
-            }
-          );
-          if (prResponse.data.success) {
-            const pr = prResponse.data.payment_request;
-            if (pr.payments && pr.payments.length > 0) {
-              const successfulPayment = pr.payments.find(p => p.status === 'Credit');
-              if (successfulPayment) {
-                payment = successfulPayment;
-                paymentId = successfulPayment.payment_id || successfulPayment.id;
-              }
-            }
           }
         } catch (error) {
           console.error('ï¿½R Error checking payment_request:', error.message);
