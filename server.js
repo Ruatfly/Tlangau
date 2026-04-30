@@ -116,7 +116,7 @@ app.use(helmet({
       scriptSrcElem: ["'self'", "'unsafe-inline'", "https://sdk.cashfree.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://tlangau.onrender.com", "https://api.cashfree.com", "https://sandbox.cashfree.com", "http://localhost:*"],
+      connectSrc: ["'self'", "https://tlangau.onrender.com", "https://api.cashfree.com", "https://sandbox.cashfree.com", "https://sdk.cashfree.com", "http://localhost:*"],
       fontSrc: ["'self'"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],

@@ -193,6 +193,8 @@ if (paymentForm) {
 
         try {
             const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+            console.log('Backend URL:', backendUrl);
+            
             if (!backendUrl || backendUrl.includes('your-backend-url')) {
                 showError('Backend URL not configured. Please contact support.');
                 submitButton.disabled = false;
@@ -200,12 +202,16 @@ if (paymentForm) {
                 return;
             }
 
+            console.log('Creating payment for:', { email, phone, services, planDuration });
+            
             const response = await fetch(`${backendUrl}/api/create-payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, phone, services, planDuration }),
             });
 
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
                 let errorMessage = errorData.message || errorData.error || `Server error: ${response.status}`;
@@ -216,6 +222,8 @@ if (paymentForm) {
             }
 
             const data = await response.json();
+            console.log('Payment response:', data);
+            
             if (!data.success) {
                 throw new Error(data.error || 'Failed to create payment link');
             }
@@ -237,11 +245,27 @@ if (paymentForm) {
             });
 
             // Open Cashfree checkout (supports UPI app-launch on mobile)
+            // Ensure Cashfree SDK is loaded
+            if (typeof Cashfree === 'undefined') {
+                throw new Error('Cashfree SDK not loaded. Please refresh the page and try again.');
+            }
+            
             const cashfreeMode = data.cashfreeEnv === 'production' ? 'production' : 'sandbox';
+            console.log('Initializing Cashfree in mode:', cashfreeMode);
+            console.log('Payment Session ID:', data.paymentSessionId);
+            
             const cashfree = Cashfree({ mode: cashfreeMode });
+            
+            // Use redirect checkout for better compatibility
             cashfree.checkout({
                 paymentSessionId: data.paymentSessionId,
                 redirectTarget: '_self',
+            }).then(result => {
+                console.log('Cashfree checkout result:', result);
+            }).catch(err => {
+                console.error('Cashfree checkout error:', err);
+                // If checkout fails, show error but re-enable button
+                throw new Error('Failed to open payment page. Please try again or use a different browser.');
             });
 
             // Note: button stays disabled while Cashfree checkout is loading
