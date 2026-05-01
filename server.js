@@ -718,6 +718,11 @@ const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
 const CASHFREE_API_VERSION = '2023-08-01';
 
+// Debug: Log environment variable status (masked for security)
+console.log(`[DEBUG] CASHFREE_ENV: ${CASHFREE_ENV}`);
+console.log(`[DEBUG] CASHFREE_APP_ID: ${CASHFREE_APP_ID ? 'set (' + CASHFREE_APP_ID.substring(0, 8) + '...)' : 'NOT SET'}`);
+console.log(`[DEBUG] CASHFREE_SECRET_KEY: ${CASHFREE_SECRET_KEY ? 'set (' + CASHFREE_SECRET_KEY.substring(0, 8) + '...)' : 'NOT SET'}`);
+
 function getCashfreeHeaders() {
   return {
     'x-api-version': CASHFREE_API_VERSION,
@@ -860,6 +865,10 @@ app.post(
       }
 
       if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+        console.error('[PAYMENT] Missing Cashfree config:', {
+          CASHFREE_APP_ID: CASHFREE_APP_ID ? 'set' : 'NOT SET',
+          CASHFREE_SECRET_KEY: CASHFREE_SECRET_KEY ? 'set' : 'NOT SET',
+        });
         return res.status(500).json({
           success: false,
           error: 'Payment gateway not configured.',
