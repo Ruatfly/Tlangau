@@ -925,12 +925,15 @@ app.post(
         ? 'All Services'
         : serviceNames;
 
-      const expiryTime = new Date(Date.now() + PAYMENT_SESSION_MINUTES * 60 * 1000).toISOString();
+      // Cashfree requires expiry time to be at least 15 minutes and less than 30 days
+      const cashfreeExpiryMinutes = Math.max(15, PAYMENT_SESSION_MINUTES);
+      const expiryTime = new Date(Date.now() + cashfreeExpiryMinutes * 60 * 1000);
+      
       const cashfreeOrderData = {
         order_id: orderId,
         order_amount: amount,
         order_currency: 'INR',
-        order_expiry_time: expiryTime,
+        order_expiry_time: expiryTime.toISOString(),
         customer_details: {
           customer_id: `cust_${crypto.createHash('md5').update(emailLower).digest('hex').slice(0, 16)}`,
           customer_email: emailLower,
