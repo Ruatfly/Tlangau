@@ -926,7 +926,8 @@ app.post(
         : serviceNames;
 
       // Cashfree requires expiry time to be at least 15 minutes and less than 30 days
-      const cashfreeExpiryMinutes = Math.max(15, PAYMENT_SESSION_MINUTES);
+      // Set to 30 minutes to ensure it's always valid
+      const cashfreeExpiryMinutes = 30;
       const expiryTime = new Date(Date.now() + cashfreeExpiryMinutes * 60 * 1000);
       
       const cashfreeOrderData = {
