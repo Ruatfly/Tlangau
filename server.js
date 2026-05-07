@@ -2721,7 +2721,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
       fcmTopicName, fcmTopicNames, bundleName, messageText,
       attachmentUrl, locationLatitude, locationLongitude, locationAddress,
       documentUrl, documentName, audioUrl, audioDuration,
-      isBroadcast,
+      isBroadcast, topicName,
     } = req.body;
 
     const normalizedTopicNames = Array.isArray(fcmTopicNames)
@@ -2764,15 +2764,23 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
       ? normalizedMessageText.substring(0, 97) + '...'
       : normalizedMessageText;
 
+    // Never put raw FCM topic strings (e.g. t_123_456) in user-visible notification text.
+    const explicitTopicLabel = topicName != null && String(topicName).trim() !== ''
+      ? String(topicName).trim()
+      : '';
+    const resolvedDataTopicName = explicitTopicLabel.length > 0
+      ? explicitTopicLabel
+      : (topicNames.length > 1 ? 'All subscribers' : normalizedBundleName);
+    const androidNotificationBody = explicitTopicLabel.length > 0
+      ? `${explicitTopicLabel}: ${previewText}`
+      : previewText;
+
     const messages = topicNames.map(topic => ({
       topic,
       data: {
         ...baseDataPayload,
         fcmTopicName: topic,
-        // Use explicit UI topic label when provided for single-target sends.
-        topicName: (topicNames.length === 1 && req.body.topicName)
-          ? String(req.body.topicName).trim()
-          : topic,
+        topicName: resolvedDataTopicName,
       },
       // IMPORTANT (sleep/doze/OEM kill): include an Android notification payload so the OS
       // can display it even when the app process/background isolate isn't scheduled promptly.
@@ -2783,7 +2791,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
           channelId: 'message_channel_v1',
           sound: 'default',
           title: `Message: ${normalizedBundleName}`,
-          body: `${(topicNames.length === 1 && req.body.topicName) ? String(req.body.topicName).trim() : topic}: ${previewText}`,
+          body: androidNotificationBody,
         },
       },
       apns: {
