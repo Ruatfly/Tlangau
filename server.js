@@ -2774,7 +2774,18 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
           ? String(req.body.topicName).trim()
           : topic,
       },
-      android: { priority: 'high', ttl: 2419200000 },
+      // IMPORTANT (sleep/doze/OEM kill): include an Android notification payload so the OS
+      // can display it even when the app process/background isolate isn't scheduled promptly.
+      android: {
+        priority: 'high',
+        ttl: 2419200000,
+        notification: {
+          channelId: 'message_channel_v1',
+          sound: 'default',
+          title: `Message: ${normalizedBundleName}`,
+          body: `${(topicNames.length === 1 && req.body.topicName) ? String(req.body.topicName).trim() : topic}: ${previewText}`,
+        },
+      },
       apns: {
         headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
         payload: {
