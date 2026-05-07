@@ -2719,6 +2719,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
   try {
     const {
       fcmTopicName, fcmTopicNames, bundleName, messageText,
+      title,
       attachmentUrl, locationLatitude, locationLongitude, locationAddress,
       documentUrl, documentName, audioUrl, audioDuration,
       isBroadcast, topicName,
@@ -2733,6 +2734,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
         .filter(Boolean)
     )];
     const normalizedBundleName = String(bundleName || '').trim();
+    const normalizedTitle = String(title || '').trim();
     const normalizedMessageText = String(messageText || '').trim();
 
     if (topicNames.length === 0 || !normalizedBundleName || !normalizedMessageText) {
@@ -2741,11 +2743,18 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
         message: 'Missing required fields: fcmTopicName(s), bundleName, messageText',
       });
     }
+    if (!normalizedTitle) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: title',
+      });
+    }
 
     console.log(`ï¿½xï¿½ Message to "${normalizedBundleName}" (${topicNames.length} topics) by ${req.userEmail}`);
 
     const baseDataPayload = {
       type: 'message',
+      title: normalizedTitle,
       messageText: normalizedMessageText,
       priority: 'high',
       timestamp: Date.now().toString(),
@@ -2760,10 +2769,6 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
     if (audioUrl) baseDataPayload.audioUrl = audioUrl;
     if (audioDuration) baseDataPayload.audioDuration = audioDuration.toString();
 
-    const previewText = normalizedMessageText.length > 100
-      ? normalizedMessageText.substring(0, 97) + '...'
-      : normalizedMessageText;
-
     // Never put raw FCM topic strings (e.g. t_123_456) in user-visible notification text.
     const explicitTopicLabel = topicName != null && String(topicName).trim() !== ''
       ? String(topicName).trim()
@@ -2771,9 +2776,8 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
     const resolvedDataTopicName = explicitTopicLabel.length > 0
       ? explicitTopicLabel
       : (topicNames.length > 1 ? 'All subscribers' : normalizedBundleName);
-    const androidNotificationBody = explicitTopicLabel.length > 0
-      ? `${explicitTopicLabel}: ${previewText}`
-      : previewText;
+    // Notification shade should show topic label + selected title (no message body).
+    const androidNotificationBody = `${resolvedDataTopicName}: ${normalizedTitle}`;
 
     const messages = topicNames.map(topic => ({
       topic,
@@ -2798,7 +2802,7 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
         headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
         payload: {
           aps: {
-            alert: { title: normalizedBundleName, body: previewText },
+            alert: { title: normalizedBundleName, body: `${resolvedDataTopicName}: ${normalizedTitle}` },
             sound: 'default',
             'content-available': 1,
             'mutable-content': 1,
