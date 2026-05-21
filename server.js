@@ -2679,16 +2679,22 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
-      // Data-only on iOS: app shows 30s ring + Stop (like Android). APNs alert here only
-      // produced a short system ding and blocked the custom ring handler.
+      // iOS: alert + content-available wakes the app when backgrounded/killed/asleep.
+      // Native code plays the 30s type-specific ring; APNs does not include a long sound.
       apns: {
         headers: {
           'apns-priority': '10',
-          'apns-push-type': 'background',
+          'apns-push-type': 'alert',
         },
         payload: {
           aps: {
+            alert: {
+              title: `Ring: ${normalizedBundleName}`,
+              body: `${normalizedTopicName} (${ringTypeLabel})`,
+            },
             'content-available': 1,
+            'mutable-content': 1,
+            'thread-id': 'tlangau_ring_alerts',
           },
         },
       },
