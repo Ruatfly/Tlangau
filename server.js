@@ -459,15 +459,15 @@ function getRingTypeLabel(ringTypeRaw) {
   const ringType = (ringTypeRaw || 'wet').toString().trim().toLowerCase();
   switch (ringType) {
     case 'wet':
-      return 'á¹¬awihthei (Wet)';
+      return 'Tawihthei (Wet)';
     case 'dry':
-      return 'á¹¬awihthei lo (Dry)';
+      return 'Tawihthei lo (Dry)';
     case 'sanitary_item':
       return 'Hriselna thil (Sanitary Item)';
     case 'special_care':
       return 'Uluk Ngai (Special Care)';
     default:
-      return 'á¹¬awihthei (Wet)';
+      return 'Tawihthei (Wet)';
   }
 }
 
@@ -2692,6 +2692,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
               title: `Ring: ${normalizedBundleName}`,
               body: `${normalizedTopicName} (${ringTypeLabel})`,
             },
+            sound: 'default',
             'content-available': 1,
             'mutable-content': 1,
             'thread-id': 'tlangau_ring_alerts',
