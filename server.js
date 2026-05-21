@@ -471,6 +471,22 @@ function getRingTypeLabel(ringTypeRaw) {
   }
 }
 
+/** Bundled iOS notification sound (plays even when app is killed / backgrounded). */
+function getApnsRingSound(ringTypeRaw) {
+  const ringType = (ringTypeRaw || 'wet').toString().trim().toLowerCase();
+  switch (ringType) {
+    case 'dry':
+      return 'ring_dry.wav';
+    case 'sanitary_item':
+      return 'ring_sanitary.wav';
+    case 'special_care':
+      return 'ring_special.wav';
+    case 'wet':
+    default:
+      return 'ring_wet.wav';
+  }
+}
+
 function getValidityText(validityDays) {
   if (validityDays >= 365) return '1 year';
   return `${validityDays} days`;
@@ -2665,6 +2681,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 
     const ringTypeValue = ringType || 'wet';
     const ringTypeLabel = getRingTypeLabel(ringTypeValue);
+    const apnsRingSound = getApnsRingSound(ringTypeValue);
     console.log(`ï¿½xï¿½ Ring: ${normalizedBundleName}/${normalizedTopicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
@@ -2679,8 +2696,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
-      // iOS: alert + content-available wakes the app when backgrounded/killed/asleep.
-      // Native code plays the 30s type-specific ring; APNs does not include a long sound.
+      // iOS: bundled type-specific sound (works when app is killed) + content-available
+      // so native RingTonePlayer can run the full 30s loop when the app wakes.
       apns: {
         headers: {
           'apns-priority': '10',
@@ -2692,10 +2709,11 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
               title: `Ring: ${normalizedBundleName}`,
               body: `${normalizedTopicName} (${ringTypeLabel})`,
             },
-            sound: 'default',
+            sound: apnsRingSound,
             'content-available': 1,
             'mutable-content': 1,
             'thread-id': 'tlangau_ring_alerts',
+            category: 'tlangau_ring_category',
           },
         },
       },
