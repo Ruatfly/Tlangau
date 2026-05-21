@@ -2679,17 +2679,16 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
+      // Data-only on iOS: app shows 30s ring + Stop (like Android). APNs alert here only
+      // produced a short system ding and blocked the custom ring handler.
       apns: {
-        headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'background',
+        },
         payload: {
           aps: {
-            alert: {
-              title: `Ring Alert: ${normalizedBundleName}`,
-              body: `${normalizedTopicName} - ${ringTypeLabel}`,
-            },
-            sound: 'default',
             'content-available': 1,
-            'interruption-level': 'time-sensitive',
           },
         },
       },
