@@ -1738,6 +1738,49 @@ app.post(
   }
 );
 
+// In-app account deletion (App Store / Play) — user can only delete their own data.
+app.post(
+  '/api/delete-account',
+  codeValidationLimiter,
+  requireAnyAuth,
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: 'Invalid email.' });
+      }
+
+      const requestedEmail = normalizeEmail(req.body.email);
+      const authenticatedEmail = normalizeEmail(req.userEmail);
+      if (!requestedEmail || !authenticatedEmail || requestedEmail !== authenticatedEmail) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only delete your own account.',
+        });
+      }
+
+      const result = await db.deleteUserByEmail(authenticatedEmail);
+      if (!result.deleted) {
+        return res.json({
+          success: true,
+          message: 'No server-side purchase data found; local app data was cleared on device.',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Account and server access data removed.',
+        deletedOrders: result.deletedOrders,
+        deletedCodes: result.deletedCodes,
+      });
+    } catch (error) {
+      console.error('Delete account error:', error.message);
+      return res.status(500).json({ success: false, message: 'Failed to delete account data.' });
+    }
+  }
+);
+
 // ==================== ADMIN ROUTES ====================
 
 function hashPassword(password) {
