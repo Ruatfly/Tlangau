@@ -2740,7 +2740,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
       },
       android: { priority: 'high', ttl: 300000 },
       // iOS: bundled type-specific sound (works when app is killed) + content-available
-      // so native RingTonePlayer can run the full 30s loop when the app wakes.
+      // so native RingTonePlayer can show Stop UI when the app wakes.
       apns: {
         headers: {
           'apns-priority': '10',
@@ -2757,6 +2757,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
             'mutable-content': 1,
             'thread-id': 'tlangau_ring_alerts',
             category: 'tlangau_ring_category',
+            'interruption-level': 'time-sensitive',
           },
         },
       },
