@@ -2754,7 +2754,6 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
             },
             sound: apnsRingSound,
             'content-available': 1,
-            'mutable-content': 1,
             'thread-id': 'tlangau_ring_alerts',
             category: 'tlangau_ring_category',
             'interruption-level': 'time-sensitive',
