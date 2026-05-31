@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const path = require('path');
 const axios = require('axios');
+const { GoogleAuth } = require('google-auth-library');
 const Database = require('./database');
 
 require('dotenv').config();
@@ -1478,6 +1479,316 @@ app.post(
     } catch (error) {
       console.error('ï¿½R Resend access code error:', error.message);
       res.status(500).json({ success: false, message: 'Failed to resend access code.' });
+    }
+  }
+);
+
+// ==================== GOOGLE PLAY BILLING (Android) ====================
+
+const GOOGLE_PLAY_PACKAGE_NAME =
+  process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.ruatfela.tlangau.tlangau';
+const GOOGLE_PLAY_PRODUCT_ID =
+  process.env.GOOGLE_PLAY_PRODUCT_ID || 'tlangau_premium_monthly';
+
+function hashPlayPurchaseToken(purchaseToken) {
+  return crypto.createHash('sha256').update(String(purchaseToken)).digest('hex');
+}
+
+let playPublisherAuthClient = null;
+
+async function getPlayPublisherAccessToken() {
+  const rawJson =
+    process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!rawJson) {
+    console.error('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON not configured');
+    return null;
+  }
+  try {
+    if (!playPublisherAuthClient) {
+      const credentials = JSON.parse(rawJson);
+      playPublisherAuthClient = new GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+      });
+    }
+    const client = await playPublisherAuthClient.getClient();
+    const tokenResponse = await client.getAccessToken();
+    return tokenResponse?.token || null;
+  } catch (error) {
+    console.error('Play Publisher auth failed:', error.message);
+    return null;
+  }
+}
+
+async function verifyGooglePlayPurchaseToken({ packageName, productId, purchaseToken }) {
+  const accessToken = await getPlayPublisherAccessToken();
+  if (!accessToken) {
+    return { ok: false, reason: 'PLAY_API_NOT_CONFIGURED' };
+  }
+
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  // Subscription (recommended SKU: tlangau_premium_monthly)
+  try {
+    const subUrl =
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}` +
+      `/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`;
+    const subResp = await axios.get(subUrl, { headers, timeout: 15000 });
+    const data = subResp.data || {};
+    const state = String(data.subscriptionState || '');
+    const activeStates = new Set([
+      'SUBSCRIPTION_STATE_ACTIVE',
+      'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+    ]);
+    if (activeStates.has(state)) {
+      return { ok: true, kind: 'subscription', raw: data };
+    }
+    if (state) {
+      return { ok: false, reason: `SUBSCRIPTION_${state}` };
+    }
+  } catch (error) {
+    const status = error.response?.status;
+    if (status && status !== 404) {
+      console.error('Play subscription verify failed:', error.response?.data || error.message);
+    }
+  }
+
+  // One-time in-app product fallback
+  try {
+    const prodUrl =
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}` +
+      `/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
+    const prodResp = await axios.get(prodUrl, { headers, timeout: 15000 });
+    const pdata = prodResp.data || {};
+    const purchaseState = Number(pdata.purchaseState);
+    if (purchaseState === 0) {
+      return { ok: true, kind: 'product', raw: pdata };
+    }
+    return { ok: false, reason: `PRODUCT_STATE_${purchaseState}` };
+  } catch (error) {
+    console.error('Play product verify failed:', error.response?.data || error.message);
+    return {
+      ok: false,
+      reason: error.response?.data?.error?.message || error.message || 'VERIFY_FAILED',
+    };
+  }
+}
+
+async function sendPlayAdminWelcomeEmail(email, services, validityDays = 30) {
+  const emailUser = (process.env.EMAIL_USER || '').replace(/[^\x20-\x7E]/g, '').trim();
+  const emailPass = (process.env.EMAIL_PASS || '').replace(/[^\x20-\x7E]/g, '').trim();
+  if (EMAIL_SERVICE !== 'sendgrid' && (!emailUser || !emailPass)) {
+    console.warn('Email not configured — skipping Play welcome email');
+    return false;
+  }
+
+  const serviceNames = getServiceNames(services).join(', ');
+  const validityText = getValidityText(validityDays);
+  const html = `
+    <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:28px;text-align:center;border-radius:10px 10px 0 0;">
+        <h1 style="margin:0;">Welcome to Tlangau Admin</h1>
+      </div>
+      <div style="background:#f9f9f9;padding:28px;border-radius:0 0 10px 10px;">
+        <p>Thank you for your Google Play purchase!</p>
+        <p>Your admin access is now linked to <strong>${email}</strong>.</p>
+        <p><strong>Services:</strong> ${serviceNames}, Statistics, Poll</p>
+        <p><strong>Valid for:</strong> ${validityText} from activation</p>
+        <p>Open the Tlangau app, tap <strong>Admin sign-in</strong>, and sign in with this Google account to open your Server Dashboard.</p>
+        <p>When access expires, the app returns you to the client dashboard automatically. Renew anytime from the Premium button.</p>
+      </div>
+    </div></body></html>`;
+
+  const mailOptions = {
+    from: (process.env.EMAIL_FROM || 'ruatfelachhakchhuak243@gmail.com').trim(),
+    to: email,
+    subject: 'Welcome to Tlangau Admin',
+    html,
+  };
+
+  try {
+    if (EMAIL_SERVICE === 'sendgrid' && transporter && transporter.type === 'sendgrid') {
+      await transporter.client.send({
+        to: email,
+        from: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@tlangau.com',
+        subject: mailOptions.subject,
+        html,
+      });
+    } else {
+      await transporter.sendMail(mailOptions);
+    }
+    console.log(`Play welcome email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('Play welcome email failed:', error.message);
+    return false;
+  }
+}
+
+async function grantPlayEntitlementForIdentity(emailLower, userAccountId, options = {}) {
+  const services = options.services || VALID_SERVICE_IDS;
+  const validityDays = options.validityDays || ACCESS_PLANS.monthly.validityDays;
+  const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+  const latestUsedEntitlement = usedEntitlements.length > 0 ? usedEntitlements[0] : null;
+  const previousExpiryIso = latestUsedEntitlement?.expiresAt || latestUsedEntitlement?.expires_at;
+  const previousExpiryTs = toTimestamp(previousExpiryIso) || 0;
+  const nowTs = Date.now();
+  const entitlementStartsAt = new Date(Math.max(nowTs, previousExpiryTs)).toISOString();
+  const stackedExpiry = new Date(
+    (toTimestamp(entitlementStartsAt) || nowTs) + getValidityDurationMs(validityDays)
+  ).toISOString();
+
+  const accessCodeValue = generateAccessCode();
+  const orderId = options.orderId || `PLAY_${nowTs}`;
+  await db.createAccessCode({
+    code: accessCodeValue,
+    email: emailLower,
+    orderId,
+    paymentId: options.purchaseTokenHash,
+    used: true,
+    used_by_email: emailLower,
+    used_by_account: userAccountId,
+    used_at: new Date().toISOString(),
+    expiresAt: stackedExpiry,
+    expires_at: stackedExpiry,
+    entitlement_starts_at: entitlementStartsAt,
+    services,
+    plan_duration: 'monthly',
+    validity_days: validityDays,
+    platform: 'google_play',
+    purchase_token_hash: options.purchaseTokenHash,
+    product_id: options.productId,
+  });
+
+  const accessCode = {
+    code: accessCodeValue,
+    email: emailLower,
+    services,
+    used: true,
+    expires_at: stackedExpiry,
+    expiresAt: stackedExpiry,
+  };
+
+  await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
+    sendWelcome: true,
+    codeKey: accessCodeValue,
+  });
+
+  const effectiveEntitlements = [...usedEntitlements, accessCode];
+  const effectiveCode = resolveEffectiveEntitlement(effectiveEntitlements, nowTs) || accessCode;
+  const codeServices = effectiveCode.services || services;
+  const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+  const stackedRawExpiry =
+    getLatestEntitlementExpiry(effectiveEntitlements) || stackedExpiry;
+  accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
+
+  return {
+    code: effectiveCode.code || accessCodeValue,
+    expiresAt: getGraceWindowEnd(stackedRawExpiry),
+    accessExpiryAt: stackedRawExpiry,
+    gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
+    graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
+    services: allServices,
+    orderId,
+  };
+}
+
+app.post(
+  '/api/play/verify-purchase',
+  paymentLimiter,
+  requireAnyAuth,
+  [
+    body('purchaseToken').notEmpty().trim(),
+    body('productId').optional().trim(),
+    body('packageName').optional().trim(),
+    body('accountId').optional().trim(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const emailLower = normalizeEmail(req.userEmail);
+      const userAccountId = (req.body.accountId || emailLower).toString().trim();
+      const purchaseToken = String(req.body.purchaseToken).trim();
+      const productId = String(req.body.productId || GOOGLE_PLAY_PRODUCT_ID).trim();
+      const packageName = String(req.body.packageName || GOOGLE_PLAY_PACKAGE_NAME).trim();
+      const tokenHash = hashPlayPurchaseToken(purchaseToken);
+
+      const existing = await db.getPlayPurchaseByTokenHash(tokenHash);
+      if (existing && existing.fulfilled === true && existing.code) {
+        return res.json({
+          success: true,
+          valid: true,
+          message: 'Purchase already activated for this account.',
+          code: existing.code,
+          expiresAt: existing.expiresAt,
+          services: existing.services || VALID_SERVICE_IDS,
+        });
+      }
+
+      const verified = await verifyGooglePlayPurchaseToken({
+        packageName,
+        productId,
+        purchaseToken,
+      });
+      if (!verified.ok) {
+        return res.status(400).json({
+          success: false,
+          valid: false,
+          message: `Google Play purchase could not be verified (${verified.reason}).`,
+        });
+      }
+
+      const entitlement = await grantPlayEntitlementForIdentity(emailLower, userAccountId, {
+        services: VALID_SERVICE_IDS,
+        validityDays: ACCESS_PLANS.monthly.validityDays,
+        purchaseTokenHash: tokenHash,
+        productId,
+        orderId: `PLAY_${tokenHash.slice(0, 12)}`,
+      });
+
+      await sendPlayAdminWelcomeEmail(
+        emailLower,
+        entitlement.services || VALID_SERVICE_IDS,
+        ACCESS_PLANS.monthly.validityDays
+      );
+
+      await db.savePlayPurchase(tokenHash, {
+        email: emailLower,
+        account_id: userAccountId,
+        product_id: productId,
+        package_name: packageName,
+        fulfilled: true,
+        code: entitlement.code,
+        expiresAt: entitlement.expiresAt,
+        services: entitlement.services,
+        order_id: entitlement.orderId,
+        verified_kind: verified.kind,
+        created_at: new Date().toISOString(),
+      });
+
+      return res.json({
+        success: true,
+        valid: true,
+        message: 'Premium activated. Sign in with Google to open your Server Dashboard.',
+        code: entitlement.code,
+        expiresAt: entitlement.expiresAt,
+        accessExpiryAt: entitlement.accessExpiryAt,
+        gracePeriodHours: entitlement.gracePeriodHours,
+        graceEndsAt: entitlement.graceEndsAt,
+        services: entitlement.services,
+      });
+    } catch (error) {
+      console.error('Error in play/verify-purchase:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to activate Play purchase. Please try again.',
+      });
     }
   }
 );

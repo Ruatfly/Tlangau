@@ -828,6 +828,23 @@ class Database {
     return { deleted: true };
   }
 
+  // ==================== GOOGLE PLAY PURCHASES ====================
+
+  async getPlayPurchaseByTokenHash(tokenHash) {
+    if (!tokenHash) return null;
+    const snapshot = await this.db.ref(`play_purchases/${tokenHash}`).once('value');
+    return snapshot.val();
+  }
+
+  async savePlayPurchase(tokenHash, data) {
+    if (!tokenHash) throw new Error('tokenHash required');
+    await this.db.ref(`play_purchases/${tokenHash}`).set({
+      ...data,
+      updated_at: new Date().toISOString(),
+    });
+    return data;
+  }
+
   close() {
     return Promise.resolve();
   }
