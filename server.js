@@ -2724,6 +2724,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 
     const ringTypeValue = ringType || 'wet';
     const ringTypeLabel = getRingTypeLabel(ringTypeValue);
+    const apnsRingSound = getApnsRingSound(ringTypeValue);
     console.log(`ï¿½xï¿½ Ring: ${normalizedBundleName}/${normalizedTopicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
@@ -2738,8 +2739,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
-      // iOS: alert banner (no aps.sound) + content-available wakes native ~30s AVAudioPlayer.
-      // Use kebab-case APNS keys — proven format on this project (firebase-admin passes through).
+      // iOS: bundled ~30s WAV via APNs (lock screen / killed / foreground) + content-available
+      // wakes native AVAudioPlayer on unlocked home screen where banner sound cuts off early.
       apns: {
         headers: {
           'apns-priority': '10',
@@ -2751,6 +2752,7 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
               title: `Ring: ${normalizedBundleName}`,
               body: `${normalizedTopicName} (${ringTypeLabel})`,
             },
+            sound: apnsRingSound,
             'content-available': 1,
             category: 'tlangau_ring_category',
             'thread-id': 'tlangau_ring_alerts',
