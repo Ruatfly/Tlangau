@@ -2738,8 +2738,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
-      // iOS: visible alert (no sound) + content-available wakes native handler for ~30s AVAudioPlayer.
-      // APNs sound tied to the banner was the ~1s home-screen bug; app-owned audio must not use aps.sound.
+      // iOS: alert banner (no aps.sound) + content-available wakes native ~30s AVAudioPlayer.
+      // Use kebab-case APNS keys — proven format on this project (firebase-admin passes through).
       apns: {
         headers: {
           'apns-priority': '10',
@@ -2751,10 +2751,9 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
               title: `Ring: ${normalizedBundleName}`,
               body: `${normalizedTopicName} (${ringTypeLabel})`,
             },
-            contentAvailable: true,
             'content-available': 1,
             category: 'tlangau_ring_category',
-            threadId: 'tlangau_ring_alerts',
+            'thread-id': 'tlangau_ring_alerts',
             'interruption-level': 'time-sensitive',
           },
         },
@@ -2762,18 +2761,26 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
       webpush: { headers: { Urgency: 'high' } },
     };
 
+    let lastFcmError = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const result = await admin.messaging().send(message);
         console.log(`ï¿½S& Ring sent: ${result}`);
         return res.json({ success: true, messageId: result });
       } catch (error) {
-        console.error(`ï¿½R Ring failed (${attempt}/2):`, error.code || error.message);
+        lastFcmError = error;
+        console.error(`ï¿½R Ring failed (${attempt}/2):`, error.code || error.message, error.message);
         if (attempt < 2) await new Promise(r => setTimeout(r, 500));
       }
     }
 
-    res.status(500).json({ success: false, message: 'Failed to send ring notification' });
+    const fcmMessage = lastFcmError?.message || 'Failed to send ring notification';
+    const fcmCode = lastFcmError?.code || 'messaging/send-failed';
+    res.status(500).json({
+      success: false,
+      message: fcmMessage,
+      error: fcmCode,
+    });
   } catch (error) {
     console.error('ï¿½R Error in send-ring:', error.message);
     res.status(500).json({ success: false, message: error.message });
