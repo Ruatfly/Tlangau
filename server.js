@@ -592,6 +592,28 @@ function getLatestEntitlementExpiry(codes) {
   return maxExpiryTs === null ? null : new Date(maxExpiryTs).toISOString();
 }
 
+/** Union of paid services from all non-expired entitlements for an identity. */
+function mergeActivePaidServices(codes, nowTs = Date.now()) {
+  const paid = new Set();
+  if (!Array.isArray(codes)) return [];
+  for (const code of codes) {
+    const rawExpiry = code?.expiresAt || code?.expires_at;
+    if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
+    const startTs = getEntitlementStartTs(code);
+    if (startTs > nowTs) continue;
+    for (const serviceId of code.services || []) {
+      if (VALID_SERVICE_IDS.includes(serviceId)) {
+        paid.add(serviceId);
+      }
+    }
+  }
+  return [...paid];
+}
+
+function mergeActiveServicesWithFree(codes, nowTs = Date.now()) {
+  return [...new Set([...mergeActivePaidServices(codes, nowTs), ...FREE_SERVICES])];
+}
+
 // Build email HTML with service info
 function buildAccessCodeEmailHtml(code, services, validityDays = 30) {
   const serviceNames = getServiceNames(services);
@@ -1490,6 +1512,24 @@ const GOOGLE_PLAY_PACKAGE_NAME =
 const GOOGLE_PLAY_PRODUCT_ID =
   process.env.GOOGLE_PLAY_PRODUCT_ID || 'tlangau_premium_monthly';
 
+/** Play product ID → paid service IDs activated by that purchase. */
+const GOOGLE_PLAY_PRODUCT_CATALOG = {
+  tlangau_premium_monthly: ['ring', 'message', 'broadcast'],
+  tlangau_service_ring_monthly: ['ring'],
+  tlangau_service_message_monthly: ['message'],
+  tlangau_service_broadcast_monthly: ['broadcast'],
+};
+
+function servicesForPlayProductId(productId) {
+  const key = String(productId || '').trim();
+  const mapped = GOOGLE_PLAY_PRODUCT_CATALOG[key];
+  if (mapped && mapped.length > 0) {
+    return [...mapped];
+  }
+  console.warn(`Unknown Play product "${key}", granting all paid services`);
+  return [...VALID_SERVICE_IDS];
+}
+
 function hashPlayPurchaseToken(purchaseToken) {
   return crypto.createHash('sha256').update(String(purchaseToken)).digest('hex');
 }
@@ -1678,8 +1718,8 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
 
   const effectiveEntitlements = [...usedEntitlements, accessCode];
   const effectiveCode = resolveEffectiveEntitlement(effectiveEntitlements, nowTs) || accessCode;
-  const codeServices = effectiveCode.services || services;
-  const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+  const mergedPaid = mergeActivePaidServices(effectiveEntitlements, nowTs);
+  const allServices = [...new Set([...mergedPaid, ...FREE_SERVICES])];
   const stackedRawExpiry =
     getLatestEntitlementExpiry(effectiveEntitlements) || stackedExpiry;
   accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
@@ -1744,8 +1784,10 @@ app.post(
         });
       }
 
+      const purchasedServices = servicesForPlayProductId(productId);
+
       const entitlement = await grantPlayEntitlementForIdentity(emailLower, userAccountId, {
-        services: VALID_SERVICE_IDS,
+        services: purchasedServices,
         validityDays: ACCESS_PLANS.monthly.validityDays,
         purchaseTokenHash: tokenHash,
         productId,
@@ -1754,7 +1796,7 @@ app.post(
 
       await sendPlayAdminWelcomeEmail(
         emailLower,
-        entitlement.services || VALID_SERVICE_IDS,
+        purchasedServices,
         ACCESS_PLANS.monthly.validityDays
       );
 
@@ -2015,32 +2057,37 @@ app.post(
         accessCode = await db.getCodeByEmail(emailLower);
       }
 
-      if (!accessCode) {
+      const mergedPaid = mergeActivePaidServices(usedEntitlements);
+      if (mergedPaid.length === 0 && !accessCode) {
         return res.json({ success: false, valid: false, message: 'No access code found for this email' });
       }
 
-      const codeServices = accessCode.services || VALID_SERVICE_IDS;
-      const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
-      const rawExpiry = accessCode.expiresAt || accessCode.expires_at;
+      const rawExpiry = accessCode?.expiresAt || accessCode?.expires_at;
       const stackedRawExpiry = getLatestEntitlementExpiry(usedEntitlements) || rawExpiry;
-      const accessStillValid = isWithinAccessWindow(rawExpiry);
-      await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
-        sendWelcome: false,
-        sendExpiredNotice: accessStillValid === false,
-      });
-      accessCodeCache.set(emailLower, { accessCode, cachedAt: Date.now() });
+      const allServices = mergeActiveServicesWithFree(usedEntitlements);
+      const accessStillValid =
+        mergedPaid.length > 0 && isWithinAccessWindow(stackedRawExpiry);
+      if (accessCode) {
+        await maybeSendAutomatedAccessCodeMails(emailLower, accessCode, {
+          sendWelcome: false,
+          sendExpiredNotice: accessStillValid === false,
+        });
+      }
+      if (accessCode) {
+        accessCodeCache.set(emailLower, { accessCode, cachedAt: Date.now() });
+      }
 
       res.json({
         success: true,
-        code: accessCode.code,
+        code: accessCode?.code,
         expiresAt: getGraceWindowEnd(stackedRawExpiry),
         accessExpiryAt: stackedRawExpiry,
         gracePeriodHours: ACCESS_GRACE_PERIOD_HOURS,
         graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
-        used: accessCode.used,
+        used: accessCode?.used ?? true,
         services: allServices,
-        planDuration: accessCode.plan_duration || 'monthly',
-        validityDays: accessCode.validity_days || ACCESS_PLANS.monthly.validityDays,
+        planDuration: accessCode?.plan_duration || 'monthly',
+        validityDays: accessCode?.validity_days || ACCESS_PLANS.monthly.validityDays,
         message: 'Access code info retrieved',
       });
     } catch (error) {
@@ -2951,8 +2998,14 @@ async function requireServerAuth(req, res, next) {
       return res.status(403).json({ success: false, message: 'Access not authorized for this account.' });
     }
 
-    const rawExpiry = accessCode.expiresAt || accessCode.expires_at;
-    if (!isWithinAccessWindow(rawExpiry)) {
+    const usedEntitlements = await db.getUsedCodesForIdentity(email, email);
+    const mergedPaid = mergeActivePaidServices(usedEntitlements);
+    const stackedRawExpiry =
+      getLatestEntitlementExpiry(usedEntitlements) ||
+      accessCode.expiresAt ||
+      accessCode.expires_at;
+
+    if (mergedPaid.length === 0 || !isWithinAccessWindow(stackedRawExpiry)) {
       await maybeSendAutomatedAccessCodeMails(email, accessCode, {
         sendWelcome: false,
         sendExpiredNotice: true,
@@ -2965,7 +3018,7 @@ async function requireServerAuth(req, res, next) {
 
     await maybeSendAutomatedAccessCodeMails(email, accessCode, { sendWelcome: false });
     req.userEmail = email;
-    req.userServices = accessCode.services || VALID_SERVICE_IDS; // Backward compat
+    req.userServices = mergeActiveServicesWithFree(usedEntitlements);
     next();
   } catch (error) {
     console.error('ï¿½R Auth check error:', error.message);
