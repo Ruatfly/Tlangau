@@ -2724,7 +2724,6 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
 
     const ringTypeValue = ringType || 'wet';
     const ringTypeLabel = getRingTypeLabel(ringTypeValue);
-    const apnsRingSound = getApnsRingSound(ringTypeValue);
     console.log(`ï¿½xï¿½ Ring: ${normalizedBundleName}/${normalizedTopicName} (${ringTypeValue}) by ${req.userEmail}`);
 
     const message = {
@@ -2739,8 +2738,8 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
         topicName: normalizedTopicName,
       },
       android: { priority: 'high', ttl: 300000 },
-      // iOS: bundled type-specific sound (works when app is killed) + content-available
-      // so native RingTonePlayer can show Stop UI when the app wakes.
+      // iOS: visible alert (no sound) + content-available wakes native handler for ~30s AVAudioPlayer.
+      // APNs sound tied to the banner was the ~1s home-screen bug; app-owned audio must not use aps.sound.
       apns: {
         headers: {
           'apns-priority': '10',
@@ -2752,10 +2751,10 @@ app.post('/api/send-ring', fcmLimiter, requireServerAuth, requireService('ring')
               title: `Ring: ${normalizedBundleName}`,
               body: `${normalizedTopicName} (${ringTypeLabel})`,
             },
-            sound: apnsRingSound,
+            contentAvailable: true,
             'content-available': 1,
-            'thread-id': 'tlangau_ring_alerts',
             category: 'tlangau_ring_category',
+            threadId: 'tlangau_ring_alerts',
             'interruption-level': 'time-sensitive',
           },
         },
