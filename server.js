@@ -601,10 +601,8 @@ function mergeActivePaidServices(codes, nowTs = Date.now()) {
     if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
     const startTs = getEntitlementStartTs(code);
     if (startTs > nowTs && code?.platform !== 'google_play') continue;
-    for (const serviceId of code.services || []) {
-      if (VALID_SERVICE_IDS.includes(serviceId)) {
-        paid.add(serviceId);
-      }
+    for (const serviceId of getPaidServicesForEntitlement(code)) {
+      paid.add(serviceId);
     }
   }
   return [...paid];
@@ -1530,8 +1528,48 @@ function servicesForPlayProductId(productId) {
   if (mapped && mapped.length > 0) {
     return [...mapped];
   }
-  console.warn(`Unknown Play product "${key}", granting all paid services`);
-  return [...VALID_SERVICE_IDS];
+  console.warn(`Unknown Play product "${key}" — no services granted`);
+  return [];
+}
+
+/** Paid services for one entitlement (Play purchases use product_id as source of truth). */
+function getPaidServicesForEntitlement(code) {
+  const productId = String(code?.product_id || '').trim();
+  if (code?.platform === 'google_play' && productId) {
+    const fromProduct = servicesForPlayProductId(productId);
+    if (fromProduct.length > 0) return fromProduct;
+  }
+  const stored = Array.isArray(code?.services) ? code.services : [];
+  const filtered = stored.filter((s) => VALID_SERVICE_IDS.includes(s));
+  if (filtered.length > 0) return filtered;
+  // Legacy Cashfree codes without a services array
+  if (code?.platform !== 'google_play') {
+    return [...VALID_SERVICE_IDS];
+  }
+  return [];
+}
+
+function resolvePlayProductIdsFromVerification(verified, fallbackProductId) {
+  const ids = [];
+  if (verified?.kind === 'subscription' && Array.isArray(verified.raw?.lineItems)) {
+    for (const item of verified.raw.lineItems) {
+      const pid = String(item?.productId || '').trim();
+      if (pid) ids.push(pid);
+    }
+  }
+  const fallback = String(fallbackProductId || '').trim();
+  if (ids.length === 0 && fallback) ids.push(fallback);
+  return [...new Set(ids)];
+}
+
+function servicesForPlayProductIds(productIds) {
+  const paid = new Set();
+  for (const pid of productIds) {
+    for (const serviceId of servicesForPlayProductId(pid)) {
+      paid.add(serviceId);
+    }
+  }
+  return [...paid];
 }
 
 function hashPlayPurchaseToken(purchaseToken) {
@@ -1672,7 +1710,13 @@ async function sendPlayAdminWelcomeEmail(email, services, validityDays = 30) {
 }
 
 async function grantPlayEntitlementForIdentity(emailLower, userAccountId, options = {}) {
-  const services = options.services || VALID_SERVICE_IDS;
+  const services =
+    Array.isArray(options.services) && options.services.length > 0
+      ? options.services.filter((s) => VALID_SERVICE_IDS.includes(s))
+      : [];
+  if (services.length === 0) {
+    throw new Error('grantPlayEntitlementForIdentity requires at least one paid service');
+  }
   const validityDays = options.validityDays || ACCESS_PLANS.monthly.validityDays;
   const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
   const nowTs = Date.now();
@@ -1747,7 +1791,7 @@ app.post(
   requireAnyAuth,
   [
     body('purchaseToken').notEmpty().trim(),
-    body('productId').optional().trim(),
+    body('productId').notEmpty().trim(),
     body('packageName').optional().trim(),
     body('accountId').optional().trim(),
   ],
@@ -1761,7 +1805,7 @@ app.post(
       const emailLower = normalizeEmail(req.userEmail);
       const userAccountId = (req.body.accountId || emailLower).toString().trim();
       const purchaseToken = String(req.body.purchaseToken).trim();
-      const productId = String(req.body.productId || GOOGLE_PLAY_PRODUCT_ID).trim();
+      const clientProductId = String(req.body.productId || '').trim();
       const packageName = String(req.body.packageName || GOOGLE_PLAY_PACKAGE_NAME).trim();
       const tokenHash = hashPlayPurchaseToken(purchaseToken);
 
@@ -1783,7 +1827,7 @@ app.post(
 
       const verified = await verifyGooglePlayPurchaseToken({
         packageName,
-        productId,
+        productId: clientProductId,
         purchaseToken,
       });
       if (!verified.ok) {
@@ -1794,7 +1838,21 @@ app.post(
         });
       }
 
-      const purchasedServices = servicesForPlayProductId(productId);
+      const resolvedProductIds = resolvePlayProductIdsFromVerification(
+        verified,
+        clientProductId
+      );
+      const productId = resolvedProductIds[0] || clientProductId;
+      const purchasedServices = servicesForPlayProductIds(resolvedProductIds);
+      if (purchasedServices.length === 0) {
+        return res.status(400).json({
+          success: false,
+          valid: false,
+          message:
+            `This purchase could not be mapped to a service (product: ${productId}). ` +
+            'Contact support if you were charged.',
+        });
+      }
 
       const entitlement = await grantPlayEntitlementForIdentity(emailLower, userAccountId, {
         services: purchasedServices,
@@ -1818,7 +1876,7 @@ app.post(
         fulfilled: true,
         code: entitlement.code,
         expiresAt: entitlement.expiresAt,
-        services: entitlement.services,
+        services: purchasedServices,
         order_id: entitlement.orderId,
         verified_kind: verified.kind,
         created_at: new Date().toISOString(),
