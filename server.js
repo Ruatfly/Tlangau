@@ -1520,7 +1520,24 @@ const GOOGLE_PLAY_PRODUCT_CATALOG = {
   tlangau_bundle_ring_broadcast_monthly: ['ring', 'broadcast'],
   tlangau_bundle_message_broadcast_monthly: ['message', 'broadcast'],
   tlangau_bundle_all_monthly: ['ring', 'message', 'broadcast'],
+  tlangau_service_ring_yearly: ['ring'],
+  tlangau_service_message_yearly: ['message'],
+  tlangau_service_broadcast_yearly: ['broadcast'],
+  tlangau_bundle_ring_message_yearly: ['ring', 'message'],
+  tlangau_bundle_ring_broadcast_yearly: ['ring', 'broadcast'],
+  tlangau_bundle_message_broadcast_yearly: ['message', 'broadcast'],
+  tlangau_bundle_all_yearly: ['ring', 'message', 'broadcast'],
 };
+
+function planDurationForPlayProductId(productId) {
+  const key = String(productId || '');
+  return key.includes('_yearly') ? 'yearly' : 'monthly';
+}
+
+function validityDaysForPlayProductId(productId) {
+  const plan = planDurationForPlayProductId(productId);
+  return ACCESS_PLANS[plan]?.validityDays || ACCESS_PLANS.monthly.validityDays;
+}
 
 function servicesForPlayProductId(productId) {
   const key = String(productId || '').trim();
@@ -1717,18 +1734,32 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
   if (services.length === 0) {
     throw new Error('grantPlayEntitlementForIdentity requires at least one paid service');
   }
-  const validityDays = options.validityDays || ACCESS_PLANS.monthly.validityDays;
+  const planDuration =
+    options.planDuration || planDurationForPlayProductId(options.productId);
+  const validityDays =
+    options.validityDays ||
+    validityDaysForPlayProductId(options.productId) ||
+    ACCESS_PLANS.monthly.validityDays;
   const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
   const nowTs = Date.now();
   const validityMs = getValidityDurationMs(validityDays);
 
-  // Play per-service / bundle purchases: all selected services active immediately for 30 days.
+  // Stack from the latest active expiry for the same service(s) being purchased.
+  let stackBaseTs = nowTs;
+  for (const code of usedEntitlements) {
+    const codeServices = getPaidServicesForEntitlement(code);
+    const overlaps = services.some((s) => codeServices.includes(s));
+    if (!overlaps) continue;
+    const rawExpiry = code?.expiresAt || code?.expires_at;
+    if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
+    const startTs = getEntitlementStartTs(code);
+    if (startTs > nowTs && code?.platform !== 'google_play') continue;
+    const expiryTs = toTimestamp(rawExpiry) || 0;
+    if (expiryTs > stackBaseTs) stackBaseTs = expiryTs;
+  }
+
   const entitlementStartsAt = new Date(nowTs).toISOString();
-  const latestActiveExpiryTs = toTimestamp(getLatestEntitlementExpiry(usedEntitlements)) || 0;
-  const newExpiryTs = nowTs + validityMs;
-  const stackedExpiryTs =
-    latestActiveExpiryTs > nowTs ? Math.max(newExpiryTs, latestActiveExpiryTs) : newExpiryTs;
-  const stackedExpiry = new Date(stackedExpiryTs).toISOString();
+  const stackedExpiry = new Date(stackBaseTs + validityMs).toISOString();
 
   const accessCodeValue = generateAccessCode();
   const orderId = options.orderId || `PLAY_${nowTs}`;
@@ -1745,7 +1776,7 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
     expires_at: stackedExpiry,
     entitlement_starts_at: entitlementStartsAt,
     services,
-    plan_duration: 'monthly',
+    plan_duration: planDuration,
     validity_days: validityDays,
     platform: 'google_play',
     purchase_token_hash: options.purchaseTokenHash,
@@ -1854,19 +1885,19 @@ app.post(
         });
       }
 
+      const planDuration = planDurationForPlayProductId(productId);
+      const validityDays = validityDaysForPlayProductId(productId);
+
       const entitlement = await grantPlayEntitlementForIdentity(emailLower, userAccountId, {
         services: purchasedServices,
-        validityDays: ACCESS_PLANS.monthly.validityDays,
+        validityDays,
+        planDuration,
         purchaseTokenHash: tokenHash,
         productId,
         orderId: `PLAY_${tokenHash.slice(0, 12)}`,
       });
 
-      await sendPlayAdminWelcomeEmail(
-        emailLower,
-        purchasedServices,
-        ACCESS_PLANS.monthly.validityDays
-      );
+      await sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays);
 
       await db.savePlayPurchase(tokenHash, {
         email: emailLower,
