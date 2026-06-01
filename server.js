@@ -600,7 +600,7 @@ function mergeActivePaidServices(codes, nowTs = Date.now()) {
     const rawExpiry = code?.expiresAt || code?.expires_at;
     if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
     const startTs = getEntitlementStartTs(code);
-    if (startTs > nowTs) continue;
+    if (startTs > nowTs && code?.platform !== 'google_play') continue;
     for (const serviceId of code.services || []) {
       if (VALID_SERVICE_IDS.includes(serviceId)) {
         paid.add(serviceId);
@@ -1518,6 +1518,10 @@ const GOOGLE_PLAY_PRODUCT_CATALOG = {
   tlangau_service_ring_monthly: ['ring'],
   tlangau_service_message_monthly: ['message'],
   tlangau_service_broadcast_monthly: ['broadcast'],
+  tlangau_bundle_ring_message_monthly: ['ring', 'message'],
+  tlangau_bundle_ring_broadcast_monthly: ['ring', 'broadcast'],
+  tlangau_bundle_message_broadcast_monthly: ['message', 'broadcast'],
+  tlangau_bundle_all_monthly: ['ring', 'message', 'broadcast'],
 };
 
 function servicesForPlayProductId(productId) {
@@ -1671,14 +1675,16 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
   const services = options.services || VALID_SERVICE_IDS;
   const validityDays = options.validityDays || ACCESS_PLANS.monthly.validityDays;
   const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
-  const latestUsedEntitlement = usedEntitlements.length > 0 ? usedEntitlements[0] : null;
-  const previousExpiryIso = latestUsedEntitlement?.expiresAt || latestUsedEntitlement?.expires_at;
-  const previousExpiryTs = toTimestamp(previousExpiryIso) || 0;
   const nowTs = Date.now();
-  const entitlementStartsAt = new Date(Math.max(nowTs, previousExpiryTs)).toISOString();
-  const stackedExpiry = new Date(
-    (toTimestamp(entitlementStartsAt) || nowTs) + getValidityDurationMs(validityDays)
-  ).toISOString();
+  const validityMs = getValidityDurationMs(validityDays);
+
+  // Play per-service / bundle purchases: all selected services active immediately for 30 days.
+  const entitlementStartsAt = new Date(nowTs).toISOString();
+  const latestActiveExpiryTs = toTimestamp(getLatestEntitlementExpiry(usedEntitlements)) || 0;
+  const newExpiryTs = nowTs + validityMs;
+  const stackedExpiryTs =
+    latestActiveExpiryTs > nowTs ? Math.max(newExpiryTs, latestActiveExpiryTs) : newExpiryTs;
+  const stackedExpiry = new Date(stackedExpiryTs).toISOString();
 
   const accessCodeValue = generateAccessCode();
   const orderId = options.orderId || `PLAY_${nowTs}`;
@@ -1761,13 +1767,17 @@ app.post(
 
       const existing = await db.getPlayPurchaseByTokenHash(tokenHash);
       if (existing && existing.fulfilled === true && existing.code) {
+        const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+        const stackedRawExpiry =
+          getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
         return res.json({
           success: true,
           valid: true,
           message: 'Purchase already activated for this account.',
           code: existing.code,
-          expiresAt: existing.expiresAt,
-          services: existing.services || VALID_SERVICE_IDS,
+          expiresAt: getGraceWindowEnd(stackedRawExpiry),
+          accessExpiryAt: stackedRawExpiry,
+          services: mergeActiveServicesWithFree(usedEntitlements),
         });
       }
 
@@ -1912,8 +1922,7 @@ app.post(
           });
         }
 
-        const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
-        const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+        const allServices = mergeActiveServicesWithFree(usedEntitlements, nowTs);
         const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
         const stackedRawExpiry = getLatestEntitlementExpiry(usedEntitlements) || effectiveRawExpiry;
         accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
@@ -1964,10 +1973,7 @@ app.post(
 
       const effectiveEntitlements = [...usedEntitlements, accessCode];
       const effectiveCode = resolveEffectiveEntitlement(effectiveEntitlements, nowTs) || accessCode;
-      // Return services from currently effective entitlement.
-      const codeServices = effectiveCode.services || VALID_SERVICE_IDS;
-      // Always include free services
-      const allServices = [...new Set([...codeServices, ...FREE_SERVICES])];
+      const allServices = mergeActiveServicesWithFree(effectiveEntitlements, nowTs);
       const effectiveRawExpiry = effectiveCode.expiresAt || effectiveCode.expires_at;
       const stackedRawExpiry = getLatestEntitlementExpiry(effectiveEntitlements) || effectiveRawExpiry;
       accessCodeCache.set(emailLower, { accessCode: effectiveCode, cachedAt: Date.now() });
