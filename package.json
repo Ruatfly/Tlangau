@@ -1,6 +1,6 @@
 {
   "name": "tlangau-web",
-  "version": "1.0.11",
+  "version": "1.0.11-64",
   "description": "Tlangau Access Code Web Portal with Payment Gateway",
   "main": "server.js",
   "scripts": {
