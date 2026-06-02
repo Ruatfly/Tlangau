@@ -2181,6 +2181,29 @@ app.post(
         graceEndsAt: getGraceWindowEnd(stackedRawExpiry),
         used: accessCode?.used ?? true,
         services: allServices,
+        // Extra detail for clients that want to show "Active" per billing period.
+        // Only includes entitlements that are currently within the access window.
+        activeEntitlements: (Array.isArray(usedEntitlements) ? usedEntitlements : [])
+          .filter((c) => {
+            const raw = c?.expiresAt || c?.expires_at;
+            if (!isWithinAccessWindow(raw)) return false;
+            const startTs = getEntitlementStartTs(c);
+            return startTs <= Date.now() || c?.platform === 'google_play';
+          })
+          .map((c) => {
+            const pid = String(c?.product_id || '').trim();
+            const plan =
+              c?.plan_duration ||
+              (pid ? planDurationForPlayProductId(pid) : null) ||
+              'monthly';
+            return {
+              platform: c?.platform || null,
+              productId: pid || null,
+              planDuration: plan,
+              expiresAt: c?.expiresAt || c?.expires_at || null,
+              services: getPaidServicesForEntitlement(c),
+            };
+          }),
         planDuration: accessCode?.plan_duration || 'monthly',
         validityDays: accessCode?.validity_days || ACCESS_PLANS.monthly.validityDays,
         message: 'Access code info retrieved',
