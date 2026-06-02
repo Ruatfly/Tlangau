@@ -369,6 +369,7 @@
             <div class="tabs" id="tabsBar">
                 <button class="tab active" data-tab="orders">Orders</button>
                 <button class="tab" data-tab="codes">Access Codes</button>
+                <button class="tab" data-tab="play">Google Play</button>
                 <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="bundles">Bundles & Topics</button>
                 <button class="tab" data-tab="deletionRequests">Deletion Requests</button>
@@ -436,6 +437,52 @@
                             </tr>
                         </thead>
                         <tbody id="codesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Google Play Tab -->
+            <div id="playTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="playSearch" placeholder="Search by email, SKU, code, or service...">
+
+                    <div style="background:#f9f9f9; border:1px solid #e0e0e0; border-radius:8px; padding:12px 14px; margin: 8px 0 18px 0;">
+                        <div style="font-weight:700; color:#333; margin-bottom:4px;">About Google Play records</div>
+                        <div style="font-size:12px; color:#666; line-height:1.45;">
+                            These rows show <strong>server entitlements</strong> granted after Play verification (SKU → services → expiry).
+                            For billing truth (charge, refund, chargeback), use <strong>Play Console → Order management</strong>.
+                        </div>
+                    </div>
+
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
+                        <label style="font-size: 12px; color:#666; font-weight:600;">Filter</label>
+                        <select id="playFilter" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="all">All</option>
+                            <option value="active">Active</option>
+                            <option value="expired">Expired</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                        <button class="btn" id="playRefreshBtn" style="width:auto; padding: 10px 14px; font-size: 12px; background:#6c757d;">Refresh</button>
+                        <span style="margin-left:auto; font-size: 12px; color:#666;" id="playCountLabel"></span>
+                    </div>
+
+                    <div id="playLoading" class="loading">Loading Google Play purchases...</div>
+                    <table id="playTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Plan</th>
+                                <th>SKU</th>
+                                <th>Services</th>
+                                <th>Status</th>
+                                <th>Entitlement Start</th>
+                                <th>Expires At</th>
+                                <th>Grace Ends</th>
+                                <th>Code Ref</th>
+                            </tr>
+                        </thead>
+                        <tbody id="playBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -664,6 +711,9 @@
         document.getElementById('codesSearch').addEventListener('keyup', function () {
             filterTable('codesTable', 'codesSearch');
         });
+        document.getElementById('playSearch').addEventListener('keyup', function () {
+            filterTable('playTable', 'playSearch');
+        });
         document.getElementById('codesSort').addEventListener('change', function () {
             renderAccessCodes();
             filterTable('codesTable', 'codesSearch');
@@ -798,6 +848,7 @@
                 loadStatistics(),
                 loadOrders(),
                 loadAccessCodes(),
+                loadPlayEntitlements(),
                 loadUsers(),
                 loadBundles(),
                 loadDeletionRequests(),
@@ -902,6 +953,105 @@
                 console.error('Error loading access codes:', error);
                 document.getElementById('codesLoading').textContent = 'Error loading access codes: ' + error.message;
             }
+        }
+
+        // ==================== GOOGLE PLAY (SERVER ENTITLEMENTS) ====================
+
+        let _allPlayEntitlements = [];
+
+        document.getElementById('playFilter').addEventListener('change', function () {
+            renderPlayEntitlements();
+            filterTable('playTable', 'playSearch');
+        });
+        document.getElementById('playRefreshBtn').addEventListener('click', function () {
+            loadPlayEntitlements();
+        });
+
+        async function loadPlayEntitlements() {
+            try {
+                document.getElementById('playLoading').style.display = 'block';
+                document.getElementById('playTable').style.display = 'none';
+
+                const response = await fetch(`${BACKEND_URL}/api/admin/play-entitlements`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    _allPlayEntitlements = Array.isArray(data.entitlements) ? data.entitlements : [];
+                    renderPlayEntitlements();
+                    document.getElementById('playLoading').style.display = 'none';
+                    document.getElementById('playTable').style.display = 'table';
+                } else {
+                    document.getElementById('playLoading').textContent = 'Error loading Google Play purchases.';
+                }
+            } catch (error) {
+                console.error('Error loading play entitlements:', error);
+                document.getElementById('playLoading').textContent = 'Error loading Google Play purchases: ' + error.message;
+            }
+        }
+
+        function renderPlayEntitlements() {
+            const tbody = document.getElementById('playBody');
+            tbody.innerHTML = '';
+
+            const filterMode = document.getElementById('playFilter')?.value || 'all';
+            let rows = (_allPlayEntitlements || []).slice();
+
+            if (filterMode !== 'all') {
+                rows = rows.filter(r => {
+                    const status = String(r.status || '').toUpperCase();
+                    const plan = String(r.planDuration || '').toLowerCase();
+                    if (filterMode === 'active') return status === 'ACTIVE';
+                    if (filterMode === 'expired') return status === 'EXPIRED';
+                    if (filterMode === 'monthly') return plan === 'monthly';
+                    if (filterMode === 'yearly') return plan === 'yearly';
+                    return true;
+                });
+            }
+
+            const label = document.getElementById('playCountLabel');
+            if (label) label.textContent = `${rows.length} shown`;
+
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">🧾</div><p>No Google Play purchases match this filter</p></td></tr>';
+                return;
+            }
+
+            rows.forEach(r => {
+                const row = document.createElement('tr');
+
+                const plan = (r.planDuration || 'monthly').toLowerCase();
+                const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(plan)}</span>`;
+
+                const services = Array.isArray(r.services) ? r.services : [];
+                const servicesBadges = services.length > 0
+                    ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
+                    : '<span style="color:#999;font-size:12px;">-</span>';
+
+                const status = String(r.status || '').toUpperCase();
+                const statusBadge = status === 'ACTIVE'
+                    ? `<span class="badge success">ACTIVE</span>`
+                    : `<span class="badge expired">EXPIRED</span>`;
+
+                const startAt = r.entitlementStartsAt ? new Date(r.entitlementStartsAt).toLocaleString() : '-';
+                const expiresAt = r.expiresAt ? new Date(r.expiresAt).toLocaleString() : '-';
+                const graceEndsAt = r.graceEndsAt ? new Date(r.graceEndsAt).toLocaleString() : '-';
+
+                row.innerHTML = `
+                    <td>${esc(r.email || '-')}</td>
+                    <td>${planBadge}</td>
+                    <td><span class="badge" style="background:#f1f3f4;color:#333;margin:1px;font-size:10px;">${esc(r.productId || '-')}</span></td>
+                    <td>${servicesBadges}</td>
+                    <td>${statusBadge}</td>
+                    <td>${esc(startAt)}</td>
+                    <td>${esc(expiresAt)}</td>
+                    <td>${esc(graceEndsAt)}</td>
+                    <td><span class="badge" style="background:#f1f8e9;color:#2e7d32;margin:1px;font-size:10px;">${esc(r.code || '-')}</span></td>
+                `;
+
+                tbody.appendChild(row);
+            });
         }
 
         function _computeCodeMeta(code) {
@@ -1683,11 +1833,12 @@
             const tabMap = {
                 orders:  { index: 0, contentId: 'ordersTab' },
                 codes:   { index: 1, contentId: 'codesTab' },
-                users:   { index: 2, contentId: 'usersTab' },
-                bundles: { index: 3, contentId: 'bundlesTab' },
-                deletionRequests: { index: 4, contentId: 'deletionRequestsTab' },
-                polls:   { index: 5, contentId: 'pollsTab' },
-                mails:   { index: 6, contentId: 'mailsTab' },
+                play:    { index: 2, contentId: 'playTab' },
+                users:   { index: 3, contentId: 'usersTab' },
+                bundles: { index: 4, contentId: 'bundlesTab' },
+                deletionRequests: { index: 5, contentId: 'deletionRequestsTab' },
+                polls:   { index: 6, contentId: 'pollsTab' },
+                mails:   { index: 7, contentId: 'mailsTab' },
             };
 
             const info = tabMap[tab];
@@ -1696,6 +1847,7 @@
             const tabButtons = document.querySelectorAll('.tab');
             if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
             document.getElementById(info.contentId).classList.add('active');
+            if (tab === 'play') loadPlayEntitlements();
             if (tab === 'bundles') loadBundles();
             if (tab === 'deletionRequests') loadDeletionRequests();
             if (tab === 'polls') loadAdminPolls();

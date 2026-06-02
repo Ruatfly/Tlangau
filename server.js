@@ -246,7 +246,7 @@ app.get('/payment.html', (req, res, next) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260304a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260602a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -2318,6 +2318,56 @@ app.get('/api/admin/access-codes', checkAdminAuth, async (req, res) => {
   try {
     const codes = await db.getAllAccessCodes();
     res.json({ success: true, codes, count: codes.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Google Play purchases (server entitlements)
+// Note: this is NOT Play Console billing truth. It's what the backend granted after verification.
+app.get('/api/admin/play-entitlements', checkAdminAuth, async (req, res) => {
+  try {
+    const codes = await db.getAllAccessCodes();
+    const now = Date.now();
+
+    const play = (Array.isArray(codes) ? codes : [])
+      .filter((c) => String(c?.platform || '').toLowerCase() === 'google_play')
+      .map((c) => {
+        const productId = String(c?.product_id || c?.productId || '').trim() || null;
+        const rawExpiry = c?.expires_at || c?.expiresAt || null;
+        const graceEndsAt = rawExpiry ? getGraceWindowEnd(rawExpiry) : null;
+        const expTs = rawExpiry ? toTimestamp(rawExpiry) : null;
+        const isActive = expTs !== null && now <= (toTimestamp(graceEndsAt) ?? expTs);
+
+        const planDuration =
+          c?.plan_duration ||
+          (productId ? planDurationForPlayProductId(productId) : null) ||
+          'monthly';
+
+        const services = Array.isArray(c?.services) ? c.services : [];
+
+        return {
+          code: c?.code || null, // safe reference id (not a purchase token)
+          email: c?.email || c?.used_by_email || null,
+          accountId: c?.account_id || c?.accountId || null,
+          platform: 'google_play',
+          productId,
+          planDuration,
+          validityDays: c?.validity_days || c?.validityDays || null,
+          services,
+          entitlementStartsAt:
+            c?.entitlement_starts_at || c?.used_at || c?.created_at || null,
+          expiresAt: rawExpiry,
+          graceEndsAt,
+          status: isActive ? 'ACTIVE' : 'EXPIRED',
+          createdAt: c?.created_at || null,
+        };
+      });
+
+    // newest first
+    play.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    res.json({ success: true, entitlements: play, count: play.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
