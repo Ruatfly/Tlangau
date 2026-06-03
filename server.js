@@ -1918,7 +1918,9 @@ app.post(
         orderId: `PLAY_${tokenHash.slice(0, 12)}`,
       });
 
-      await sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays);
+      sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays).catch(
+        (err) => console.error('Play welcome email failed:', err.message)
+      );
 
       await db.savePlayPurchase(tokenHash, {
         email: emailLower,
@@ -2058,7 +2060,9 @@ app.post(
         }
       );
 
-      await sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays);
+      sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays).catch(
+        (err) => console.error('Apple welcome email failed:', err.message)
+      );
 
       await db.savePlayPurchase(txHash, {
         email: emailLower,
