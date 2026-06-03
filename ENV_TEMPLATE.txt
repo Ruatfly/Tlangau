@@ -48,6 +48,14 @@ FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","priv
 FIREBASE_SERVICE_ACCOUNT_PATH=./service-account-key.json
 # Firebase Realtime Database URL
 FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebasedatabase.app
+
+# Apple In-App Purchase (App Store Server API — iOS premium activation)
+# App Store Connect → Users and Access → Integrations → In-App Purchase
+APPLE_IAP_ISSUER_ID=
+APPLE_IAP_KEY_ID=
+APPLE_IAP_PRIVATE_KEY=
+APPLE_BUNDLE_ID=com.ruatfela.tlangau.tlangau
+APPLE_IAP_ENV=sandbox
 # To get service account key:
 # 1. Go to Firebase Console > Project Settings > Service Accounts
 # 2. Click "Generate new private key"

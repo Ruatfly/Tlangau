@@ -10,7 +10,9 @@ const crypto = require('crypto');
 const path = require('path');
 const axios = require('axios');
 const { GoogleAuth } = require('google-auth-library');
+const { createRemoteJWKSet, jwtVerify } = require('jose');
 const Database = require('./database');
+const { verifyAppleTransaction, isAppleIapConfigured } = require('./apple_iap');
 
 require('dotenv').config();
 
@@ -600,7 +602,13 @@ function mergeActivePaidServices(codes, nowTs = Date.now()) {
     const rawExpiry = code?.expiresAt || code?.expires_at;
     if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
     const startTs = getEntitlementStartTs(code);
-    if (startTs > nowTs && code?.platform !== 'google_play') continue;
+    if (
+      startTs > nowTs &&
+      code?.platform !== 'google_play' &&
+      code?.platform !== 'app_store'
+    ) {
+      continue;
+    }
     for (const serviceId of getPaidServicesForEntitlement(code)) {
       paid.add(serviceId);
     }
@@ -1527,6 +1535,10 @@ const GOOGLE_PLAY_PRODUCT_CATALOG = {
   tlangau_bundle_ring_broadcast_yearly: ['ring', 'broadcast'],
   tlangau_bundle_message_broadcast_yearly: ['message', 'broadcast'],
   tlangau_bundle_all_yearly: ['ring', 'message', 'broadcast'],
+  // App Store Connect yearly (alternate product IDs on iOS)
+  tlangau_ring_yearly: ['ring'],
+  tlangau_message_yearly: ['message'],
+  tlangau_broadcast_yearly: ['broadcast'],
 };
 
 function planDurationForPlayProductId(productId) {
@@ -1552,7 +1564,10 @@ function servicesForPlayProductId(productId) {
 /** Paid services for one entitlement (Play purchases use product_id as source of truth). */
 function getPaidServicesForEntitlement(code) {
   const productId = String(code?.product_id || '').trim();
-  if (code?.platform === 'google_play' && productId) {
+  if (
+    (code?.platform === 'google_play' || code?.platform === 'app_store') &&
+    productId
+  ) {
     const fromProduct = servicesForPlayProductId(productId);
     if (fromProduct.length > 0) return fromProduct;
   }
@@ -1753,7 +1768,13 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
     const rawExpiry = code?.expiresAt || code?.expires_at;
     if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
     const startTs = getEntitlementStartTs(code);
-    if (startTs > nowTs && code?.platform !== 'google_play') continue;
+    if (
+      startTs > nowTs &&
+      code?.platform !== 'google_play' &&
+      code?.platform !== 'app_store'
+    ) {
+      continue;
+    }
     const expiryTs = toTimestamp(rawExpiry) || 0;
     if (expiryTs > stackBaseTs) stackBaseTs = expiryTs;
   }
@@ -1778,7 +1799,7 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
     services,
     plan_duration: planDuration,
     validity_days: validityDays,
-    platform: 'google_play',
+    platform: options.platform || 'google_play',
     purchase_token_hash: options.purchaseTokenHash,
     product_id: options.productId,
   });
@@ -1929,6 +1950,148 @@ app.post(
       res.status(500).json({
         success: false,
         message: 'Failed to activate Play purchase. Please try again.',
+      });
+    }
+  }
+);
+
+// ==================== APP STORE BILLING (iOS) ====================
+
+function hashAppleTransactionId(transactionId) {
+  return crypto.createHash('sha256').update(String(transactionId)).digest('hex');
+}
+
+app.post(
+  '/api/apple/verify-purchase',
+  paymentLimiter,
+  [
+    body('transactionId').notEmpty().trim(),
+    body('productId').notEmpty().trim(),
+    body('bundleId').optional().trim(),
+    body('accountId').optional().trim(),
+  ],
+  async (req, res) => {
+    try {
+      const fbReady = await waitForFirebaseReady(15000);
+      if (!fbReady) {
+        return res.status(503).json({
+          success: false,
+          message: 'Server is starting up. Please try again in a few seconds.',
+        });
+      }
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      if (!isAppleIapConfigured()) {
+        return res.status(503).json({
+          success: false,
+          message: 'Apple IAP verification is not configured on the server.',
+        });
+      }
+
+      const emailLower = normalizeEmail(
+        (await verifyAnyAuthEmail(req)) || ''
+      );
+      if (!emailLower) {
+        return res.status(401).json({
+          success: false,
+          message: 'Sign in with Apple before activating your purchase.',
+        });
+      }
+
+      const transactionId = String(req.body.transactionId).trim();
+      const productId = String(req.body.productId).trim();
+      const bundleId =
+        String(req.body.bundleId || '').trim() ||
+        process.env.APPLE_BUNDLE_ID ||
+        'com.ruatfela.tlangau.tlangau';
+      const userAccountId = (req.body.accountId || emailLower).toString().trim();
+      const txHash = hashAppleTransactionId(transactionId);
+
+      const existing = await db.getPlayPurchaseByTokenHash(txHash);
+      if (existing && existing.fulfilled === true && existing.code) {
+        const usedEntitlements = await db.getUsedCodesForIdentity(
+          emailLower,
+          userAccountId
+        );
+        const stackedRawExpiry =
+          getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
+        return res.json({
+          success: true,
+          valid: true,
+          message: 'Purchase already activated for this account.',
+          code: existing.code,
+          expiresAt: getGraceWindowEnd(stackedRawExpiry),
+          accessExpiryAt: stackedRawExpiry,
+          services: mergeActiveServicesWithFree(usedEntitlements),
+        });
+      }
+
+      await verifyAppleTransaction({ transactionId, productId, bundleId });
+
+      const purchasedServices = servicesForPlayProductId(productId);
+      if (purchasedServices.length === 0) {
+        return res.status(400).json({
+          success: false,
+          valid: false,
+          message: `Unknown App Store product id: ${productId}`,
+        });
+      }
+
+      const planDuration = planDurationForPlayProductId(productId);
+      const validityDays = validityDaysForPlayProductId(productId);
+
+      const entitlement = await grantPlayEntitlementForIdentity(
+        emailLower,
+        userAccountId,
+        {
+          services: purchasedServices,
+          validityDays,
+          planDuration,
+          purchaseTokenHash: txHash,
+          productId,
+          orderId: `APPLE_${txHash.slice(0, 12)}`,
+          platform: 'app_store',
+        }
+      );
+
+      await sendPlayAdminWelcomeEmail(emailLower, purchasedServices, validityDays);
+
+      await db.savePlayPurchase(txHash, {
+        email: emailLower,
+        account_id: userAccountId,
+        product_id: productId,
+        package_name: bundleId,
+        fulfilled: true,
+        code: entitlement.code,
+        expiresAt: entitlement.expiresAt,
+        services: purchasedServices,
+        order_id: entitlement.orderId,
+        verified_kind: 'app_store',
+        platform: 'app_store',
+        transaction_id: transactionId,
+        created_at: new Date().toISOString(),
+      });
+
+      return res.json({
+        success: true,
+        valid: true,
+        message: 'Premium activated. Sign in with Apple to open your Server Dashboard.',
+        code: entitlement.code,
+        expiresAt: entitlement.expiresAt,
+        accessExpiryAt: entitlement.accessExpiryAt,
+        gracePeriodHours: entitlement.gracePeriodHours,
+        graceEndsAt: entitlement.graceEndsAt,
+        services: entitlement.services,
+      });
+    } catch (error) {
+      console.error('Error in apple/verify-purchase:', error.message);
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to activate App Store purchase.',
       });
     }
   }
@@ -3099,6 +3262,41 @@ async function maybeSendAutomatedAccessCodeMails(email, accessCode, options = {}
   }
 }
 
+const appleIdentityJwks = createRemoteJWKSet(
+  new URL('https://appleid.apple.com/auth/keys')
+);
+
+async function verifyAppleAuth(req) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.split(' ')[1];
+
+  const cacheKey = `apple:${token}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) return cached.email;
+
+  try {
+    const audience =
+      process.env.APPLE_BUNDLE_ID || 'com.ruatfela.tlangau.tlangau';
+    const { payload } = await jwtVerify(token, appleIdentityJwks, {
+      issuer: 'https://appleid.apple.com',
+      audience,
+    });
+    const email = String(payload.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email) return null;
+    tokenCache.set(cacheKey, {
+      email,
+      expiresAt: Date.now() + TOKEN_CACHE_TTL_MS,
+    });
+    return email;
+  } catch (error) {
+    console.error('Apple auth failed:', error.message);
+    return null;
+  }
+}
+
 async function verifyGoogleAuth(req) {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -3122,6 +3320,35 @@ async function verifyGoogleAuth(req) {
     console.error('ï¿½R Google auth failed:', error.response?.status || error.message);
     return null;
   }
+}
+
+async function verifyAnyAuthEmail(req) {
+  const provider = String(req.headers['x-auth-provider'] || '')
+    .trim()
+    .toLowerCase();
+  if (provider === 'apple') {
+    return verifyAppleAuth(req);
+  }
+
+  const authHeader = req.headers['authorization'];
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      try {
+        const payload = JSON.parse(
+          Buffer.from(parts[1], 'base64url').toString('utf8')
+        );
+        if (payload?.iss === 'https://appleid.apple.com') {
+          return verifyAppleAuth(req);
+        }
+      } catch {
+        // fall through to Google
+      }
+    }
+  }
+
+  return verifyGoogleAuth(req);
 }
 
 // Server auth middleware ï¿½ now also checks service permissions
@@ -3613,7 +3840,7 @@ async function requireAnyAuth(req, res, next) {
   if (!fbReady) {
     return res.status(503).json({ success: false, message: 'Server starting up.' });
   }
-  const email = await verifyGoogleAuth(req);
+  const email = await verifyAnyAuthEmail(req);
   if (!email) {
     return res.status(401).json({ success: false, message: 'Authentication required.' });
   }
