@@ -25,9 +25,12 @@ function isAppleIapConfigured() {
 async function createAppStoreApiJwt() {
   const issuerId = process.env.APPLE_IAP_ISSUER_ID;
   const keyId = process.env.APPLE_IAP_KEY_ID;
+  const bundleId =
+    process.env.APPLE_BUNDLE_ID || 'com.ruatfela.tlangau.tlangau';
   const privateKey = crypto.createPrivateKey(applePrivateKeyPem());
 
-  return new SignJWT({})
+  // Apple requires bid in the JWT payload (see Generating JSON Web Tokens for API requests).
+  return new SignJWT({ bid: bundleId })
     .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: 'JWT' })
     .setIssuer(issuerId)
     .setAudience('appstoreconnect-v1')
