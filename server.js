@@ -856,6 +856,8 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     message: 'Tlangau Server API is running',
     firebaseReady: firebaseInitialized,
+    appleIapConfigured: isAppleIapConfigured(),
+    appleIapEnv: process.env.APPLE_IAP_ENV || null,
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
