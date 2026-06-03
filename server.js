@@ -1541,6 +1541,9 @@ const GOOGLE_PLAY_PRODUCT_CATALOG = {
   tlangau_ring_yearly: ['ring'],
   tlangau_message_yearly: ['message'],
   tlangau_broadcast_yearly: ['broadcast'],
+  tlangau_service_ring_message_yearly: ['ring', 'message'],
+  tlangau_service_ring_broadcast_yearly: ['ring', 'broadcast'],
+  tlangau_service_message_broadcast_yearly: ['message', 'broadcast'],
 };
 
 function planDurationForPlayProductId(productId) {
@@ -1761,12 +1764,9 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
   const nowTs = Date.now();
   const validityMs = getValidityDurationMs(validityDays);
 
-  // Stack from the latest active expiry for the same service(s) being purchased.
+  // Stack from the latest active paid expiry (any service), matching Premium UI copy.
   let stackBaseTs = nowTs;
   for (const code of usedEntitlements) {
-    const codeServices = getPaidServicesForEntitlement(code);
-    const overlaps = services.some((s) => codeServices.includes(s));
-    if (!overlaps) continue;
     const rawExpiry = code?.expiresAt || code?.expires_at;
     if (!isWithinAccessWindow(rawExpiry, nowTs)) continue;
     const startTs = getEntitlementStartTs(code);
@@ -1777,6 +1777,8 @@ async function grantPlayEntitlementForIdentity(emailLower, userAccountId, option
     ) {
       continue;
     }
+    const paidOnCode = getPaidServicesForEntitlement(code);
+    if (paidOnCode.length === 0) continue;
     const expiryTs = toTimestamp(rawExpiry) || 0;
     if (expiryTs > stackBaseTs) stackBaseTs = expiryTs;
   }
@@ -1965,6 +1967,14 @@ function hashAppleTransactionId(transactionId) {
   return crypto.createHash('sha256').update(String(transactionId)).digest('hex');
 }
 
+/** Idempotent Apple IAP record (same txn + different SKU = separate activations). */
+function hashApplePurchaseRecord(transactionId, productId) {
+  return crypto
+    .createHash('sha256')
+    .update(`${String(transactionId).trim()}:${String(productId || '').trim()}`)
+    .digest('hex');
+}
+
 app.post(
   '/api/apple/verify-purchase',
   paymentLimiter,
@@ -2013,9 +2023,23 @@ app.post(
         process.env.APPLE_BUNDLE_ID ||
         'com.ruatfela.tlangau.tlangau';
       const userAccountId = (req.body.accountId || emailLower).toString().trim();
-      const txHash = hashAppleTransactionId(transactionId);
+      const txHash = hashApplePurchaseRecord(transactionId, productId);
+      const legacyTxHash = hashAppleTransactionId(transactionId);
 
-      const existing = await db.getPlayPurchaseByTokenHash(txHash);
+      let existing = await db.getPlayPurchaseByTokenHash(txHash);
+      if (!existing && legacyTxHash !== txHash) {
+        const legacy = await db.getPlayPurchaseByTokenHash(legacyTxHash);
+        const legacyProduct = String(legacy?.product_id || '').trim();
+        if (legacy && legacyProduct === productId) {
+          existing = legacy;
+        }
+      }
+      if (existing?.fulfilled === true && existing.code) {
+        const existingProduct = String(existing.product_id || '').trim();
+        if (existingProduct && existingProduct !== productId) {
+          existing = null;
+        }
+      }
       if (existing && existing.fulfilled === true && existing.code) {
         const usedEntitlements = await db.getUsedCodesForIdentity(
           emailLower,
@@ -2357,7 +2381,11 @@ app.post(
             const raw = c?.expiresAt || c?.expires_at;
             if (!isWithinAccessWindow(raw)) return false;
             const startTs = getEntitlementStartTs(c);
-            return startTs <= Date.now() || c?.platform === 'google_play';
+            return (
+              startTs <= Date.now() ||
+              c?.platform === 'google_play' ||
+              c?.platform === 'app_store'
+            );
           })
           .map((c) => {
             const pid = String(c?.product_id || '').trim();
