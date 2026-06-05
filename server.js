@@ -270,6 +270,7 @@ const noCachePublicFiles = new Set([
   'success.html',
   'script.js',
   'config.js',
+  'index.html',
   'pricing-shared.js',
   'styles.css',
 ]);

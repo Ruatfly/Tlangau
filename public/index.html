@@ -135,28 +135,36 @@
             <h2 class="section-title">Tlangau Premium</h2>
             <p class="pricing-lead">Select your platform and services — totals match the in-app checkout (India reference pricing).</p>
 
-            <div id="pricing-explorer" class="pricing-explorer">
-                <div class="premium-toggles">
-                    <div class="toggle-group" data-platform-toggle>
-                        <button type="button" class="toggle-btn is-active" data-platform="ios">iOS</button>
+            <div id="pricing-explorer" class="pricing-card pricing-card--interactive">
+                <div class="pricing-card-top">
+                    <h3>Tlangau Premium</h3>
+                    <div class="toggle-group toggle-group--compact" data-platform-toggle>
                         <button type="button" class="toggle-btn" data-platform="android">Android</button>
-                    </div>
-                    <div class="toggle-group" data-period-toggle>
-                        <button type="button" class="toggle-btn is-active" data-period="monthly">Monthly</button>
-                        <button type="button" class="toggle-btn" data-period="yearly">Yearly</button>
+                        <button type="button" class="toggle-btn is-active" data-platform="ios">iOS</button>
                     </div>
                 </div>
 
-                <div class="pricing-explorer-grid">
-                    <div class="pricing-explorer-services" data-services></div>
-                    <div class="pricing-explorer-summary">
-                        <h3>Checkout total</h3>
-                        <p class="pricing-total" data-total>—</p>
-                        <p class="pricing-hint" data-hint>Select at least one paid service to see your bundle total.</p>
-                        <p class="pricing-save-note" data-save-tags>Yearly plans show save badges on each service (same as the app).</p>
-                        <a class="btn btn-large btn-primary" data-get-store href="https://apps.apple.com/app/id6769981685" target="_blank" rel="noopener noreferrer">GET</a>
-                    </div>
+                <div class="toggle-group toggle-group--period" data-period-toggle>
+                    <button type="button" class="toggle-btn is-active" data-period="monthly">Monthly</button>
+                    <button type="button" class="toggle-btn" data-period="yearly">Yearly</button>
                 </div>
+
+                <div class="price price--hero" data-price-hero>
+                    <span class="currency">&#8377;</span>
+                    <span class="amount" data-total-amount>29</span>
+                    <span class="price-suffix" data-price-suffix>/service / month</span>
+                </div>
+                <p class="pricing-hint pricing-hint--card" data-hint>Tap services below — total updates for App Store (India tiers).</p>
+
+                <div class="pricing-features-interactive" data-services></div>
+
+                <ul class="pricing-features pricing-features--meta">
+                    <li>&#9989; Bundle checkout in app (e.g. 2 or 3 services)</li>
+                    <li>&#9989; Billed through <span data-store-label>App Store</span></li>
+                    <li>&#9989; Manage subscriptions in device settings</li>
+                </ul>
+
+                <a class="btn btn-large btn-primary" data-get-store href="https://apps.apple.com/app/id6769981685" target="_blank" rel="noopener noreferrer">Subscribe in the App</a>
             </div>
         </div>
     </section>
@@ -242,7 +250,7 @@
         </div>
     </footer>
 
-    <script src="pricing-shared.js?v=20260605b"></script>
+    <script src="pricing-shared.js?v=20260606a"></script>
     <script src="script.js"></script>
 </body>
 </html>

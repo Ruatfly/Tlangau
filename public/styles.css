@@ -1434,6 +1434,130 @@ section {
     font-size: 1.05rem;
 }
 
+.pricing-card--interactive {
+    max-width: 520px;
+    margin: 0 auto;
+    text-align: center;
+    position: relative;
+}
+
+.pricing-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.pricing-card-top h3 {
+    margin: 0;
+    text-align: left;
+}
+
+.toggle-group--compact {
+    flex-shrink: 0;
+}
+
+.toggle-group--compact .toggle-btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+.toggle-group--period {
+    display: inline-flex;
+    margin: 0 auto 1.25rem;
+    background: var(--bg-light);
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+}
+
+.price--hero {
+    margin-bottom: 0.5rem;
+}
+
+.price--hero .amount {
+    font-size: 4rem;
+}
+
+.price-suffix {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    margin-left: 4px;
+}
+
+.pricing-hint--card {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 1.25rem;
+}
+
+.pricing-features-interactive {
+    text-align: left;
+    margin-bottom: 1rem;
+}
+
+.pricing-service-pick {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 0.5rem;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: background 0.15s;
+}
+
+.pricing-service-pick:hover {
+    background: rgba(102, 126, 234, 0.06);
+}
+
+.pricing-service-pick.is-selected {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.pricing-service-pick.is-selected .pricing-service-pick__text strong {
+    color: var(--primary-color);
+}
+
+.pricing-service-pick--free {
+    cursor: default;
+    grid-template-columns: auto 1fr auto;
+}
+
+.pricing-service-pick__icon {
+    font-size: 1.15rem;
+    width: 1.5rem;
+    text-align: center;
+}
+
+.pricing-service-pick__text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.pricing-service-pick__text strong {
+    font-weight: 600;
+}
+
+.pricing-service-pick__price {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.pricing-features--meta {
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+
 .pricing-explorer {
     max-width: 960px;
     margin: 0 auto;

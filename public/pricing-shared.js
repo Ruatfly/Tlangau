@@ -1,57 +1,76 @@
 /**
- * Mirrors lib/config/play_billing_config.dart (India INR reference pricing).
+ * Mirrors lib/config/play_billing_config.dart — per-platform India INR tiers.
+ * Update ios/android blocks if App Store Connect tiers differ from Play.
  */
 window.TlangauPricing = {
-  monthlyPerService: 29,
-  yearlyPerService: 199,
-  monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
-  yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
   yearlySave: {
     ring: 'Save 43%',
     message: 'Save 33%',
     broadcast: 'Save 50%',
+  },
+  platformPricing: {
+    android: {
+      monthlyPerService: 29,
+      yearlyPerService: 199,
+      monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
+      yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
+    },
+    ios: {
+      monthlyPerService: 29,
+      yearlyPerService: 199,
+      monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
+      yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
+    },
   },
   paidServices: [
     {
       id: 'ring',
       title: 'Bawlhhlawh paih tur hriattirna',
       subtitle: 'Ring notification',
+      icon: '&#128260;',
       color: '#AD131D',
     },
     {
       id: 'message',
       title: 'Information Notice',
       subtitle: 'Message notification',
+      icon: '&#128172;',
       color: '#3B8C19',
     },
     {
       id: 'broadcast',
       title: 'Broadcast Message',
-      subtitle: 'Multi-bundle broadcast',
+      subtitle: 'Broadcast message',
+      icon: '&#128226;',
       color: '#1565C0',
     },
   ],
   freeServices: [
-    { title: 'Statistics & Insights', subtitle: 'Always included' },
-    { title: 'Polls', subtitle: 'Always included' },
+    { title: 'Statistics & Insights', icon: '&#128202;' },
+    { title: 'Polls', icon: '&#128203;' },
   ],
   stores: {
     ios: 'https://apps.apple.com/app/id6769981685',
     android:
       'https://play.google.com/store/apps/details?id=com.ruatfela.tlangau.tlangau',
   },
-  formatInr(amount) {
-    return `₹${amount.toFixed(0)}.00`;
+  tier(platform) {
+    return this.platformPricing[platform] || this.platformPricing.android;
   },
-  checkoutTotal(period, count) {
+  formatInr(amount) {
+    return amount.toFixed(0);
+  },
+  checkoutTotal(platform, period, count) {
+    const tier = this.tier(platform);
     const map =
-      period === 'yearly' ? this.yearlyCheckout : this.monthlyCheckout;
-    if (count <= 0) return 0;
+      period === 'yearly' ? tier.yearlyCheckout : tier.monthlyCheckout;
+    if (count <= 0) return tier[period === 'yearly' ? 'yearlyPerService' : 'monthlyPerService'];
     if (count >= 3) return map[3];
     return map[count];
   },
-  perService(period) {
-    return period === 'yearly' ? this.yearlyPerService : this.monthlyPerService;
+  perService(platform, period) {
+    const tier = this.tier(platform);
+    return period === 'yearly' ? tier.yearlyPerService : tier.monthlyPerService;
   },
 };
 
@@ -59,140 +78,126 @@ function formatPeriodLabel(period) {
   return period === 'yearly' ? 'year' : 'month';
 }
 
-function bindPlatformToggle(root, onChange) {
-  const buttons = root.querySelectorAll('[data-platform]');
+function bindToggleGroup(root, attr, onChange) {
+  if (!root) return null;
+  const buttons = root.querySelectorAll(`[${attr}]`);
+  let current = null;
   buttons.forEach((btn) => {
+    if (btn.classList.contains('is-active')) {
+      current = btn.getAttribute(attr);
+    }
     btn.addEventListener('click', () => {
-      const platform = btn.getAttribute('data-platform');
+      const value = btn.getAttribute(attr);
       buttons.forEach((b) => b.classList.toggle('is-active', b === btn));
-      onChange(platform);
+      onChange(value);
     });
   });
-  return buttons[0]?.getAttribute('data-platform') || 'ios';
+  return current || buttons[0]?.getAttribute(attr);
 }
 
-function bindPeriodToggle(root, onChange) {
-  const buttons = root.querySelectorAll('[data-period]');
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const period = btn.getAttribute('data-period');
-      buttons.forEach((b) => b.classList.toggle('is-active', b === btn));
-      onChange(period);
-    });
-  });
-  return buttons[0]?.getAttribute('data-period') || 'monthly';
-}
-
-function renderServiceCheckboxes(container, selected, period, platform, onUpdate) {
+function renderInteractiveServices(container, selected, period, platform, onUpdate) {
   const p = window.TlangauPricing;
   container.innerHTML = '';
 
   p.paidServices.forEach((svc) => {
     const checked = selected.has(svc.id);
-    const row = document.createElement('label');
-    row.className = 'premium-service-row';
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `pricing-service-pick${checked ? ' is-selected' : ''}`;
+    row.setAttribute('aria-pressed', checked ? 'true' : 'false');
+    const saveTag =
+      period === 'yearly' && p.yearlySave[svc.id]
+        ? `<span class="save-tag">${p.yearlySave[svc.id]}</span>`
+        : '';
     row.innerHTML = `
-      <input type="checkbox" value="${svc.id}" ${checked ? 'checked' : ''} />
-      <span class="premium-service-icon" style="background:${svc.color}22;color:${svc.color}">●</span>
-      <span class="premium-service-text">
-        <strong>${svc.title}</strong>
-        <small>${svc.subtitle}</small>
+      <span class="pricing-service-pick__icon" style="color:${svc.color}">${svc.icon}</span>
+      <span class="pricing-service-pick__text">
+        <strong>${svc.subtitle}</strong>
+        ${saveTag}
       </span>
-      <span class="premium-service-price">
-        ${p.formatInr(p.perService(period))}
-        ${
-          period === 'yearly' && platform === 'ios' && p.yearlySave[svc.id]
-            ? `<span class="save-tag">${p.yearlySave[svc.id]}</span>`
-            : period === 'yearly' && platform === 'android' && p.yearlySave[svc.id]
-              ? `<span class="save-tag">${p.yearlySave[svc.id]}</span>`
-              : ''
-        }
-      </span>
+      <span class="pricing-service-pick__price">&#8377;${p.formatInr(p.perService(platform, period))}.00</span>
     `;
-    row.querySelector('input').addEventListener('change', (e) => {
-      if (e.target.checked) selected.add(svc.id);
-      else selected.delete(svc.id);
+    row.addEventListener('click', () => {
+      if (selected.has(svc.id)) selected.delete(svc.id);
+      else selected.add(svc.id);
       onUpdate();
     });
     container.appendChild(row);
   });
 
-  const freeWrap = document.createElement('div');
-  freeWrap.className = 'premium-free-list';
-  freeWrap.innerHTML = '<p class="premium-free-heading">Included free</p>';
   p.freeServices.forEach((f) => {
-    const line = document.createElement('div');
-    line.className = 'premium-free-row';
-    line.innerHTML = `<span>${f.title}</span><span class="free-badge">FREE</span>`;
-    freeWrap.appendChild(line);
+    const row = document.createElement('div');
+    row.className = 'pricing-service-pick pricing-service-pick--free';
+    row.innerHTML = `
+      <span class="pricing-service-pick__icon">${f.icon}</span>
+      <span class="pricing-service-pick__text"><strong>${f.title}</strong></span>
+      <span class="free-badge">FREE</span>
+    `;
+    container.appendChild(row);
   });
-  container.appendChild(freeWrap);
 }
 
-function updateCheckoutSummary(totalEl, hintEl, btnEl, period, count, platform) {
+function updateHeroPrice(root, platform, period, selectedCount) {
   const p = window.TlangauPricing;
-  const total = p.checkoutTotal(period, count);
-  if (totalEl) {
-    totalEl.textContent =
-      count === 0
-        ? '—'
-        : `${p.formatInr(total)} / ${formatPeriodLabel(period)}`;
+  const amountEl = root.querySelector('[data-total-amount]');
+  const suffixEl = root.querySelector('[data-price-suffix]');
+  const hintEl = root.querySelector('[data-hint]');
+  const storeLabel = root.querySelector('[data-store-label]');
+  const getBtn = root.querySelector('[data-get-store]');
+  const storeName = platform === 'ios' ? 'App Store' : 'Google Play';
+
+  const total = p.checkoutTotal(platform, period, selectedCount);
+  const displayAmount = selectedCount === 0 ? p.perService(platform, period) : total;
+
+  if (amountEl) amountEl.textContent = p.formatInr(displayAmount);
+  if (suffixEl) {
+    suffixEl.textContent =
+      selectedCount === 0
+        ? `/service / ${formatPeriodLabel(period)}`
+        : selectedCount === 1
+          ? `/service / ${formatPeriodLabel(period)}`
+          : `/ ${formatPeriodLabel(period)} (${selectedCount} services)`;
   }
   if (hintEl) {
-    const store = platform === 'ios' ? 'App Store' : 'Google Play';
     hintEl.textContent =
-      count === 0
-        ? 'Select at least one paid service to see your bundle total.'
-        : `${count} service${count > 1 ? 's' : ''} · billed in the ${store} (India reference pricing)`;
+      selectedCount === 0
+        ? `Tap Ring, Message, or Broadcast — prices shown for ${storeName} (India).`
+        : `${selectedCount} service${selectedCount > 1 ? 's' : ''} selected · checkout total for ${storeName}.`;
   }
-  if (btnEl) {
-    btnEl.disabled = false;
-    btnEl.href = p.stores[platform];
-  }
+  if (storeLabel) storeLabel.textContent = storeName;
+  if (getBtn) getBtn.href = p.stores[platform];
 }
 
 function initPricingExplorer(rootId) {
   const root = document.getElementById(rootId);
   if (!root) return;
 
-  const p = window.TlangauPricing;
   const selected = new Set();
   let platform = 'ios';
   let period = 'monthly';
-
   const servicesEl = root.querySelector('[data-services]');
-  const totalEl = root.querySelector('[data-total]');
-  const hintEl = root.querySelector('[data-hint]');
-  const getBtn = root.querySelector('[data-get-store]');
 
   function refresh() {
-    renderServiceCheckboxes(servicesEl, selected, period, platform, refresh);
-    updateCheckoutSummary(
-      totalEl,
-      hintEl,
-      getBtn,
-      period,
-      selected.size,
-      platform
-    );
-    root.querySelectorAll('[data-save-tags]').forEach((el) => {
-      el.hidden = period !== 'yearly';
-    });
+    renderInteractiveServices(servicesEl, selected, period, platform, refresh);
+    updateHeroPrice(root, platform, period, selected.size);
   }
 
-  platform = bindPlatformToggle(root.querySelector('[data-platform-toggle]'), (v) => {
-    platform = v;
-    refresh();
-  });
-  period = bindPeriodToggle(root.querySelector('[data-period-toggle]'), (v) => {
-    period = v;
-    refresh();
-  });
+  platform =
+    bindToggleGroup(root.querySelector('[data-platform-toggle]'), 'data-platform', (v) => {
+      platform = v;
+      refresh();
+    }) || platform;
+  period =
+    bindToggleGroup(root.querySelector('[data-period-toggle]'), 'data-period', (v) => {
+      period = v;
+      refresh();
+    }) || period;
   refresh();
 }
 
 function renderStoreCard(container, platform) {
   const p = window.TlangauPricing;
+  const tier = p.tier(platform);
   const storeName = platform === 'ios' ? 'App Store' : 'Google Play';
   const isIos = platform === 'ios';
 
@@ -208,12 +213,12 @@ function renderStoreCard(container, platform) {
         ${p.paidServices
           .map(
             (s) =>
-              `<li><span>${s.title}</span><span>${p.formatInr(p.monthlyPerService)}</span></li>`
+              `<li><span>${s.subtitle}</span><span>&#8377;${p.formatInr(tier.monthlyPerService)}.00</span></li>`
           )
           .join('')}
-        <li class="bundle-line"><span>1 service checkout</span><span>${p.formatInr(p.monthlyCheckout[1])}</span></li>
-        <li class="bundle-line"><span>2 services bundle</span><span>${p.formatInr(p.monthlyCheckout[2])}</span></li>
-        <li class="bundle-line"><span>3 services bundle</span><span>${p.formatInr(p.monthlyCheckout[3])}</span></li>
+        <li class="bundle-line"><span>1 service</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[1])}.00</span></li>
+        <li class="bundle-line"><span>2 services</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[2])}.00</span></li>
+        <li class="bundle-line"><span>3 services</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[3])}.00</span></li>
       </ul>
     </div>
     <div class="store-pricing-card__period">
@@ -221,22 +226,24 @@ function renderStoreCard(container, platform) {
       <ul class="store-price-list">
         ${p.paidServices
           .map((s) => {
-            const tag =
-              p.yearlySave[s.id]
-                ? `<span class="save-tag">${p.yearlySave[s.id]}</span>`
-                : '';
-            return `<li><span>${s.title} ${tag}</span><span>${p.formatInr(p.yearlyPerService)}</span></li>`;
+            const tag = p.yearlySave[s.id]
+              ? `<span class="save-tag">${p.yearlySave[s.id]}</span>`
+              : '';
+            return `<li><span>${s.subtitle} ${tag}</span><span>&#8377;${p.formatInr(tier.yearlyPerService)}.00</span></li>`;
           })
           .join('')}
-        <li class="bundle-line"><span>1 service checkout</span><span>${p.formatInr(p.yearlyCheckout[1])}</span></li>
-        <li class="bundle-line"><span>2 services bundle</span><span>${p.formatInr(p.yearlyCheckout[2])}</span></li>
-        <li class="bundle-line"><span>3 services bundle</span><span>${p.formatInr(p.yearlyCheckout[3])}</span></li>
+        <li class="bundle-line"><span>1 service</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[1])}.00</span></li>
+        <li class="bundle-line"><span>2 services</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[2])}.00</span></li>
+        <li class="bundle-line"><span>3 services</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[3])}.00</span></li>
       </ul>
     </div>
     <div class="store-pricing-card__free">
       <p>Included free</p>
       ${p.freeServices
-        .map((f) => `<div class="premium-free-row"><span>${f.title}</span><span class="free-badge">FREE</span></div>`)
+        .map(
+          (f) =>
+            `<div class="premium-free-row"><span>${f.title}</span><span class="free-badge">FREE</span></div>`
+        )
         .join('')}
     </div>
     <a class="btn btn-large btn-primary store-get-btn" href="${p.stores[platform]}" target="_blank" rel="noopener noreferrer">GET</a>
