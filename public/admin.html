@@ -247,6 +247,36 @@
             background: #c82333;
         }
 
+        .btn-danger:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .bulk-bar {
+            display: none;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin: 8px 0 14px 0;
+            padding: 10px 12px;
+            background: #fff8f8;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+        }
+
+        .bulk-check {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #AD131D;
+        }
+
+        th .bulk-check, .bulk-check-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .error {
             color: #dc3545;
             margin-top: 10px;
@@ -601,9 +631,13 @@
             <!-- Complaints Tab -->
             <div id="complaintsTab" class="tab-content">
                 <div class="table-container">
+                    <div id="bulkBar-complaints" class="bulk-bar">
+                        <span id="bulkCount-complaints" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-complaints" disabled>Delete selected</button>
+                    </div>
                     <input type="text" class="search-box" id="complaintsSearch" placeholder="Search complaints by district, bundle, title, email…">
                     <div id="complaintsLoading" class="loading">Loading complaints…</div>
-                    <div id="complaintsList" style="display:none;"></div>
+                    <div id="complaintsList" data-bulk-container="complaints" style="display:none;"></div>
                 </div>
             </div>
 
@@ -614,20 +648,29 @@
                         <button class="btn-secondary btn-toolbar" id="donationsRefreshBtn" type="button">Refresh</button>
                         <button class="btn-danger btn-toolbar" id="donationsClearBtn" type="button">Clear all</button>
                     </div>
+                    <div id="bulkBar-donations" class="bulk-bar">
+                        <span id="bulkCount-donations" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-donations" disabled>Delete selected</button>
+                    </div>
                     <input type="text" class="search-box" id="donationsSearch" placeholder="Search donation setups by server, bundle, subpoint…">
                     <div id="donationsLoading" class="loading">Loading donation setups…</div>
-                    <div id="donationsList" style="display:none;"></div>
+                    <div id="donationsList" data-bulk-container="donations" style="display:none;"></div>
                 </div>
             </div>
 
             <!-- Orders Tab -->
             <div id="ordersTab" class="tab-content">
                 <div class="table-container">
+                    <div id="bulkBar-orders" class="bulk-bar">
+                        <span id="bulkCount-orders" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-orders" disabled>Delete selected</button>
+                    </div>
                     <input type="text" class="search-box" id="ordersSearch" placeholder="Search orders by email, order ID, or payment ID...">
                     <div id="ordersLoading" class="loading">Loading orders...</div>
                     <table id="ordersTable" style="display: none;">
                         <thead>
                             <tr>
+                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="orders" title="Select all visible"></th>
                                 <th>Order ID</th>
                                 <th>Email</th>
                                 <th>Amount</th>
@@ -638,7 +681,7 @@
                                 <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody id="ordersBody"></tbody>
+                        <tbody id="ordersBody" data-bulk-container="orders"></tbody>
                     </table>
                 </div>
             </div>
@@ -664,10 +707,15 @@
                         <button class="btn" id="codesClearFiltersBtn" style="width:auto; padding: 10px 14px; font-size: 12px; background:#6c757d;">Reset</button>
                         <span style="margin-left:auto; font-size: 12px; color:#666;" id="codesCountLabel"></span>
                     </div>
+                    <div id="bulkBar-codes" class="bulk-bar">
+                        <span id="bulkCount-codes" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-codes" disabled>Delete selected</button>
+                    </div>
                     <div id="codesLoading" class="loading">Loading access codes...</div>
                     <table id="codesTable" style="display: none;">
                         <thead>
                             <tr>
+                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="codes" title="Select all visible"></th>
                                 <th>Code</th>
                                 <th>Email</th>
                                 <th>Order ID</th>
@@ -679,7 +727,7 @@
                                 <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody id="codesBody"></tbody>
+                        <tbody id="codesBody" data-bulk-container="codes"></tbody>
                     </table>
                 </div>
             </div>
@@ -755,10 +803,15 @@
             <!-- Bundles & Topics Tab -->
             <div id="bundlesTab" class="tab-content">
                 <div class="table-container">
+                    <div id="bulkBar-bundles" class="bulk-bar">
+                        <span id="bulkCount-bundles" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-bundles" disabled>Delete bundles</button>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-topics" disabled>Delete subpoints</button>
+                    </div>
                     <input type="text" class="search-box" id="bundlesSearch" placeholder="Search bundles or topics...">
                     <div id="bundlesLoading" class="loading">Loading bundles and topics...</div>
                     <div id="bundlesContainer" style="display: none;">
-                        <div id="bundlesList"></div>
+                        <div id="bundlesList" data-bulk-container="bundles"></div>
                     </div>
                 </div>
             </div>
@@ -818,8 +871,12 @@
                         <div id="pollComposeSuccess" class="success" style="display: none;"></div>
                     </div>
 
+                    <div id="bulkBar-polls" class="bulk-bar">
+                        <span id="bulkCount-polls" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-polls" disabled>Delete selected</button>
+                    </div>
                     <div id="pollsLoading" class="loading">Loading polls...</div>
-                    <div id="pollsList" style="display: none;"></div>
+                    <div id="pollsList" data-bulk-container="polls" style="display: none;"></div>
                 </div>
             </div>
 
@@ -855,9 +912,13 @@
                         <div id="composeSuccess" class="success" style="display: none;"></div>
                     </div>
 
+                    <div id="bulkBar-mails" class="bulk-bar">
+                        <span id="bulkCount-mails" style="font-size:12px;color:#666;"></span>
+                        <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-mails" disabled>Delete selected</button>
+                    </div>
                     <!-- Mails List -->
                     <div id="mailsLoading" class="loading">Loading mails...</div>
-                    <div id="mailsList" style="display: none;"></div>
+                    <div id="mailsList" data-bulk-container="mails" style="display: none;"></div>
                 </div>
             </div>
         </div>
@@ -874,6 +935,102 @@
         let _complaintsItems = [];
         let _donationItems = [];
         let _activeTab = 'overview';
+
+        const _bulkSel = {
+            orders: new Set(),
+            codes: new Set(),
+            bundles: new Set(),
+            topics: new Set(),
+            complaints: new Set(),
+            donations: new Set(),
+            polls: new Set(),
+            mails: new Set(),
+        };
+
+        function bulkTopicKey(bundleId, topicId) {
+            return bundleId + '::' + topicId;
+        }
+
+        function bulkCheckHtml(group, id) {
+            const checked = _bulkSel[group].has(id);
+            return `<input type="checkbox" class="bulk-check" data-bulk-group="${group}" data-bulk-id="${esc(id)}"${checked ? ' checked' : ''}>`;
+        }
+
+        function updateBulkBar(group) {
+            if (group === 'bundles' || group === 'topics') {
+                updateBundlesBulkBar();
+                return;
+            }
+            const n = _bulkSel[group].size;
+            const bar = document.getElementById('bulkBar-' + group);
+            const btn = document.getElementById('bulkDelete-' + group);
+            const count = document.getElementById('bulkCount-' + group);
+            if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+            if (btn) {
+                btn.disabled = n === 0;
+                btn.textContent = `Delete selected (${n})`;
+            }
+            if (count) count.textContent = n > 0 ? `${n} selected` : '';
+        }
+
+        function updateBundlesBulkBar() {
+            const nb = _bulkSel.bundles.size;
+            const nt = _bulkSel.topics.size;
+            const bar = document.getElementById('bulkBar-bundles');
+            const btnB = document.getElementById('bulkDelete-bundles');
+            const btnT = document.getElementById('bulkDelete-topics');
+            const count = document.getElementById('bulkCount-bundles');
+            if (bar) bar.style.display = (nb + nt) > 0 ? 'flex' : 'none';
+            if (btnB) {
+                btnB.disabled = nb === 0;
+                btnB.textContent = `Delete bundles (${nb})`;
+            }
+            if (btnT) {
+                btnT.disabled = nt === 0;
+                btnT.textContent = `Delete subpoints (${nt})`;
+            }
+            if (count) {
+                const parts = [];
+                if (nb) parts.push(`${nb} bundle${nb === 1 ? '' : 's'}`);
+                if (nt) parts.push(`${nt} subpoint${nt === 1 ? '' : 's'}`);
+                count.textContent = parts.join(' · ');
+            }
+        }
+
+        function syncBulkSelectAllState(group) {
+            const master = document.querySelector(`[data-bulk-select-all="${group}"]`);
+            const container = document.querySelector(`[data-bulk-container="${group}"]`);
+            if (!master || !container) return;
+            const visible = [...container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`)].filter(cb => {
+                const row = cb.closest('tr');
+                return row && row.style.display !== 'none';
+            });
+            if (!visible.length) {
+                master.checked = false;
+                master.indeterminate = false;
+                return;
+            }
+            const checked = visible.filter(cb => cb.checked).length;
+            master.checked = checked === visible.length;
+            master.indeterminate = checked > 0 && checked < visible.length;
+        }
+
+        function setupBulkSelectAll(master, group) {
+            const container = document.querySelector(`[data-bulk-container="${group}"]`);
+            if (!container) return;
+            const visible = [...container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`)].filter(cb => {
+                const row = cb.closest('tr');
+                return row && row.style.display !== 'none';
+            });
+            const selectAll = master.checked;
+            visible.forEach(cb => {
+                cb.checked = selectAll;
+                const id = cb.dataset.bulkId;
+                if (selectAll) _bulkSel[group].add(id);
+                else _bulkSel[group].delete(id);
+            });
+            updateBulkBar(group);
+        }
 
         const TAB_CONTENT_MAP = {
             overview: 'overviewTab',
@@ -1041,6 +1198,32 @@
         document.getElementById('donationsClearBtn').addEventListener('click', function () {
             clearAllDonationSetups();
         });
+
+        document.addEventListener('change', function (e) {
+            const master = e.target.closest('[data-bulk-select-all]');
+            if (master) {
+                setupBulkSelectAll(master, master.dataset.bulkSelectAll);
+                return;
+            }
+            const cb = e.target.closest('.bulk-check[data-bulk-group]');
+            if (!cb || cb.hasAttribute('data-bulk-select-all')) return;
+            const group = cb.dataset.bulkGroup;
+            const id = cb.dataset.bulkId;
+            if (cb.checked) _bulkSel[group].add(id);
+            else _bulkSel[group].delete(id);
+            updateBulkBar(group);
+            syncBulkSelectAllState(group);
+        });
+
+        document.getElementById('bulkDelete-orders').addEventListener('click', bulkDeleteOrders);
+        document.getElementById('bulkDelete-codes').addEventListener('click', bulkDeleteCodes);
+        document.getElementById('bulkDelete-bundles').addEventListener('click', bulkDeleteBundles);
+        document.getElementById('bulkDelete-topics').addEventListener('click', bulkDeleteTopics);
+        document.getElementById('bulkDelete-complaints').addEventListener('click', bulkDeleteComplaints);
+        document.getElementById('bulkDelete-donations').addEventListener('click', bulkDeleteDonations);
+        document.getElementById('bulkDelete-polls').addEventListener('click', bulkDeletePolls);
+        document.getElementById('bulkDelete-mails').addEventListener('click', bulkDeleteMails);
+
         document.getElementById('pollDurationType').addEventListener('change', function () {
             const customInput = document.getElementById('pollCustomExpiry');
             customInput.disabled = this.value !== 'custom';
@@ -1061,6 +1244,7 @@
             if (btn) deleteUser(btn.dataset.deleteUser);
         });
         document.getElementById('bundlesList').addEventListener('click', function (e) {
+            if (e.target.closest('.bulk-check')) return;
             const toggle = e.target.closest('[data-bundle-toggle]');
             if (toggle) {
                 const acc = toggle.closest('.bundle-acc');
@@ -1407,12 +1591,16 @@
             const list = document.getElementById('complaintsList');
             if (!filtered.length) {
                 list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📮</div><p>No complaints</p></div>';
+                updateBulkBar('complaints');
                 return;
             }
             list.innerHTML = filtered.map(c => `
-                <div class="activity-card" style="margin-bottom:12px;">
+                <div class="activity-card" style="margin-bottom:12px;" data-bulk-row>
                     <div class="activity-card__top">
-                        <div class="activity-card__title">${esc(c.title)}</div>
+                        <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;">
+                            ${bulkCheckHtml('complaints', c.id)}
+                            <span class="activity-card__title">${esc(c.title)}</span>
+                        </label>
                         <button class="btn-danger" data-delete-complaint="${esc(c.id)}" data-complaint-title="${esc(c.title)}">Delete</button>
                     </div>
                     <div class="activity-card__meta">
@@ -1425,10 +1613,13 @@
                     </div>
                 </div>
             `).join('');
+            updateBulkBar('complaints');
         }
 
-        async function deleteComplaint(id, title) {
-            if (!confirm('Delete complaint "' + title + '"?')) return;
+        async function deleteComplaint(id, title, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm('Delete complaint "' + title + '"?')) return false;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/complaints/${id}`, {
                     method: 'DELETE',
@@ -1436,14 +1627,19 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    loadComplaints();
-                    loadOverviewPanels();
-                    loadMonitorSummary();
-                } else {
-                    alert(data.error || data.message || 'Delete failed');
+                    _bulkSel.complaints.delete(id);
+                    if (!skipReload) {
+                        loadComplaints();
+                        loadOverviewPanels();
+                        loadMonitorSummary();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert(data.error || data.message || 'Delete failed');
+                return false;
             } catch (error) {
-                alert('Delete failed: ' + error.message);
+                if (!skipConfirm) alert('Delete failed: ' + error.message);
+                return false;
             }
         }
 
@@ -1477,15 +1673,19 @@
             const list = document.getElementById('donationsList');
             if (!filtered.length) {
                 list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💰</div><p>No donation setups</p></div>';
+                updateBulkBar('donations');
                 return;
             }
             list.innerHTML = filtered.map(s => `
-                <div class="activity-card" style="margin-bottom:12px;">
+                <div class="activity-card" data-bulk-row style="margin-bottom:12px;">
                     <div class="activity-card__top">
-                        <div class="activity-card__title">
-                            ${esc(s.serverName || s.serverEmail)}
-                            ${s.active ? '' : '<span class="tag tag--inactive">inactive</span>'}
-                        </div>
+                        <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;">
+                            ${bulkCheckHtml('donations', s.id)}
+                            <div class="activity-card__title">
+                                ${esc(s.serverName || s.serverEmail)}
+                                ${s.active ? '' : '<span class="tag tag--inactive">inactive</span>'}
+                            </div>
+                        </label>
                         <button class="btn-danger" data-delete-donation="${esc(s.id)}" data-donation-label="${esc(s.bundleName + ' / ' + s.topicName)}">Delete</button>
                     </div>
                     <div class="activity-card__meta">
@@ -1496,6 +1696,7 @@
                     </div>
                 </div>
             `).join('');
+            updateBulkBar('donations');
         }
 
         async function clearActivityLog(source) {
@@ -1562,8 +1763,10 @@
             }
         }
 
-        async function deleteDonationSetup(id, label) {
-            if (!confirm('Delete donation setup for "' + label + '"?')) return;
+        async function deleteDonationSetup(id, label, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm('Delete donation setup for "' + label + '"?')) return false;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/donation-setups/${id}`, {
                     method: 'DELETE',
@@ -1571,13 +1774,18 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    loadDonationSetups();
-                    loadMonitorSummary();
-                } else {
-                    alert(data.error || data.message || 'Delete failed');
+                    _bulkSel.donations.delete(id);
+                    if (!skipReload) {
+                        loadDonationSetups();
+                        loadMonitorSummary();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert(data.error || data.message || 'Delete failed');
+                return false;
             } catch (error) {
-                alert('Delete failed: ' + error.message);
+                if (!skipConfirm) alert('Delete failed: ' + error.message);
+                return false;
             }
         }
 
@@ -1622,7 +1830,7 @@
                     tbody.innerHTML = '';
 
                     if (data.orders.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><div class="empty-state-icon">📦</div><p>No orders found</p></td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">📦</div><p>No orders found</p></td></tr>';
                     } else {
                         data.orders.forEach(order => {
                             const row = document.createElement('tr');
@@ -1635,6 +1843,7 @@
                                 ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
                                 : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
                             row.innerHTML = `
+                                <td class="bulk-check-wrap">${bulkCheckHtml('orders', order.order_id)}</td>
                                 <td>${esc(order.order_id)}</td>
                                 <td>${esc(order.email)}</td>
                                 <td>₹${esc(amount)}</td>
@@ -1652,6 +1861,8 @@
 
                     document.getElementById('ordersLoading').style.display = 'none';
                     document.getElementById('ordersTable').style.display = 'table';
+                    syncBulkSelectAllState('orders');
+                    updateBulkBar('orders');
                 }
             } catch (error) {
                 console.error('Error loading orders:', error);
@@ -1826,7 +2037,9 @@
             if (label) label.textContent = `${codes.length} shown`;
 
             if (codes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">🔑</div><p>No access codes match this filter</p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">🔑</div><p>No access codes match this filter</p></td></tr>';
+                syncBulkSelectAllState('codes');
+                updateBulkBar('codes');
                 return;
             }
 
@@ -1856,6 +2069,7 @@
                     : '<span style="color:#999;font-size:12px;">All (legacy)</span>';
 
                 row.innerHTML = `
+                    <td class="bulk-check-wrap">${bulkCheckHtml('codes', code.code)}</td>
                     <td><strong>${esc(code.code)}</strong></td>
                     <td>${esc(code.email)}</td>
                     <td>${esc(code.order_id)}</td>
@@ -1871,6 +2085,8 @@
                 if (m.isActive) row.style.background = '#f1fff4';
                 tbody.appendChild(row);
             });
+            syncBulkSelectAllState('codes');
+            updateBulkBar('codes');
         }
 
         async function loadUsers() {
@@ -1932,10 +2148,12 @@
                             if (bundle.topics.length === 0) {
                                 topicsHtml = '<p style="color: #666; font-style: italic;">No subpoints in this bundle</p>';
                             } else {
-                                topicsHtml = '<table style="width: 100%; margin-top: 10px;"><thead><tr><th>Subpoint</th><th>FCM Topic</th><th>Subscribers</th><th>Action</th></tr></thead><tbody>';
+                                topicsHtml = '<table style="width: 100%; margin-top: 10px;"><thead><tr><th class="bulk-check-wrap" style="width:40px;"></th><th>Subpoint</th><th>FCM Topic</th><th>Subscribers</th><th>Action</th></tr></thead><tbody>';
                                 bundle.topics.forEach(topic => {
+                                    const topicKey = bulkTopicKey(bundle.id, topic.id);
                                     topicsHtml += `
                                         <tr>
+                                            <td class="bulk-check-wrap">${bulkCheckHtml('topics', topicKey)}</td>
                                             <td><strong>${esc(topic.name)}</strong></td>
                                             <td><code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(topic.fcmTopicName)}</code></td>
                                             <td>${topic.subscribers}</td>
@@ -1959,6 +2177,7 @@
                             acc.className = 'bundle-acc';
                             acc.innerHTML = `
                                 <div class="bundle-acc__head">
+                                    <span class="bulk-check-wrap" style="padding-left:4px;">${bulkCheckHtml('bundles', bundle.id)}</span>
                                     <button type="button" class="bundle-acc__toggle" data-bundle-toggle>
                                         <span class="bundle-acc__chevron" aria-hidden="true"></span>
                                         <span style="flex:1;">
@@ -1987,6 +2206,7 @@
                     document.getElementById('bundlesLoading').style.display = 'none';
                     document.getElementById('bundlesContainer').style.display = 'block';
                     filterBundlesTable();
+                    updateBundlesBulkBar();
                 } else {
                     if (data.error && data.error.includes('Firebase Admin not initialized')) {
                         document.getElementById('bundlesLoading').innerHTML = `
@@ -2066,46 +2286,195 @@
             }
         }
 
+        // ==================== BULK DELETE ====================
+
+        async function bulkDeleteOrders() {
+            const ids = [..._bulkSel.orders];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected order(s) and their access codes?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteOrder(id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.orders.clear();
+            updateBulkBar('orders');
+            loadOrders();
+            loadAccessCodes();
+            loadStatistics();
+            alert(`✅ Deleted ${ok} order(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteCodes() {
+            const ids = [..._bulkSel.codes];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected access code(s)?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteCode(id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.codes.clear();
+            updateBulkBar('codes');
+            loadAccessCodes();
+            loadStatistics();
+            alert(`✅ Deleted ${ok} code(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteBundles() {
+            const ids = [..._bulkSel.bundles];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected bundle(s) and all their subpoints?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteBundle(id, id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.bundles.clear();
+            updateBundlesBulkBar();
+            loadBundles();
+            loadMonitorSummary();
+            alert(`✅ Deleted ${ok} bundle(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteTopics() {
+            const keys = [..._bulkSel.topics];
+            if (!keys.length) return;
+            if (!confirm(`Delete ${keys.length} selected subpoint(s)?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const key of keys) {
+                const parts = key.split('::');
+                const bundleId = parts[0];
+                const topicId = parts.slice(1).join('::');
+                if (await deleteTopic(bundleId, topicId, topicId, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.topics.clear();
+            updateBundlesBulkBar();
+            loadBundles();
+            loadMonitorSummary();
+            alert(`✅ Deleted ${ok} subpoint(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteComplaints() {
+            const ids = [..._bulkSel.complaints];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected complaint(s)?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteComplaint(id, id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.complaints.clear();
+            updateBulkBar('complaints');
+            loadComplaints();
+            loadOverviewPanels();
+            loadMonitorSummary();
+            alert(`✅ Deleted ${ok} complaint(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteDonations() {
+            const ids = [..._bulkSel.donations];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected donation setup(s)?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                const item = _donationItems.find(s => s.id === id);
+                const label = item ? (item.bundleName + ' / ' + item.topicName) : id;
+                if (await deleteDonationSetup(id, label, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.donations.clear();
+            updateBulkBar('donations');
+            loadDonationSetups();
+            loadMonitorSummary();
+            alert(`✅ Deleted ${ok} donation setup(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeletePolls() {
+            const ids = [..._bulkSel.polls];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected poll(s)?\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteAdminPoll(id, id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.polls.clear();
+            updateBulkBar('polls');
+            loadAdminPolls();
+            alert(`✅ Deleted ${ok} poll(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
+        async function bulkDeleteMails() {
+            const ids = [..._bulkSel.mails];
+            if (!ids.length) return;
+            if (!confirm(`Delete ${ids.length} selected mail(s)?\n\nThis will remove them from all app users.\n\nThis cannot be undone.`)) return;
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                if (await deleteDevMail(id, id, { skipConfirm: true, skipReload: true })) ok++;
+                else fail++;
+            }
+            _bulkSel.mails.clear();
+            updateBulkBar('mails');
+            loadDevMails();
+            alert(`✅ Deleted ${ok} mail(s)${fail ? `, ${fail} failed` : ''}`);
+        }
+
         // ==================== DELETE ACTIONS ====================
 
-        async function deleteCode(code) {
-            if (!confirm(`Are you sure you want to delete access code "${code}"?\n\nThis action cannot be undone.`)) return;
+        async function deleteCode(code, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete access code "${code}"?\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/access-codes/${code}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/access-codes/${encodeURIComponent(code)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Access code deleted successfully');
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete code'));
+                    _bulkSel.codes.delete(code);
+                    if (!skipConfirm) alert('✅ Access code deleted successfully');
+                    if (!skipReload) {
+                        loadAccessCodes();
+                        loadStatistics();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete code'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting code: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting code: ' + error.message);
+                return false;
             }
         }
 
-        async function deleteOrder(orderId) {
-            if (!confirm(`Are you sure you want to delete order "${orderId}"?\n\nThis will also delete all associated access codes.\n\nThis action cannot be undone.`)) return;
+        async function deleteOrder(orderId, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete order "${orderId}"?\n\nThis will also delete all associated access codes.\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/orders/${orderId}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/orders/${encodeURIComponent(orderId)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Order and associated access codes deleted successfully');
-                    loadOrders();
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete order'));
+                    _bulkSel.orders.delete(orderId);
+                    if (!skipConfirm) alert('✅ Order and associated access codes deleted successfully');
+                    if (!skipReload) {
+                        loadOrders();
+                        loadAccessCodes();
+                        loadStatistics();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete order'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting order: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting order: ' + error.message);
+                return false;
             }
         }
 
@@ -2133,43 +2502,57 @@
             }
         }
 
-        async function deleteBundle(bundleId, bundleName) {
-            if (!confirm(`⚠️ Are you sure you want to delete bundle "${bundleName}"?\n\nThis will delete ALL topics in this bundle.\n\nThis action cannot be undone.`)) return;
+        async function deleteBundle(bundleId, bundleName, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`⚠️ Are you sure you want to delete bundle "${bundleName}"?\n\nThis will delete ALL topics in this bundle.\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${encodeURIComponent(bundleId)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Bundle deleted successfully');
-                    loadBundles();
-                    loadMonitorSummary();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete bundle'));
+                    _bulkSel.bundles.delete(bundleId);
+                    if (!skipConfirm) alert('✅ Bundle deleted successfully');
+                    if (!skipReload) {
+                        loadBundles();
+                        loadMonitorSummary();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete bundle'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting bundle: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting bundle: ' + error.message);
+                return false;
             }
         }
 
-        async function deleteTopic(bundleId, topicId, topicName) {
-            if (!confirm(`Are you sure you want to delete topic "${topicName}"?\n\nThis action cannot be undone.`)) return;
+        async function deleteTopic(bundleId, topicId, topicName, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete topic "${topicName}"?\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${bundleId}/topics/${topicId}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/bundles/${encodeURIComponent(bundleId)}/topics/${encodeURIComponent(topicId)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Topic deleted successfully');
-                    loadBundles();
-                    loadMonitorSummary();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete topic'));
+                    _bulkSel.topics.delete(bulkTopicKey(bundleId, topicId));
+                    if (!skipConfirm) alert('✅ Topic deleted successfully');
+                    if (!skipReload) {
+                        loadBundles();
+                        loadMonitorSummary();
+                    }
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete topic'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting topic: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting topic: ' + error.message);
+                return false;
             }
         }
 
@@ -2228,9 +2611,11 @@
                     const polls = data.polls || [];
                     if (polls.length === 0) {
                         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No polls yet. Create one to engage your users.</p></div>';
+                        updateBulkBar('polls');
                     } else {
                         polls.forEach(poll => {
                             const card = document.createElement('div');
+                            card.setAttribute('data-bulk-row', '');
                             card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0;';
 
                             const statusColor = poll.status === 'active' ? '#155724' : '#721c24';
@@ -2244,6 +2629,9 @@
 
                             card.innerHTML = `
                                 <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                                    <label style="display:flex;align-items:flex-start;padding-top:4px;cursor:pointer;">
+                                        ${bulkCheckHtml('polls', poll.id)}
+                                    </label>
                                     <div style="flex:1;">
                                         <h4 style="margin:0 0 6px 0; color:#333; font-size:16px;">
                                             ${esc(poll.question || 'Untitled poll')}
@@ -2276,6 +2664,7 @@
                     }
                     loading.style.display = 'none';
                     container.style.display = 'block';
+                    updateBulkBar('polls');
                 } else {
                     loading.textContent = 'Error loading polls: ' + (data.message || 'Unknown error');
                 }
@@ -2403,21 +2792,26 @@
             }
         }
 
-        async function deleteAdminPoll(pollId, pollQuestion) {
-            if (!confirm(`Delete poll "${pollQuestion}"?\n\nThis action cannot be undone.`)) return;
+        async function deleteAdminPoll(pollId, pollQuestion, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`Delete poll "${pollQuestion}"?\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/polls/${pollId}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/polls/${encodeURIComponent(pollId)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    loadAdminPolls();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete poll'));
+                    _bulkSel.polls.delete(pollId);
+                    if (!skipReload) loadAdminPolls();
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete poll'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting poll: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting poll: ' + error.message);
+                return false;
             }
         }
 
@@ -2439,6 +2833,7 @@
                     } else {
                         data.mails.forEach(mail => {
                             const card = document.createElement('div');
+                            card.setAttribute('data-bulk-row', '');
                             card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0; position: relative;';
                             if (mail.pinned) {
                                 card.style.borderLeft = '4px solid #AD131D';
@@ -2449,7 +2844,10 @@
                             const bodyPreview = (mail.body || '').length > 200 ? mail.body.substring(0, 200) + '...' : mail.body;
 
                             card.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                                    <label style="display:flex;align-items:flex-start;padding-top:4px;cursor:pointer;">
+                                        ${bulkCheckHtml('mails', mail.id)}
+                                    </label>
                                     <div style="flex: 1;">
                                         <h4 style="margin: 0 0 6px 0; color: #333; font-size: 16px;">${esc(mail.title)}${pinnedBadge}</h4>
                                         <p style="margin: 0 0 8px 0; color: #666; font-size: 13px; white-space: pre-wrap;">${esc(bodyPreview)}</p>
@@ -2469,6 +2867,7 @@
 
                     document.getElementById('mailsLoading').style.display = 'none';
                     container.style.display = 'block';
+                    updateBulkBar('mails');
                 }
             } catch (error) {
                 console.error('Error loading dev mails:', error);
@@ -2525,22 +2924,27 @@
             }
         }
 
-        async function deleteDevMail(mailId, mailTitle) {
-            if (!confirm(`Are you sure you want to delete mail "${mailTitle}"?\n\nThis will remove it from all app users.\n\nThis action cannot be undone.`)) return;
+        async function deleteDevMail(mailId, mailTitle, opts = {}) {
+            const skipConfirm = opts.skipConfirm === true;
+            const skipReload = opts.skipReload === true;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete mail "${mailTitle}"?\n\nThis will remove it from all app users.\n\nThis action cannot be undone.`)) return false;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails/${mailId}`, {
+                const response = await fetch(`${BACKEND_URL}/api/admin/dev-mails/${encodeURIComponent(mailId)}`, {
                     method: 'DELETE',
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Mail deleted successfully');
-                    loadDevMails();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to delete mail'));
+                    _bulkSel.mails.delete(mailId);
+                    if (!skipConfirm) alert('✅ Mail deleted successfully');
+                    if (!skipReload) loadDevMails();
+                    return true;
                 }
+                if (!skipConfirm) alert('❌ Error: ' + (data.message || 'Failed to delete mail'));
+                return false;
             } catch (error) {
-                alert('❌ Error deleting mail: ' + error.message);
+                if (!skipConfirm) alert('❌ Error deleting mail: ' + error.message);
+                return false;
             }
         }
 
