@@ -298,11 +298,22 @@ section {
     margin: 0 auto;
 }
 
+.about-tlangau__heading {
+    font-size: 1.15rem;
+    color: var(--brand-red);
+    margin: 1.75rem 0 0.5rem;
+    font-weight: 700;
+}
+
+.about-tlangau__heading:first-of-type {
+    margin-top: 0.5rem;
+}
+
 .about-tlangau__content p {
     color: var(--text-light);
     font-size: 1.05rem;
     line-height: 1.85;
-    margin-bottom: 1.35rem;
+    margin-bottom: 1.1rem;
 }
 
 .about-tlangau__content p:last-child {
