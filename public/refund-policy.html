@@ -8,24 +8,32 @@
     <meta name="author" content="Tlangau">
     
     <title>Refund Policy - Tlangau</title>
-    <link rel="stylesheet" href="styles.css?v=20260608b">
+    <link rel="stylesheet" href="styles.css?v=20260609f">
     <link rel="canonical" href="https://tlangau.com/refund-policy.html">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar" data-site-nav>
         <div class="container">
             <div class="nav-brand">
-                <a href="index.html">
+                <a href="index.html" aria-label="Tlangau home">
                     <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
                     <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
                 </a>
             </div>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="contact.html">Contact</a></li>
-                <li><a href="payment.html">Get the App</a></li>
-            </ul>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav-menu" aria-label="Open menu">
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+            </button>
+            <div class="nav-menu" id="site-nav-menu">
+                <ul class="nav-menu__links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Premium</a></li>
+                    <li><a href="payment.html">Get the App</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="locations.html">Available locations to Subscribe</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -34,15 +42,25 @@
         <div class="container">
             <div class="legal-content">
                 <h1>Refund Policy</h1>
-                <p class="last-updated">Last Updated: January 13, 2025</p>
+                <p class="last-updated">Last Updated: June 16, 2026</p>
 
                 <div class="legal-section">
                     <h2>1. Overview</h2>
-                    <p>This Refund Policy outlines the terms and conditions under which refunds may be issued for purchases made through Tlangau.</p>
+                    <p>Premium Tlangau features are purchased as <strong>in-app subscriptions</strong> via the Apple App Store or Google Play. This policy explains how refunds work. We no longer sell new subscriptions on this website.</p>
                 </div>
 
                 <div class="legal-section">
-                    <h2>2. Google Play purchases (in-app subscriptions)</h2>
+                    <h2>2. Apple App Store purchases (iOS)</h2>
+                    <p>Subscriptions on iPhone are billed by Apple. To request a refund or cancel auto-renewal:</p>
+                    <ul>
+                        <li>Open <strong>Settings → Apple ID → Subscriptions</strong> on your device, or use the App Store subscription management page.</li>
+                        <li>For refunds, visit <a href="https://reportaproblem.apple.com" target="_blank" rel="noopener noreferrer">reportaproblem.apple.com</a> and select the Tlangau purchase.</li>
+                    </ul>
+                    <p>Apple approves or denies refunds under their policies. We cannot process App Store card charges directly.</p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>3. Google Play purchases (Android)</h2>
                     <p>
                         If you purchase premium services inside the Android app using <strong>Google Play</strong>, refunds are handled under Google Play’s refund policies.
                         In many cases, you may be able to request a refund within 48 hours from Google Play. After that, you may need to contact us.
@@ -56,7 +74,7 @@
                 </div>
 
                 <div class="legal-section">
-                    <h2>3. Website access code purchases (legacy)</h2>
+                    <h2>4. Website access code purchases (legacy)</h2>
                     <p><strong>Update (June 2026):</strong> We no longer sell new access codes on this website. Premium is purchased in the Tlangau app via the App Store or Google Play (see sections 1–2 above). The following applies only to past website purchases.</p>
                     <p class="important-notice"><strong>IMPORTANT:</strong> Once an access code has been generated and delivered to your email address, <strong>NO REFUNDS WILL BE PROVIDED</strong>, regardless of the circumstances.</p>
                     <p>This policy applies to all situations, including but not limited to:</p>
@@ -240,6 +258,6 @@
         </div>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="site-ui.js?v=20260609f"></script>
 </body>
 </html>

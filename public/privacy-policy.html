@@ -8,24 +8,32 @@
     <meta name="author" content="Tlangau">
     
     <title>Privacy Policy - Tlangau</title>
-    <link rel="stylesheet" href="styles.css?v=20260608b">
+    <link rel="stylesheet" href="styles.css?v=20260609f">
     <link rel="canonical" href="https://tlangau.com/privacy-policy.html">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar" data-site-nav>
         <div class="container">
             <div class="nav-brand">
-                <a href="index.html">
+                <a href="index.html" aria-label="Tlangau home">
                     <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
                     <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
                 </a>
             </div>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="contact.html">Contact</a></li>
-                <li><a href="payment.html">Get the App</a></li>
-            </ul>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav-menu" aria-label="Open menu">
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+            </button>
+            <div class="nav-menu" id="site-nav-menu">
+                <ul class="nav-menu__links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Premium</a></li>
+                    <li><a href="payment.html">Get the App</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="locations.html">Available locations to Subscribe</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -34,7 +42,7 @@
         <div class="container">
             <div class="legal-content">
                 <h1>Privacy Policy</h1>
-                <p class="last-updated">Last Updated: May 7, 2026</p>
+                <p class="last-updated">Last Updated: June 16, 2026</p>
 
                 <div class="legal-section">
                     <h2>1. Introduction</h2>
@@ -45,7 +53,8 @@
                     <h2>2. Information We Collect</h2>
                     <h3>2.1 Account and Profile Information</h3>
                     <ul>
-                        <li><strong>Google account information:</strong> Name, email address, and profile details returned by Google Sign-In.</li>
+                        <li><strong>Google account information:</strong> Name, email address, and profile details returned by Google Sign-In (Android and cross-platform sign-in).</li>
+                        <li><strong>Apple account information:</strong> On iOS, if you use Sign in with Apple, we receive the identifiers and email (or private relay email) Apple provides for authentication.</li>
                         <li><strong>User-entered profile data:</strong> Contact and address details you enter in donation/payment flows.</li>
                     </ul>
 
@@ -90,14 +99,14 @@
                 </div>
 
                 <div class="legal-section">
-                    <h2>2.6 Purchases and Subscriptions (Google Play)</h2>
-                    <p>If you purchase premium services on Android using Google Play Billing, we may collect and process:</p>
+                    <h2>2.6 Purchases and Subscriptions (Google Play &amp; App Store)</h2>
+                    <p>If you purchase premium services in the app, we may collect and process:</p>
                     <ul>
-                        <li><strong>Purchase identifiers:</strong> such as purchase tokens and the purchased product ID, used to verify your purchase with our server.</li>
+                        <li><strong>Purchase identifiers:</strong> product IDs, purchase tokens (Google Play), or transaction/receipt data (App Store) to verify your purchase with our server.</li>
                         <li><strong>Entitlement status:</strong> which services are active for your account and their expiry time.</li>
                     </ul>
                     <p>
-                        <strong>Payment information:</strong> your payment method details are processed by Google Play. We do not receive or store your full card/UPI details from Google Play.
+                        <strong>Payment information:</strong> payments are processed by Apple or Google. We do not receive or store your full card, UPI, or wallet details from the stores.
                     </p>
                 </div>
 
@@ -119,7 +128,8 @@
                     <p>We do not sell your personal data. We share information only as needed to operate the app:</p>
                     <ul>
                         <li><strong>Google Sign-In:</strong> Authentication and account identity.</li>
-                        <li><strong>Google Play Billing (Android):</strong> Purchase processing handled by Google Play; we may verify purchase status via our backend using purchase identifiers.</li>
+                        <li><strong>Sign in with Apple (iOS):</strong> Authentication when you choose Apple sign-in.</li>
+                        <li><strong>Google Play Billing (Android) &amp; App Store (iOS):</strong> Purchase processing handled by the store; we verify entitlement status on our backend.</li>
                         <li><strong>Firebase services:</strong> Realtime Database, Cloud Messaging, and Storage for app data and notifications.</li>
                         <li><strong>Image hosting/upload providers:</strong> For user-submitted images (e.g., payment proof and complaint photos).</li>
                         <li><strong>Map/geocoding/search providers:</strong> To return map, place, and address results for location features.</li>
@@ -228,6 +238,6 @@
         </div>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="site-ui.js?v=20260609f"></script>
 </body>
 </html>

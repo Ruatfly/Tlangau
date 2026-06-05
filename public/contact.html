@@ -66,11 +66,11 @@
                         <div class="contact-icon">💬</div>
                         <h3>What We Can Help With</h3>
                         <ul class="help-list">
-                            <li>Payment issues</li>
-                            <li>Access code delivery problems</li>
-                            <li>Refund requests</li>
-                            <li>Technical support</li>
-                            <li>General inquiries</li>
+                            <li>App Store or Google Play subscriptions</li>
+                            <li>Restore purchases &amp; premium access</li>
+                            <li>Notifications not working</li>
+                            <li>Refunds (see our Refund Policy)</li>
+                            <li>Joining bundles &amp; general help</li>
                         </ul>
                     </div>
                 </div>
@@ -80,7 +80,7 @@
                         <h2>Send Us a Message</h2>
                         <p>Fill out the form below and we'll respond as soon as possible.</p>
                         
-                        <form class="contact-form" id="contactForm" action="mailto:chhakchhuakr59@gmail.com" method="post" enctype="text/plain">
+                        <form class="contact-form" id="contactForm" action="#" method="post">
                             <div class="form-group">
                                 <label for="name">Your Name *</label>
                                 <input type="text" id="name" name="name" required placeholder="Enter your name">
@@ -95,18 +95,19 @@
                                 <label for="subject">Subject *</label>
                                 <select id="subject" name="subject" required>
                                     <option value="">Select a subject</option>
-                                    <option value="Payment Issue">Payment Issue</option>
-                                    <option value="Access Code Not Received">Access Code Not Received</option>
+                                    <option value="Subscription / Payment Issue">Subscription / Payment Issue</option>
+                                    <option value="Restore Purchase">Restore Purchase</option>
+                                    <option value="Notifications Not Working">Notifications Not Working</option>
                                     <option value="Refund Request">Refund Request</option>
+                                    <option value="Joining a Bundle / Location">Joining a Bundle / Location</option>
                                     <option value="Technical Support">Technical Support</option>
                                     <option value="General Inquiry">General Inquiry</option>
-                                    <option value="Other">Other</option>
                                 </select>
                             </div>
 
                             <div class="form-group">
-                                <label for="orderId">Order ID (if applicable)</label>
-                                <input type="text" id="orderId" name="orderId" placeholder="Enter your order ID">
+                                <label for="orderId">Order / transaction reference (optional)</label>
+                                <input type="text" id="orderId" name="orderId" placeholder="App Store, Play, or legacy order ID">
                             </div>
 
                             <div class="form-group">
@@ -115,6 +116,7 @@
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-large">Send Message</button>
+                            <div id="contactFormStatus" class="error" style="display:none;margin-top:12px;"></div>
                         </form>
                     </div>
                 </div>
@@ -166,7 +168,8 @@
         </div>
     </footer>
 
+    <script src="config.js"></script>
     <script src="site-ui.js?v=20260609f"></script>
-    <script src="script.js"></script>
+    <script src="contact.js?v=20260616a"></script>
 </body>
 </html>

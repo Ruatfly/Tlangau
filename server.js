@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260615a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260616a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -2595,51 +2595,59 @@ app.get('/api/admin/access-codes', checkAdminAuth, async (req, res) => {
   }
 });
 
+function buildStoreEntitlementsList(codes, platformKey) {
+  const now = Date.now();
+  const platform = String(platformKey || '').toLowerCase();
+  const rows = (Array.isArray(codes) ? codes : [])
+    .filter((c) => String(c?.platform || '').toLowerCase() === platform)
+    .map((c) => {
+      const productId = String(c?.product_id || c?.productId || '').trim() || null;
+      const rawExpiry = c?.expires_at || c?.expiresAt || null;
+      const graceEndsAt = rawExpiry ? getGraceWindowEnd(rawExpiry) : null;
+      const expTs = rawExpiry ? toTimestamp(rawExpiry) : null;
+      const isActive = expTs !== null && now <= (toTimestamp(graceEndsAt) ?? expTs);
+      const planDuration =
+        c?.plan_duration ||
+        (productId ? planDurationForPlayProductId(productId) : null) ||
+        'monthly';
+      const services = Array.isArray(c?.services) ? c.services : [];
+      return {
+        code: c?.code || null,
+        email: c?.email || c?.used_by_email || null,
+        accountId: c?.account_id || c?.accountId || null,
+        platform,
+        productId,
+        planDuration,
+        validityDays: c?.validity_days || c?.validityDays || null,
+        services,
+        entitlementStartsAt: c?.entitlement_starts_at || c?.used_at || c?.created_at || null,
+        expiresAt: rawExpiry,
+        graceEndsAt,
+        status: isActive ? 'ACTIVE' : 'EXPIRED',
+        createdAt: c?.created_at || null,
+      };
+    });
+  rows.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return rows;
+}
+
 // Admin: Google Play purchases (server entitlements)
-// Note: this is NOT Play Console billing truth. It's what the backend granted after verification.
 app.get('/api/admin/play-entitlements', checkAdminAuth, async (req, res) => {
   try {
     const codes = await db.getAllAccessCodes();
-    const now = Date.now();
+    const entitlements = buildStoreEntitlementsList(codes, 'google_play');
+    res.json({ success: true, entitlements, count: entitlements.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
-    const play = (Array.isArray(codes) ? codes : [])
-      .filter((c) => String(c?.platform || '').toLowerCase() === 'google_play')
-      .map((c) => {
-        const productId = String(c?.product_id || c?.productId || '').trim() || null;
-        const rawExpiry = c?.expires_at || c?.expiresAt || null;
-        const graceEndsAt = rawExpiry ? getGraceWindowEnd(rawExpiry) : null;
-        const expTs = rawExpiry ? toTimestamp(rawExpiry) : null;
-        const isActive = expTs !== null && now <= (toTimestamp(graceEndsAt) ?? expTs);
-
-        const planDuration =
-          c?.plan_duration ||
-          (productId ? planDurationForPlayProductId(productId) : null) ||
-          'monthly';
-
-        const services = Array.isArray(c?.services) ? c.services : [];
-
-        return {
-          code: c?.code || null, // safe reference id (not a purchase token)
-          email: c?.email || c?.used_by_email || null,
-          accountId: c?.account_id || c?.accountId || null,
-          platform: 'google_play',
-          productId,
-          planDuration,
-          validityDays: c?.validity_days || c?.validityDays || null,
-          services,
-          entitlementStartsAt:
-            c?.entitlement_starts_at || c?.used_at || c?.created_at || null,
-          expiresAt: rawExpiry,
-          graceEndsAt,
-          status: isActive ? 'ACTIVE' : 'EXPIRED',
-          createdAt: c?.created_at || null,
-        };
-      });
-
-    // newest first
-    play.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-    res.json({ success: true, entitlements: play, count: play.length });
+// Admin: App Store purchases (server entitlements)
+app.get('/api/admin/app-store-entitlements', checkAdminAuth, async (req, res) => {
+  try {
+    const codes = await db.getAllAccessCodes();
+    const entitlements = buildStoreEntitlementsList(codes, 'app_store');
+    res.json({ success: true, entitlements, count: entitlements.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -4373,6 +4381,55 @@ app.post('/api/client-welcome', requireAnyAuth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to create client welcome mail.' });
   }
 });
+
+// Public website contact form (no auth — creates support ticket)
+app.post(
+  '/api/public/contact',
+  supportLimiter,
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().normalizeEmail(),
+    body('subject').trim().notEmpty().withMessage('Subject is required'),
+    body('message').trim().isLength({ min: 10 }).withMessage('Message must be at least 10 characters'),
+    body('orderId').optional().trim(),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: errors.array()[0].msg });
+      }
+
+      const name = req.body.name.trim();
+      const email = normalizeEmail(req.body.email);
+      const subject = req.body.subject.trim();
+      const message = req.body.message.trim();
+      const orderId = (req.body.orderId || '').trim();
+
+      const subjectLower = subject.toLowerCase();
+      let category = 'general';
+      if (subjectLower.includes('refund')) category = 'refund';
+      else if (subjectLower.includes('payment') || subjectLower.includes('purchase') || subjectLower.includes('subscription')) category = 'payment';
+      else if (subjectLower.includes('notification') || subjectLower.includes('technical') || subjectLower.includes('bug')) category = 'bug';
+      else if (subjectLower.includes('restore')) category = 'payment';
+
+      const ticketId = await db.createSupportTicket({
+        email,
+        order_id: orderId || null,
+        subject,
+        message: `Contact form — ${name}\nEmail: ${email}${orderId ? `\nReference: ${orderId}` : ''}\n\n${message}`,
+        category,
+        status: 'open',
+        meta: { source: 'website', name },
+      });
+
+      res.json({ success: true, ticketId, message: 'Message received. We will reply by email within 24–48 hours.' });
+    } catch (error) {
+      console.error('Public contact error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to send message. Please email us directly.' });
+    }
+  }
+);
 
 // Create support ticket (authenticated users)
 app.post(

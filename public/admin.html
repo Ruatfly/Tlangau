@@ -532,7 +532,12 @@
                 <span>Billing &amp; access codes</span>
                 <button type="button" class="btn-danger btn-toolbar" id="resetBillingBtn" style="margin-left:auto;">Reset billing stats to 0</button>
             </div>
-            <p style="font-size:12px;color:#888;margin:-8px 0 14px 0;">Reset permanently deletes all orders and access codes (including Play/App Store entitlements). Does not affect bundles, sends, or community data.</p>
+            <p style="font-size:12px;color:#888;margin:-8px 0 10px 0;">Reset permanently deletes all orders and access codes (including Play/App Store entitlements). Does not affect bundles, sends, or community data.</p>
+            <div class="monitor-row" style="margin-bottom:16px;">
+                <input type="email" id="resendEmailInput" placeholder="Legacy code email to resend" style="padding:8px 12px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;min-width:220px;">
+                <button type="button" class="btn-secondary btn-toolbar" id="resendEmailBtn">Resend code email</button>
+                <button type="button" class="btn-secondary btn-toolbar" id="reconcilePaymentsBtn">Reconcile pending payments</button>
+            </div>
             <div class="stats-grid" id="statsGrid">
                 <div class="stat-card">
                     <h3>Total Orders</h3>
@@ -579,9 +584,11 @@
                 <button class="tab" data-tab="orders">Orders</button>
                 <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="play">Google Play</button>
+                <button class="tab" data-tab="appstore">App Store</button>
                 <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="deletionRequests">Deletion Requests</button>
                 <button class="tab" data-tab="mails">📧 Dev Mails</button>
+                <button class="tab" data-tab="support">🎫 Support</button>
             </div>
 
             <!-- Overview Tab -->
@@ -684,6 +691,7 @@
                                 <th>Amount</th>
                                 <th>Services</th>
                                 <th>Status</th>
+                                <th>Refund</th>
                                 <th>Payment ID</th>
                                 <th>Created At</th>
                                 <th>Action</th>
@@ -736,6 +744,48 @@
                             </tr>
                         </thead>
                         <tbody id="codesBody" data-bulk-container="codes"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- App Store Tab -->
+            <div id="appstoreTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="appstoreSearch" placeholder="Search by email, SKU, code, or service...">
+                    <div style="background:#f9f9f9; border:1px solid #e0e0e0; border-radius:8px; padding:12px 14px; margin: 8px 0 18px 0;">
+                        <div style="font-weight:700; color:#333; margin-bottom:4px;">About App Store records</div>
+                        <div style="font-size:12px; color:#666; line-height:1.45;">
+                            Server entitlements granted after Apple IAP verification. For billing truth, use <strong>App Store Connect → Sales and Trends / Subscriptions</strong>.
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
+                        <label style="font-size: 12px; color:#666; font-weight:600;">Filter</label>
+                        <select id="appstoreFilter" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="all">All</option>
+                            <option value="active">Active</option>
+                            <option value="expired">Expired</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                        <button class="btn" id="appstoreRefreshBtn" style="width:auto; padding: 10px 14px; font-size: 12px; background:#6c757d;">Refresh</button>
+                        <span style="margin-left:auto; font-size: 12px; color:#666;" id="appstoreCountLabel"></span>
+                    </div>
+                    <div id="appstoreLoading" class="loading">Loading App Store purchases...</div>
+                    <table id="appstoreTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Plan</th>
+                                <th>SKU</th>
+                                <th>Services</th>
+                                <th>Status</th>
+                                <th>Entitlement Start</th>
+                                <th>Expires At</th>
+                                <th>Grace Ends</th>
+                                <th>Code Ref</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appstoreBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -929,6 +979,27 @@
                     <div id="mailsList" data-bulk-container="mails" style="display: none;"></div>
                 </div>
             </div>
+
+            <!-- Support Tickets Tab -->
+            <div id="supportTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="supportSearch" placeholder="Search tickets by email, subject, category, status…">
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 18px 0;">
+                        <label style="font-size:12px;color:#666;font-weight:600;">Filter</label>
+                        <select id="supportFilter" style="padding:10px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;">
+                            <option value="all">All statuses</option>
+                            <option value="open">Open</option>
+                            <option value="in_progress">In progress</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                        <button type="button" class="btn-secondary btn-toolbar" id="supportRefreshBtn">Refresh</button>
+                        <span id="supportCountLabel" style="margin-left:auto;font-size:12px;color:#666;"></span>
+                    </div>
+                    <div id="supportLoading" class="loading">Loading support tickets…</div>
+                    <div id="supportList" style="display:none;"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1050,7 +1121,9 @@
             orders: 'ordersTab',
             codes: 'codesTab',
             play: 'playTab',
+            appstore: 'appstoreTab',
             users: 'usersTab',
+            support: 'supportTab',
             deletionRequests: 'deletionRequestsTab',
             mails: 'mailsTab',
         };
@@ -1077,6 +1150,8 @@
                     loadComplaints();
                 } else if (_activeTab === 'donations') {
                     loadDonationSetups();
+                } else if (_activeTab === 'support') {
+                    loadSupportTickets();
                 }
             }, AUTO_REFRESH_MS);
         }
@@ -1209,6 +1284,23 @@
         document.getElementById('resetBillingBtn').addEventListener('click', function () {
             resetBillingStats();
         });
+        document.getElementById('resendEmailBtn').addEventListener('click', resendAccessCodeEmail);
+        document.getElementById('reconcilePaymentsBtn').addEventListener('click', reconcilePendingPayments);
+        document.getElementById('appstoreFilter').addEventListener('change', function () {
+            renderAppStoreEntitlements();
+            filterTable('appstoreTable', 'appstoreSearch');
+        });
+        document.getElementById('appstoreRefreshBtn').addEventListener('click', loadAppStoreEntitlements);
+        document.getElementById('appstoreSearch').addEventListener('keyup', function () {
+            filterTable('appstoreTable', 'appstoreSearch');
+        });
+        document.getElementById('supportRefreshBtn').addEventListener('click', loadSupportTickets);
+        document.getElementById('supportSearch').addEventListener('keyup', renderSupportTickets);
+        document.getElementById('supportFilter').addEventListener('change', renderSupportTickets);
+        document.getElementById('supportList').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-save-ticket]');
+            if (btn) saveSupportTicket(btn.dataset.saveTicket);
+        });
 
         document.addEventListener('change', function (e) {
             const master = e.target.closest('[data-bulk-select-all]');
@@ -1243,6 +1335,11 @@
 
         // Event delegation for dynamically created delete buttons
         document.getElementById('ordersBody').addEventListener('click', function (e) {
+            const refundBtn = e.target.closest('[data-refund-order]');
+            if (refundBtn) {
+                updateOrderRefund(refundBtn.dataset.refundOrder, refundBtn.dataset.refundAction);
+                return;
+            }
             const btn = e.target.closest('[data-delete-order]');
             if (btn) deleteOrder(btn.dataset.deleteOrder);
         });
@@ -1370,6 +1467,8 @@
                 loadOrders(),
                 loadAccessCodes(),
                 loadPlayEntitlements(),
+                loadAppStoreEntitlements(),
+                loadSupportTickets(),
                 loadUsers(),
                 loadBundles(),
                 loadDeletionRequests(),
@@ -1873,12 +1972,25 @@
                     tbody.innerHTML = '';
 
                     if (data.orders.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">📦</div><p>No orders found</p></td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">📦</div><p>No orders found</p></td></tr>';
                     } else {
                         data.orders.forEach(order => {
                             const row = document.createElement('tr');
                             const amount = (order.amount / 100).toFixed(2);
                             const statusBadge = `<span class="badge ${esc(order.status.toLowerCase())}">${esc(order.status)}</span>`;
+                            const refundStatus = (order.refund_status || '-').toString();
+                            const refundBadge = refundStatus !== '-'
+                                ? `<span class="badge" style="background:#fff3cd;color:#856404;font-size:10px;">${esc(refundStatus)}</span>`
+                                : '<span style="color:#999;">-</span>';
+                            let refundActions = '';
+                            if (refundStatus === 'requested') {
+                                refundActions = `
+                                    <button class="btn-danger" style="padding:4px 8px;font-size:11px;margin-top:4px;" data-refund-order="${esc(order.order_id)}" data-refund-action="approved">Approve</button>
+                                    <button class="btn-danger" style="padding:4px 8px;font-size:11px;margin-top:4px;background:#6c757d;" data-refund-order="${esc(order.order_id)}" data-refund-action="rejected">Reject</button>
+                                `;
+                            } else if (refundStatus === 'approved') {
+                                refundActions = `<button class="btn-danger" style="padding:4px 8px;font-size:11px;margin-top:4px;background:#2e7d32;" data-refund-order="${esc(order.order_id)}" data-refund-action="processed">Mark processed</button>`;
+                            }
                             const services = order.services || [];
                             const planDuration = order.plan_duration || 'monthly';
                             const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(planDuration)}</span>`;
@@ -1892,6 +2004,7 @@
                                 <td>₹${esc(amount)}</td>
                                 <td>${planBadge} ${servicesBadges}</td>
                                 <td>${statusBadge}</td>
+                                <td>${refundBadge}${refundActions}</td>
                                 <td>${esc(order.payment_id || '-')}</td>
                                 <td>${esc(new Date(order.created_at).toLocaleString())}</td>
                                 <td>
@@ -1933,9 +2046,80 @@
             }
         }
 
+        // ==================== BILLING TOOLS ====================
+
+        async function resendAccessCodeEmail() {
+            const email = (document.getElementById('resendEmailInput')?.value || '').trim();
+            if (!email) {
+                alert('Enter an email address.');
+                return;
+            }
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/resend-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ email }),
+                });
+                const data = await response.json();
+                alert(data.success ? ('✅ ' + (data.message || 'Email sent')) : (data.message || data.error || 'Failed'));
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function reconcilePendingPayments() {
+            if (!confirm('Reconcile pending/suspicious gateway orders now?')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/reconcile-payments`, {
+                    method: 'POST',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success && data.report) {
+                    const r = data.report;
+                    alert(`Reconcile complete.\nScanned: ${r.scanned || 0}\nRecovered: ${r.recovered || 0}\nUnchanged: ${r.unchanged || 0}\nFailed: ${r.failed || 0}`);
+                    loadOrders();
+                    loadAccessCodes();
+                    loadStatistics();
+                } else {
+                    alert(data.message || data.error || 'Reconcile failed');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function updateOrderRefund(orderId, status) {
+            const note = prompt(`Refund note for ${orderId} (optional):`) || '';
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/refunds/${encodeURIComponent(orderId)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({ status, note }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadOrders();
+                    loadSupportTickets();
+                } else {
+                    alert(data.message || data.error || 'Update failed');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
         // ==================== GOOGLE PLAY (SERVER ENTITLEMENTS) ====================
 
         let _allPlayEntitlements = [];
+        let _allAppStoreEntitlements = [];
+        let _supportTickets = [];
 
         document.getElementById('playFilter').addEventListener('change', function () {
             renderPlayEntitlements();
@@ -2030,6 +2214,172 @@
 
                 tbody.appendChild(row);
             });
+        }
+
+        // ==================== APP STORE (SERVER ENTITLEMENTS) ====================
+
+        async function loadAppStoreEntitlements() {
+            try {
+                document.getElementById('appstoreLoading').style.display = 'block';
+                document.getElementById('appstoreTable').style.display = 'none';
+                const response = await fetch(`${BACKEND_URL}/api/admin/app-store-entitlements`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    _allAppStoreEntitlements = Array.isArray(data.entitlements) ? data.entitlements : [];
+                    renderAppStoreEntitlements();
+                    document.getElementById('appstoreLoading').style.display = 'none';
+                    document.getElementById('appstoreTable').style.display = 'table';
+                } else {
+                    document.getElementById('appstoreLoading').textContent = 'Error loading App Store purchases.';
+                }
+            } catch (error) {
+                document.getElementById('appstoreLoading').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function renderAppStoreEntitlements() {
+            const tbody = document.getElementById('appstoreBody');
+            tbody.innerHTML = '';
+            const filterMode = document.getElementById('appstoreFilter')?.value || 'all';
+            let rows = (_allAppStoreEntitlements || []).slice();
+            if (filterMode !== 'all') {
+                rows = rows.filter(r => {
+                    const status = String(r.status || '').toUpperCase();
+                    const plan = String(r.planDuration || '').toLowerCase();
+                    if (filterMode === 'active') return status === 'ACTIVE';
+                    if (filterMode === 'expired') return status === 'EXPIRED';
+                    if (filterMode === 'monthly') return plan === 'monthly';
+                    if (filterMode === 'yearly') return plan === 'yearly';
+                    return true;
+                });
+            }
+            const label = document.getElementById('appstoreCountLabel');
+            if (label) label.textContent = `${rows.length} shown`;
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="empty-state-icon">🍎</div><p>No App Store purchases match this filter</p></td></tr>';
+                return;
+            }
+            rows.forEach(r => {
+                const row = document.createElement('tr');
+                const plan = (r.planDuration || 'monthly').toLowerCase();
+                const planBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;margin:1px;font-size:10px;">${esc(plan)}</span>`;
+                const services = Array.isArray(r.services) ? r.services : [];
+                const servicesBadges = services.length > 0
+                    ? services.map(s => `<span class="badge" style="background:#e8eaf6;color:#3949ab;margin:1px;font-size:10px;">${esc(s)}</span>`).join(' ')
+                    : '<span style="color:#999;font-size:12px;">-</span>';
+                const status = String(r.status || '').toUpperCase();
+                const statusBadge = status === 'ACTIVE'
+                    ? `<span class="badge success">ACTIVE</span>`
+                    : `<span class="badge expired">EXPIRED</span>`;
+                row.innerHTML = `
+                    <td>${esc(r.email || '-')}</td>
+                    <td>${planBadge}</td>
+                    <td><span class="badge" style="background:#f1f3f4;color:#333;margin:1px;font-size:10px;">${esc(r.productId || '-')}</span></td>
+                    <td>${servicesBadges}</td>
+                    <td>${statusBadge}</td>
+                    <td>${esc(r.entitlementStartsAt ? new Date(r.entitlementStartsAt).toLocaleString() : '-')}</td>
+                    <td>${esc(r.expiresAt ? new Date(r.expiresAt).toLocaleString() : '-')}</td>
+                    <td>${esc(r.graceEndsAt ? new Date(r.graceEndsAt).toLocaleString() : '-')}</td>
+                    <td><span class="badge" style="background:#f1f8e9;color:#2e7d32;margin:1px;font-size:10px;">${esc(r.code || '-')}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // ==================== SUPPORT TICKETS ====================
+
+        async function loadSupportTickets() {
+            const loading = document.getElementById('supportLoading');
+            const list = document.getElementById('supportList');
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/support-tickets`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    loading.textContent = 'Error: ' + (data.message || 'Failed');
+                    return;
+                }
+                _supportTickets = data.tickets || [];
+                loading.style.display = 'none';
+                list.style.display = 'block';
+                renderSupportTickets();
+            } catch (error) {
+                loading.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function renderSupportTickets() {
+            const q = (document.getElementById('supportSearch')?.value || '').toLowerCase();
+            const filter = document.getElementById('supportFilter')?.value || 'all';
+            let items = _supportTickets.slice();
+            if (filter !== 'all') {
+                items = items.filter(t => (t.status || 'open') === filter);
+            }
+            if (q) {
+                items = items.filter(t => {
+                    const blob = [t.email, t.subject, t.message, t.category, t.status, t.order_id].join(' ').toLowerCase();
+                    return blob.includes(q);
+                });
+            }
+            const label = document.getElementById('supportCountLabel');
+            if (label) label.textContent = `${items.length} ticket${items.length === 1 ? '' : 's'}`;
+            const list = document.getElementById('supportList');
+            if (!items.length) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎫</div><p>No support tickets</p></div>';
+                return;
+            }
+            list.innerHTML = items.map(t => `
+                <div class="activity-card" style="margin-bottom:12px;">
+                    <div class="activity-card__top">
+                        <div class="activity-card__title">${esc(t.subject || 'Support request')}</div>
+                        <span class="badge" style="background:#e8eaf6;color:#3949ab;">${esc(t.status || 'open')}</span>
+                    </div>
+                    <div class="activity-card__meta">
+                        <strong>${esc(t.email || '-')}</strong> · ${esc(t.category || 'general')}
+                        ${t.order_id ? ' · Order: <code>' + esc(t.order_id) + '</code>' : ''}<br>
+                        ${esc(formatTs(Date.parse(t.created_at || t.updated_at || 0)))}
+                        ${t.meta && t.meta.source ? ' · via ' + esc(t.meta.source) : ''}
+                        <p style="margin-top:8px;white-space:pre-wrap;">${esc(t.message || '')}</p>
+                        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                            <label style="font-size:12px;">Status</label>
+                            <select data-ticket-status="${esc(t.id)}" style="padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                                <option value="open"${t.status === 'open' ? ' selected' : ''}>open</option>
+                                <option value="in_progress"${t.status === 'in_progress' ? ' selected' : ''}>in_progress</option>
+                                <option value="resolved"${t.status === 'resolved' ? ' selected' : ''}>resolved</option>
+                                <option value="closed"${t.status === 'closed' ? ' selected' : ''}>closed</option>
+                            </select>
+                            <input type="text" data-ticket-note="${esc(t.id)}" placeholder="Admin note" value="${esc(t.admin_note || '')}" style="flex:1;min-width:160px;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                            <button class="btn-secondary btn-toolbar" data-save-ticket="${esc(t.id)}">Save</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function saveSupportTicket(ticketId) {
+            const statusEl = document.querySelector(`[data-ticket-status="${ticketId}"]`);
+            const noteEl = document.querySelector(`[data-ticket-note="${ticketId}"]`);
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/support-tickets/${encodeURIComponent(ticketId)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPassword,
+                    },
+                    body: JSON.stringify({
+                        status: statusEl?.value,
+                        admin_note: noteEl?.value || '',
+                    }),
+                });
+                const data = await response.json();
+                if (data.success) loadSupportTickets();
+                else alert(data.message || 'Save failed');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         function _computeCodeMeta(code) {
@@ -3031,6 +3381,8 @@
             if (tab === 'complaints') loadComplaints();
             if (tab === 'donations') loadDonationSetups();
             if (tab === 'play') loadPlayEntitlements();
+            if (tab === 'appstore') loadAppStoreEntitlements();
+            if (tab === 'support') loadSupportTickets();
             if (tab === 'bundles') loadBundles();
             if (tab === 'deletionRequests') loadDeletionRequests();
             if (tab === 'polls') loadAdminPolls();
