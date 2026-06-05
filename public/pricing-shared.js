@@ -197,7 +197,7 @@ function initPricingExplorer(rootId) {
   if (!root) return;
 
   const selected = new Set();
-  let platform = 'ios';
+  let platform = 'android';
   let period = 'monthly';
   const servicesEl = root.querySelector('[data-services]');
 
