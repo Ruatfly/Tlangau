@@ -96,14 +96,14 @@ body {
 }
 
 .brand-logo {
-    height: 22px;
+    height: 30px;
     width: auto;
     display: block;
     object-fit: contain;
 }
 
 .brand-logo--sm {
-    height: 18px;
+    height: 24px;
 }
 
 .footer-brand {
