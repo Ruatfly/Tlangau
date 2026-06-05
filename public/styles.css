@@ -288,6 +288,37 @@ section {
     color: var(--text-light);
 }
 
+/* What is Tlangau */
+.about-tlangau {
+    background: var(--bg-white);
+}
+
+.about-tlangau__content {
+    max-width: 820px;
+    margin: 0 auto;
+}
+
+.about-tlangau__content p {
+    color: var(--text-light);
+    font-size: 1.05rem;
+    line-height: 1.85;
+    margin-bottom: 1.35rem;
+}
+
+.about-tlangau__content p:last-child {
+    margin-bottom: 0;
+}
+
+.about-tlangau__content strong {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.about-tlangau__content em {
+    font-style: italic;
+    color: var(--text-dark);
+}
+
 /* How It Works */
 .how-it-works {
     background: var(--bg-white);
