@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605b';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605c';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -659,6 +659,43 @@ function countCurrentlyActiveBuyers(codes, nowTs = Date.now()) {
     }
   }
   return active;
+}
+
+function isStoreEntitlementActive(code, nowTs = Date.now()) {
+  const rawExpiry = code?.expires_at || code?.expiresAt;
+  if (!rawExpiry) return false;
+  const graceEndsAt = getGraceWindowEnd(rawExpiry);
+  const expTs = toTimestamp(rawExpiry);
+  if (expTs === null) return false;
+  const graceEndTs = toTimestamp(graceEndsAt) ?? expTs;
+  return nowTs <= graceEndTs;
+}
+
+function countActiveStoreEntitlements(codes, platformKey, nowTs = Date.now()) {
+  const platform = String(platformKey || '').toLowerCase();
+  return (Array.isArray(codes) ? codes : []).filter((c) => {
+    if (String(c?.platform || '').toLowerCase() !== platform) return false;
+    return isStoreEntitlementActive(c, nowTs);
+  }).length;
+}
+
+function countExpiringSoonStoreEntitlements(codes, days = 7, nowTs = Date.now()) {
+  const horizon = nowTs + days * 24 * 60 * 60 * 1000;
+  return (Array.isArray(codes) ? codes : []).filter((c) => {
+    const p = String(c?.platform || '').toLowerCase();
+    if (p !== 'google_play' && p !== 'app_store') return false;
+    if (!isStoreEntitlementActive(c, nowTs)) return false;
+    const expTs = toTimestamp(c?.expires_at || c?.expiresAt);
+    if (expTs === null) return false;
+    return expTs > nowTs && expTs <= horizon;
+  }).length;
+}
+
+function countOpenSupportTickets(tickets) {
+  return (Array.isArray(tickets) ? tickets : []).filter((t) => {
+    const status = String(t?.status || 'open').toLowerCase();
+    return status === 'open' || status === 'in_progress';
+  }).length;
 }
 
 function mergeActivePaidServices(codes, nowTs = Date.now()) {
@@ -2750,11 +2787,16 @@ app.delete('/api/admin/users/:email', checkAdminAuth, async (req, res) => {
 // Admin: Get statistics
 app.get('/api/admin/statistics', checkAdminAuth, async (req, res) => {
   try {
-    const [stats, codes] = await Promise.all([
+    const [stats, codes, tickets] = await Promise.all([
       db.getStatistics(),
       db.getAllAccessCodes(),
+      db.getAllSupportTickets(),
     ]);
     stats.currentlyActive = countCurrentlyActiveBuyers(codes);
+    stats.activePlay = countActiveStoreEntitlements(codes, 'google_play');
+    stats.activeAppStore = countActiveStoreEntitlements(codes, 'app_store');
+    stats.expiringSoon7d = countExpiringSoonStoreEntitlements(codes, 7);
+    stats.openSupportTickets = countOpenSupportTickets(tickets);
     res.json({ success: true, statistics: stats });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
