@@ -642,6 +642,20 @@ class Database {
     return stats;
   }
 
+  async resetBillingRecords() {
+    const [ordersSnap, codesSnap] = await Promise.all([
+      this.db.ref('orders').once('value'),
+      this.db.ref('access_codes').once('value'),
+    ]);
+    const deletedOrders = ordersSnap.exists() ? Object.keys(ordersSnap.val()).length : 0;
+    const deletedCodes = codesSnap.exists() ? Object.keys(codesSnap.val()).length : 0;
+    await Promise.all([
+      this.db.ref('orders').remove(),
+      this.db.ref('access_codes').remove(),
+    ]);
+    return { deletedOrders, deletedCodes };
+  }
+
   // ==================== POLL METHODS ====================
 
   async createPoll(pollData) {

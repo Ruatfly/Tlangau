@@ -528,7 +528,11 @@
                 <div class="stat-card"><h3>Polls</h3><div class="value" id="monPolls">-</div></div>
             </div>
 
-            <div class="section-label">Billing &amp; access codes</div>
+            <div class="section-label" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <span>Billing &amp; access codes</span>
+                <button type="button" class="btn-danger btn-toolbar" id="resetBillingBtn" style="margin-left:auto;">Reset billing stats to 0</button>
+            </div>
+            <p style="font-size:12px;color:#888;margin:-8px 0 14px 0;">Reset permanently deletes all orders and access codes (including Play/App Store entitlements). Does not affect bundles, sends, or community data.</p>
             <div class="stats-grid" id="statsGrid">
                 <div class="stat-card">
                     <h3>Total Orders</h3>
@@ -557,6 +561,10 @@
                 <div class="stat-card">
                     <h3>Unique Users</h3>
                     <div class="value" id="statUniqueUsers">-</div>
+                </div>
+                <div class="stat-card" style="border:2px solid #c8e6c9;">
+                    <h3>Currently Active</h3>
+                    <div class="value" id="statCurrentlyActive" style="color:#2e7d32;">-</div>
                 </div>
             </div>
 
@@ -1198,6 +1206,9 @@
         document.getElementById('donationsClearBtn').addEventListener('click', function () {
             clearAllDonationSetups();
         });
+        document.getElementById('resetBillingBtn').addEventListener('click', function () {
+            resetBillingStats();
+        });
 
         document.addEventListener('change', function (e) {
             const master = e.target.closest('[data-bulk-select-all]');
@@ -1805,9 +1816,41 @@
                     document.getElementById('statUsedCodes').textContent = stats.usedCodes;
                     document.getElementById('statUnusedCodes').textContent = stats.unusedCodes;
                     document.getElementById('statUniqueUsers').textContent = stats.uniqueUsers;
+                    document.getElementById('statCurrentlyActive').textContent =
+                        typeof stats.currentlyActive === 'number' ? stats.currentlyActive : '-';
                 }
             } catch (error) {
                 console.error('Error loading statistics:', error);
+            }
+        }
+
+        async function resetBillingStats() {
+            const msg = 'Permanently delete ALL orders and access codes?\n\nAll billing stats will reset to 0. Active server dashboard access will be revoked until users purchase again.\n\nThis cannot be undone.';
+            if (!confirm(msg)) return;
+            if (!confirm('Are you absolutely sure? Type OK in the next step is not required — this is your last chance to cancel.')) return;
+            const typed = prompt('Type RESET to confirm wiping all billing data:');
+            if (typed !== 'RESET') {
+                alert('Reset cancelled.');
+                return;
+            }
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/billing/reset`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Billing reset complete.\n\nRemoved ${data.deletedOrders} order(s) and ${data.deletedCodes} access code(s).`);
+                    loadStatistics();
+                    loadOrders();
+                    loadAccessCodes();
+                    loadUsers();
+                    loadPlayEntitlements();
+                } else {
+                    alert(data.error || data.message || 'Reset failed');
+                }
+            } catch (error) {
+                alert('Reset failed: ' + error.message);
             }
         }
 

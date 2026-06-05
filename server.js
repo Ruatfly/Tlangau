@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260614a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260615a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -631,6 +631,36 @@ function getLatestEntitlementExpiry(codes) {
 }
 
 /** Union of paid services from all non-expired entitlements for an identity. */
+function identityKeyForEntitlement(code) {
+  if (!code || typeof code !== 'object') return null;
+  const email = String(code.used_by_email || '').toLowerCase().trim();
+  if (email) return `email:${email}`;
+  const account = String(code.used_by_account || '').trim();
+  if (account) return `account:${account}`;
+  return null;
+}
+
+function countCurrentlyActiveBuyers(codes, nowTs = Date.now()) {
+  const byIdentity = new Map();
+  for (const code of Array.isArray(codes) ? codes : []) {
+    if (!code || code.used !== true) continue;
+    const key = identityKeyForEntitlement(code);
+    if (!key) continue;
+    if (!byIdentity.has(key)) byIdentity.set(key, []);
+    byIdentity.get(key).push(code);
+  }
+
+  let active = 0;
+  for (const entitlements of byIdentity.values()) {
+    const mergedPaid = mergeActivePaidServices(entitlements, nowTs);
+    const stackedRawExpiry = getLatestEntitlementExpiry(entitlements);
+    if (mergedPaid.length > 0 && isWithinAccessWindow(stackedRawExpiry, nowTs)) {
+      active += 1;
+    }
+  }
+  return active;
+}
+
 function mergeActivePaidServices(codes, nowTs = Date.now()) {
   const paid = new Set();
   if (!Array.isArray(codes)) return [];
@@ -2712,9 +2742,30 @@ app.delete('/api/admin/users/:email', checkAdminAuth, async (req, res) => {
 // Admin: Get statistics
 app.get('/api/admin/statistics', checkAdminAuth, async (req, res) => {
   try {
-    const stats = await db.getStatistics();
+    const [stats, codes] = await Promise.all([
+      db.getStatistics(),
+      db.getAllAccessCodes(),
+    ]);
+    stats.currentlyActive = countCurrentlyActiveBuyers(codes);
     res.json({ success: true, statistics: stats });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: Reset all billing records (orders + access codes) — irreversible
+app.delete('/api/admin/billing/reset', checkAdminAuth, async (req, res) => {
+  try {
+    const result = await db.resetBillingRecords();
+    console.log(`Admin reset billing: ${result.deletedOrders} orders, ${result.deletedCodes} codes`);
+    res.json({
+      success: true,
+      message: 'Billing records reset',
+      deletedOrders: result.deletedOrders,
+      deletedCodes: result.deletedCodes,
+    });
+  } catch (error) {
+    console.error('Admin billing reset error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
