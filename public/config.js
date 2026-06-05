@@ -4,6 +4,9 @@
 
 window.BACKEND_URL = 'https://tlangau.onrender.com';
 
+// Web access-code checkout (Cashfree). Premium is sold in the mobile app via IAP.
+window.WEB_ACCESS_CODE_SALES_ENABLED = false;
+
 // Auto-detect backend URL based on current hostname
 (function () {
     const hostname = window.location.hostname;

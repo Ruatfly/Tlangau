@@ -37,6 +37,10 @@ const ACCESS_PLANS = {
 };
 const VALID_PLAN_IDS = Object.keys(ACCESS_PLANS);
 
+// Web access-code sales (Cashfree checkout). Default off — use App Store / Play in the app.
+const WEB_ACCESS_CODE_SALES_ENABLED =
+  (process.env.WEB_ACCESS_CODE_SALES_ENABLED || 'false').toLowerCase() === 'true';
+
 // ==================== PAYMENT SESSION CONFIG ====================
 const PAYMENT_SESSION_MINUTES = 10;
 const CODE_EMAIL_RESEND_COOLDOWN_MINUTES = process.env.CODE_EMAIL_RESEND_COOLDOWN_MINUTES
@@ -236,7 +240,7 @@ const deletionRequestLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 
 // Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
-const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260303b';
+const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260605a';
 app.get(['/payment', '/pay', '/payr'], (req, res) => {
   return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
 });
@@ -903,6 +907,15 @@ app.post(
   ],
   async (req, res) => {
     try {
+      if (!WEB_ACCESS_CODE_SALES_ENABLED) {
+        return res.status(410).json({
+          success: false,
+          error: 'Web checkout disabled',
+          message:
+            'Access codes are no longer sold on this website. Open the Tlangau app and subscribe via the App Store or Google Play.',
+        });
+      }
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         const firstError = errors.array()[0];

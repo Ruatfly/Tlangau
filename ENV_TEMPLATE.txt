@@ -11,6 +11,9 @@ EMAIL_FROM=your_email@gmail.com
 EMAIL_PORT=2525
 # For Gmail, use App Password: https://support.google.com/accounts/answer/185833
 
+# Web access-code checkout (legacy). Leave false — premium is sold via IAP in the app.
+WEB_ACCESS_CODE_SALES_ENABLED=false
+
 # Cashfree Payment Gateway Configuration
 CASHFREE_APP_ID=your_cashfree_app_id
 CASHFREE_SECRET_KEY=your_cashfree_secret_key

@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Purchase Tlangau access code. Choose your services and pay securely. Get instant access code via email.">
+    <meta name="description" content="Tlangau premium is purchased in the mobile app via App Store or Google Play.">
     <meta name="robots" content="noindex, follow">
-    <title>Purchase Access Code - Tlangau</title>
+    <title>Premium — Tlangau App</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
@@ -17,195 +16,59 @@
             </div>
             <ul class="nav-links">
                 <li><a href="index.html">Home</a></li>
-                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#get-app" class="btn-primary">Get the App</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Payment Section -->
     <section class="payment-section">
         <div class="container">
             <div class="payment-container">
                 <div class="payment-header">
-                    <h1>Purchase Access Code</h1>
-                    <p>Select the services you need and complete payment to receive your access code</p>
+                    <h1>Premium is in the app</h1>
+                    <p>Web access-code checkout is no longer available. Subscribe from the Tlangau app on your phone.</p>
                 </div>
 
-                <div class="payment-content">
-                    <!-- Order Summary (dynamic) -->
-                    <div class="order-summary" id="orderSummary">
-                        <h3>Order Summary</h3>
-
-                        <div class="summary-item" id="summaryServices">
-                            <span>Selected Services</span>
-                            <span id="serviceCount">0 selected</span>
-                        </div>
-                        <div id="serviceLineItems"></div>
-                        <div class="summary-item">
-                            <span>Validity</span>
-                            <span id="summaryValidity">30 Days</span>
-                        </div>
-                        <div class="summary-item">
-                            <span>Delivery</span>
-                            <span>Instant Email</span>
-                        </div>
-                        <div class="summary-item" style="border-bottom: none;">
-                            <span>&#128202; Statistics & Insights</span>
-                            <span style="color: #48bb78; font-weight: 600;">FREE</span>
-                        </div>
-                        <div class="summary-total">
-                            <span>Total Amount</span>
-                            <span class="total-amount" id="totalAmount">&#8377;0.00</span>
-                        </div>
-                    </div>
-
-                    <!-- Payment Form -->
+                <div class="payment-content" style="grid-template-columns: 1fr; max-width: 640px; margin: 0 auto;">
                     <div class="payment-form-container">
-                        <form id="paymentForm" class="payment-form">
-                            <!-- Service Selection -->
-                            <div class="form-group">
-                                <label>Choose Your Services *</label>
-                                <small class="form-help" style="margin-bottom: 12px; display: block;">Select the services you want access to (&#8377;10 each)</small>
-
-                                <div class="service-selection">
-                                    <label class="service-card" for="service-ring">
-                                        <input type="checkbox" id="service-ring" name="services" value="ring">
-                                        <div class="service-card-content">
-                                            <div class="service-icon" style="background: #AD131D;">&#128260;</div>
-                                            <div class="service-info">
-                                                <strong>Bawlhhlawh paih tur hriattirna</strong>
-                                                <span>Bawlhhlawh paih hriattirna</span>
-                                            </div>
-                                            <div class="service-price">&#8377;10</div>
-                                        </div>
-                                    </label>
-
-                                    <label class="service-card" for="service-message">
-                                        <input type="checkbox" id="service-message" name="services" value="message">
-                                        <div class="service-card-content">
-                                            <div class="service-icon" style="background: #3B8C19;">&#128172;</div>
-                                            <div class="service-info">
-                                                <strong>Message Notification</strong>
-                                                <span>Information Notice</span>
-                                            </div>
-                                            <div class="service-price">&#8377;10</div>
-                                        </div>
-                                    </label>
-
-                                    <label class="service-card" for="service-broadcast">
-                                        <input type="checkbox" id="service-broadcast" name="services" value="broadcast">
-                                        <div class="service-card-content">
-                                            <div class="service-icon" style="background: #1565C0;">&#128226;</div>
-                                            <div class="service-info">
-                                                <strong>Broadcast Message</strong>
-                                                <span>Multi-bundle broadcast</span>
-                                            </div>
-                                            <div class="service-price">&#8377;10</div>
-                                        </div>
-                                    </label>
-
-                                    <div class="service-card service-card-free">
-                                        <div class="service-card-content">
-                                            <div class="service-icon" style="background: #6A1B9A;">&#128202;</div>
-                                            <div class="service-info">
-                                                <strong>Statistics & Insights</strong>
-                                                <span>Always included</span>
-                                            </div>
-                                            <div class="service-price service-free-badge">FREE</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Quick select buttons -->
-                                <div class="service-quick-select">
-                                    <button type="button" class="quick-select-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
-                                </div>
-
-                                <div id="serviceError" class="service-error" style="display: none;">
-                                    Please select at least one service
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="planDuration">Access Plan *</label>
-                                <select id="planDuration" name="planDuration" required>
-                                    <option value="monthly" selected>Monthly Plan - 30 days validity</option>
-                                    <option value="yearly">Yearly Plan - 1 year validity</option>
-                                </select>
-                                <small class="form-help">Monthly plans are valid for 30 days. Yearly plans are valid for 1 year.</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="email">Email Address *</label>
-                                <input 
-                                    type="email" 
-                                    id="email" 
-                                    name="email" 
-                                    placeholder="your.email@example.com"
-                                    required
-                                    autocomplete="email"
-                                    aria-label="Email Address"
-                                >
-                                <small class="form-help">Your access code will be sent to this email</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="phone">Mobile Number *</label>
-                                <input
-                                    type="tel"
-                                    id="phone"
-                                    name="phone"
-                                    placeholder="10-digit mobile number"
-                                    required
-                                    autocomplete="tel"
-                                    maxlength="10"
-                                    pattern="[6-9][0-9]{9}"
-                                    inputmode="numeric"
-                                    aria-label="Mobile Number"
-                                >
-                                <small class="form-help">Used to pre-fill checkout &amp; open UPI app directly on mobile</small>
-                            </div>
-
-                            <div class="payment-info">
-                                <div class="info-box">
-                                    <h4>&#128203; What You'll Get</h4>
-                                    <ul>
-                                        <li>Unique 12-character access code</li>
-                                        <li id="validityInfoLine">Valid for 30 days from purchase</li>
-                                        <li>Access to your selected services only</li>
-                                        <li>Instant email delivery</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn btn-large btn-primary btn-payment" id="paymentBtn" disabled>
-                                <span id="paymentBtnText">Select services to continue</span>
-                                <span class="amount-badge" id="paymentBtnAmount">&#8377;0</span>
-                            </button>
-
-                            <p class="payment-security">
-                                &#128274; Secure payment via Cashfree &bull; 256-bit encryption
-                            </p>
-                        </form>
+                        <div class="info-box">
+                            <h4>&#128241; How to subscribe</h4>
+                            <ul>
+                                <li>Install <strong>Tlangau</strong> from the App Store or Google Play</li>
+                                <li>Open <strong>More → Tlangau Premium</strong></li>
+                                <li>Choose your services and complete payment in the store</li>
+                                <li>Sign in with Apple (iOS) or Google (Android) to unlock the server dashboard</li>
+                            </ul>
+                        </div>
+                        <div class="info-box" style="margin-top: 1rem;">
+                            <h4>Already have an access code?</h4>
+                            <p style="margin: 0; color: var(--text-light);">Legacy codes can still be entered in the app admin sign-in if they are valid. New codes are not sold on this website.</p>
+                        </div>
+                        <a href="index.html#get-app" class="btn btn-large btn-primary" style="width: 100%; margin-top: 1.5rem; text-align: center;">Back to Get the App</a>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
+    <!--
+      Legacy Cashfree access-code checkout (disabled June 2026).
+      Premium is sold via App Store / Google Play in the Flutter app.
+      Server: POST /api/create-payment returns 410 unless WEB_ACCESS_CODE_SALES_ENABLED=true.
+    -->
+
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
                 <div class="footer-section">
                     <h3>&#128640; Tlangau</h3>
-                    <p>Secure access code purchase platform.</p>
+                    <p>Official website for the Tlangau mobile app.</p>
                 </div>
                 <div class="footer-section">
                     <h4>Legal</h4>
                     <ul>
                         <li><a href="privacy-policy.html">Privacy Policy</a></li>
-                        <li><a href="terms-conditions.html">Terms & Conditions</a></li>
+                        <li><a href="terms-conditions.html">Terms &amp; Conditions</a></li>
                         <li><a href="refund-policy.html">Refund Policy</a></li>
                     </ul>
                 </div>
@@ -213,7 +76,6 @@
                     <h4>Support</h4>
                     <ul>
                         <li><a href="contact.html">Contact Us</a></li>
-                        <li><a href="index.html#faq">FAQ</a></li>
                         <li><a href="index.html">Home</a></li>
                     </ul>
                 </div>
@@ -223,10 +85,5 @@
             </div>
         </div>
     </footer>
-
-    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-    <script src="config.js?v=20260430"></script>
-    <script src="script.js?v=20260430"></script>
 </body>
 </html>
-

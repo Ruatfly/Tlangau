@@ -161,6 +161,14 @@ function saveLastPaymentSession(session) {
 }
 
 if (paymentForm) {
+    if (window.WEB_ACCESS_CODE_SALES_ENABLED === false) {
+        paymentForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            showError(
+                'Web checkout is disabled. Open the Tlangau app and subscribe via the App Store or Google Play.'
+            );
+        });
+    } else {
     paymentForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         hideError();
@@ -278,6 +286,7 @@ if (paymentForm) {
             submitButton.innerHTML = originalHTML;
         }
     });
+    }
 }
 
 // ==================== HELPERS ====================
