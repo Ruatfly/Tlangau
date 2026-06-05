@@ -1485,6 +1485,13 @@ section {
     position: relative;
 }
 
+.pricing-card--get-app {
+    box-shadow: var(--shadow-xl);
+    padding: 2rem;
+    border-radius: 16px;
+    background: var(--bg-white);
+}
+
 .pricing-card-top {
     display: flex;
     align-items: flex-start;
