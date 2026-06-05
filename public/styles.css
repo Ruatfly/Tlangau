@@ -132,8 +132,25 @@ body {
 
 .hero-title {
     font-size: 3rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     font-weight: 700;
+}
+
+.hero-availability {
+    font-size: 1rem;
+    margin-bottom: 1.25rem;
+    opacity: 0.92;
+}
+
+.hero-availability a {
+    color: #fff;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.hero-availability a:hover {
+    opacity: 0.85;
 }
 
 .hero-subtitle {

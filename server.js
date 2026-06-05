@@ -240,7 +240,7 @@ const deletionRequestLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 
 // Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
-const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260605b';
+const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260605c';
 app.get(['/payment', '/pay', '/payr'], (req, res) => {
   return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
 });
