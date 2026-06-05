@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D94F5C 0%, #AD131D 52%, #6E1018 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -35,7 +35,7 @@
         .login-container h1 {
             text-align: center;
             margin-bottom: 30px;
-            color: #667eea;
+            color: #AD131D;
         }
 
         .form-group {
@@ -60,13 +60,13 @@
 
         .form-group input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #AD131D;
         }
 
         .btn {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D94F5C 0%, #AD131D 52%, #6E1018 100%);
             color: white;
             border: none;
             border-radius: 6px;
@@ -102,7 +102,7 @@
         }
 
         .header h1 {
-            color: #667eea;
+            color: #AD131D;
             margin-bottom: 10px;
         }
 
@@ -131,7 +131,7 @@
         .stat-card .value {
             font-size: 32px;
             font-weight: bold;
-            color: #667eea;
+            color: #AD131D;
         }
 
         .tabs {
@@ -156,7 +156,7 @@
         }
 
         .tab.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D94F5C 0%, #AD131D 52%, #6E1018 100%);
             color: white;
         }
 
@@ -295,7 +295,7 @@
 
         .search-box:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #AD131D;
         }
 
         .empty-state {
@@ -534,7 +534,7 @@
             <div id="pollsTab" class="tab-content">
                 <div class="table-container">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="margin: 0; color: #667eea;">Create &amp; Manage Polls</h3>
+                        <h3 style="margin: 0; color: #AD131D;">Create &amp; Manage Polls</h3>
                         <button class="btn" id="showPollComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">📊 New Poll</button>
                     </div>
 
@@ -584,7 +584,7 @@
             <div id="mailsTab" class="tab-content">
                 <div class="table-container">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="margin: 0; color: #667eea;">Compose &amp; Manage Mails</h3>
+                        <h3 style="margin: 0; color: #AD131D;">Compose &amp; Manage Mails</h3>
                         <button class="btn" id="showComposeBtn" style="width: auto; padding: 10px 24px; font-size: 14px;">✉️ Compose New Mail</button>
                     </div>
 
@@ -1230,7 +1230,7 @@
                             bundleCard.innerHTML = `
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <div>
-                                        <h3 style="margin: 0; color: #667eea; font-size: 20px;">${esc(bundle.name)}</h3>
+                                        <h3 style="margin: 0; color: #AD131D; font-size: 20px;">${esc(bundle.name)}</h3>
                                         <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
                                             Bundle ID: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(bundle.id)}</code>
                                             | ${bundle.topicsCount} topic${bundle.topicsCount !== 1 ? 's' : ''}
@@ -1700,10 +1700,10 @@
                             const card = document.createElement('div');
                             card.style.cssText = 'background: #f9f9f9; padding: 16px 20px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e0e0e0; position: relative;';
                             if (mail.pinned) {
-                                card.style.borderLeft = '4px solid #667eea';
+                                card.style.borderLeft = '4px solid #AD131D';
                             }
 
-                            const pinnedBadge = mail.pinned ? '<span class="badge" style="background:#667eea; color:#fff; margin-left:8px;">📌 Pinned</span>' : '';
+                            const pinnedBadge = mail.pinned ? '<span class="badge" style="background:#AD131D; color:#fff; margin-left:8px;">📌 Pinned</span>' : '';
                             const dateStr = new Date(mail.created_at).toLocaleString();
                             const bodyPreview = (mail.body || '').length > 200 ? mail.body.substring(0, 200) + '...' : mail.body;
 

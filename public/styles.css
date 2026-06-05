@@ -6,15 +6,23 @@
 }
 
 :root {
-    --primary-color: #667eea;
-    --primary-dark: #5568d3;
-    --secondary-color: #764ba2;
-    --accent-color: #f093fb;
+    /* Tlangau brand — app accent #AD131D, softened for web readability */
+    --brand-red: #AD131D;
+    --primary-color: #C73545;
+    --primary-dark: #9B1824;
+    --secondary-color: #7A121C;
+    --accent-color: #E87680;
+    --primary-alpha-05: rgba(173, 19, 29, 0.05);
+    --primary-alpha-06: rgba(173, 19, 29, 0.06);
+    --primary-alpha-10: rgba(173, 19, 29, 0.1);
+    --primary-alpha-15: rgba(173, 19, 29, 0.15);
+    --primary-alpha-20: rgba(173, 19, 29, 0.2);
+    --gradient-brand: linear-gradient(135deg, #D94F5C 0%, var(--brand-red) 52%, #6E1018 100%);
     --text-dark: #2d3748;
     --text-light: #718096;
-    --bg-light: #f7fafc;
+    --bg-light: #faf7f7;
     --bg-white: #ffffff;
-    --border-color: #e2e8f0;
+    --border-color: #ede4e4;
     --success-color: #48bb78;
     --error-color: #f56565;
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -61,7 +69,7 @@ body {
 .nav-brand h1,
 .nav-brand .brand-name {
     font-size: 1.5rem;
-    color: var(--primary-color);
+    color: var(--brand-red);
     margin: 0;
     font-weight: 700;
 }
@@ -129,7 +137,7 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: var(--gradient-brand);
     color: white;
 }
 
@@ -155,7 +163,7 @@ body {
 
 /* Hero Section */
 .hero {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: var(--gradient-brand);
     color: white;
     padding: 6rem 0;
     text-align: center;
@@ -299,7 +307,7 @@ section {
 .step-number {
     width: 60px;
     height: 60px;
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: var(--gradient-brand);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -553,7 +561,7 @@ section {
 
 .payment-method-card input[type="radio"]:checked + label {
     border-color: var(--primary-color);
-    background: rgba(102, 126, 234, 0.1);
+    background: var(--primary-alpha-10);
 }
 
 .method-icon {
@@ -821,7 +829,7 @@ section {
 
 /* Footer */
 .footer {
-    background: var(--text-dark);
+    background: linear-gradient(180deg, #2a1819 0%, #1a1011 100%);
     color: white;
     padding: 3rem 0 1rem;
 }
@@ -1270,7 +1278,7 @@ section {
 .progress-fill {
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    background: var(--gradient-brand);
     border-radius: 3px;
     transition: width 0.5s ease;
 }
@@ -1301,7 +1309,7 @@ section {
 
 .service-card:hover {
     border-color: var(--primary-color);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+    box-shadow: 0 2px 8px var(--primary-alpha-15);
 }
 
 .service-card input[type="checkbox"] {
@@ -1311,12 +1319,12 @@ section {
 }
 
 .service-card input[type="checkbox"]:checked ~ .service-card-content {
-    background: rgba(102, 126, 234, 0.06);
+    background: var(--primary-alpha-06);
 }
 
 .service-card:has(input:checked) {
     border-color: var(--primary-color);
-    box-shadow: 0 2px 12px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 2px 12px var(--primary-alpha-20);
 }
 
 .service-card:has(input:checked)::after {
@@ -1422,7 +1430,7 @@ section {
 .quick-select-btn:hover {
     border-color: var(--primary-color);
     color: var(--primary-color);
-    background: rgba(102, 126, 234, 0.05);
+    background: var(--primary-alpha-05);
 }
 
 .service-error {
@@ -1562,11 +1570,11 @@ section {
 }
 
 .pricing-service-pick:hover {
-    background: rgba(102, 126, 234, 0.06);
+    background: var(--primary-alpha-06);
 }
 
 .pricing-service-pick.is-selected {
-    background: rgba(102, 126, 234, 0.1);
+    background: var(--primary-alpha-10);
 }
 
 .pricing-service-pick.is-selected .pricing-service-pick__text strong {
@@ -1641,7 +1649,7 @@ section {
 }
 
 .toggle-btn.is-active {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: var(--gradient-brand);
     color: #fff;
 }
 
@@ -1725,7 +1733,7 @@ section {
 
 .save-tag {
     display: inline-block;
-    background: #AD131D;
+    background: var(--brand-red);
     color: #fff;
     font-size: 0.68rem;
     font-weight: 700;
