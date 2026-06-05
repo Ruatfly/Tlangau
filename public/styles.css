@@ -163,7 +163,7 @@ body {
 
 /* Hero Section */
 .hero {
-    background: var(--gradient-brand);
+    background: var(--brand-red);
     color: white;
     padding: 6rem 0;
     text-align: center;
@@ -461,10 +461,14 @@ section {
     background: var(--bg-light);
 }
 
+.from-developer .section-title {
+    text-align: left;
+}
+
 .from-developer__content {
     max-width: 820px;
     margin: 0 auto;
-    text-align: center;
+    text-align: left;
 }
 
 .from-developer__content p {
