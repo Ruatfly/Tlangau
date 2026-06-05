@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260616a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605b';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });

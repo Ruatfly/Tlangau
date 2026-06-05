@@ -348,6 +348,63 @@
             margin: 8px 0 12px 4px;
         }
 
+        .section-hint {
+            font-size: 12px;
+            color: #888;
+            margin: -4px 0 14px 4px;
+            max-width: 720px;
+        }
+
+        .legacy-panel {
+            background: #fafafa;
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+
+        .legacy-panel summary {
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #888;
+        }
+
+        .legacy-panel .stats-grid {
+            margin-top: 14px;
+        }
+
+        .tab.legacy-tab {
+            background: #f8f8f8;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .tab.legacy-tab.active {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .info-banner {
+            background: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #2e7d32;
+            margin-bottom: 16px;
+        }
+
+        .legacy-banner {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #6d4c41;
+            margin-bottom: 16px;
+        }
+
         .monitor-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -514,7 +571,7 @@
             <div class="header">
                 <button class="logout-btn" id="logoutBtn">Logout</button>
                 <h1>📊 Admin Dashboard</h1>
-                <p>Developer cockpit — monitor community activity, bundles, sends, complaints, and billing</p>
+                <p>Developer cockpit — monitor community activity, bundles, sends, complaints, and subscriptions</p>
                 <p id="monitorUpdatedAt" style="font-size:12px;color:#888;margin-top:6px;"></p>
             </div>
 
@@ -528,50 +585,49 @@
                 <div class="stat-card"><h3>Polls</h3><div class="value" id="monPolls">-</div></div>
             </div>
 
-            <div class="section-label" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
-                <span>Billing &amp; access codes</span>
-                <button type="button" class="btn-danger btn-toolbar" id="resetBillingBtn" style="margin-left:auto;">Reset billing stats to 0</button>
-            </div>
-            <p style="font-size:12px;color:#888;margin:-8px 0 10px 0;">Reset permanently deletes all orders and access codes (including Play/App Store entitlements). Does not affect bundles, sends, or community data.</p>
-            <div class="monitor-row" style="margin-bottom:16px;">
-                <input type="email" id="resendEmailInput" placeholder="Legacy code email to resend" style="padding:8px 12px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;min-width:220px;">
-                <button type="button" class="btn-secondary btn-toolbar" id="resendEmailBtn">Resend code email</button>
-                <button type="button" class="btn-secondary btn-toolbar" id="reconcilePaymentsBtn">Reconcile pending payments</button>
-            </div>
+            <div class="section-label">Subscriptions (email-based access)</div>
+            <p class="section-hint">Premium is tied to the user&apos;s sign-in email via App Store or Google Play. Users do not enter access codes. Use the <strong>Google Play</strong>, <strong>App Store</strong>, and <strong>Entitlements</strong> tabs for live subscription records.</p>
             <div class="stats-grid" id="statsGrid">
-                <div class="stat-card">
-                    <h3>Total Orders</h3>
-                    <div class="value" id="statTotalOrders">-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Successful Orders</h3>
-                    <div class="value" id="statSuccessfulOrders">-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Total Revenue</h3>
-                    <div class="value" id="statRevenue">₹-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Total Codes</h3>
-                    <div class="value" id="statTotalCodes">-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Used Codes</h3>
-                    <div class="value" id="statUsedCodes">-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Unused Codes</h3>
-                    <div class="value" id="statUnusedCodes">-</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Unique Users</h3>
-                    <div class="value" id="statUniqueUsers">-</div>
-                </div>
                 <div class="stat-card" style="border:2px solid #c8e6c9;">
                     <h3>Currently Active</h3>
                     <div class="value" id="statCurrentlyActive" style="color:#2e7d32;">-</div>
                 </div>
+                <div class="stat-card">
+                    <h3>Entitlement records</h3>
+                    <div class="value" id="statTotalCodes">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Billing emails</h3>
+                    <div class="value" id="statUniqueUsers">-</div>
+                </div>
             </div>
+            <details class="legacy-panel">
+                <summary>Legacy website billing stats &amp; dangerous tools (pre–app store)</summary>
+                <p style="font-size:12px;color:#888;margin:12px 0 10px 0;">Cashfree-era orders and code redemption stats. Reset permanently deletes <strong>all</strong> orders and entitlement records (including Play/App Store). Does not affect bundles, sends, or community data.</p>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Orders</h3>
+                        <div class="value" id="statTotalOrders">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Successful Orders</h3>
+                        <div class="value" id="statSuccessfulOrders">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Revenue</h3>
+                        <div class="value" id="statRevenue">₹-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Used (legacy)</h3>
+                        <div class="value" id="statUsedCodes">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Unused (legacy)</h3>
+                        <div class="value" id="statUnusedCodes">-</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-danger btn-toolbar" id="resetBillingBtn">Wipe all billing &amp; entitlement data</button>
+            </details>
 
             <!-- Tabs -->
             <div class="tabs" id="tabsBar">
@@ -581,14 +637,14 @@
                 <button class="tab" data-tab="complaints">📮 Complaints</button>
                 <button class="tab" data-tab="donations">💰 Donations</button>
                 <button class="tab" data-tab="polls">📊 Polls</button>
-                <button class="tab" data-tab="orders">Orders</button>
-                <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="play">Google Play</button>
                 <button class="tab" data-tab="appstore">App Store</button>
-                <button class="tab" data-tab="users">Users</button>
+                <button class="tab" data-tab="codes">Entitlements</button>
+                <button class="tab" data-tab="support">🎫 Support</button>
+                <button class="tab" data-tab="users">Billing emails</button>
+                <button class="tab legacy-tab" data-tab="orders">Legacy · Orders</button>
                 <button class="tab" data-tab="deletionRequests">Deletion Requests</button>
                 <button class="tab" data-tab="mails">📧 Dev Mails</button>
-                <button class="tab" data-tab="support">🎫 Support</button>
             </div>
 
             <!-- Overview Tab -->
@@ -673,9 +729,10 @@
                 </div>
             </div>
 
-            <!-- Orders Tab -->
+            <!-- Orders Tab (legacy) -->
             <div id="ordersTab" class="tab-content">
                 <div class="table-container">
+                    <div class="legacy-banner"><strong>Legacy Cashfree orders</strong> — from when premium was sold on this website. New subscriptions are via App Store / Google Play only.</div>
                     <div id="bulkBar-orders" class="bulk-bar">
                         <span id="bulkCount-orders" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-orders" disabled>Delete selected</button>
@@ -702,10 +759,11 @@
                 </div>
             </div>
 
-            <!-- Access Codes Tab -->
+            <!-- Entitlements Tab -->
             <div id="codesTab" class="tab-content">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="codesSearch" placeholder="Search codes by code, email, or order ID...">
+                    <div class="info-banner">Email-linked subscription records (App Store, Google Play, and legacy). Users sign in with their store account — no manual code entry.</div>
+                    <input type="text" class="search-box" id="codesSearch" placeholder="Search by record ID, email, or order ID...">
                     <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
                         <label style="font-size: 12px; color:#666; font-weight:600;">Sort</label>
                         <select id="codesSort" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
@@ -727,12 +785,12 @@
                         <span id="bulkCount-codes" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-codes" disabled>Delete selected</button>
                     </div>
-                    <div id="codesLoading" class="loading">Loading access codes...</div>
+                    <div id="codesLoading" class="loading">Loading entitlements...</div>
                     <table id="codesTable" style="display: none;">
                         <thead>
                             <tr>
                                 <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="codes" title="Select all visible"></th>
-                                <th>Code</th>
+                                <th>Record ID</th>
                                 <th>Email</th>
                                 <th>Order ID</th>
                                 <th>Services</th>
@@ -836,10 +894,11 @@
                 </div>
             </div>
 
-            <!-- Users Tab -->
+            <!-- Billing emails Tab -->
             <div id="usersTab" class="tab-content">
                 <div class="table-container">
-                    <input type="text" class="search-box" id="usersSearch" placeholder="Search users by email...">
+                    <div class="info-banner">Aggregated billing history by email (legacy website orders and store-linked records).</div>
+                    <input type="text" class="search-box" id="usersSearch" placeholder="Search by email...">
                     <div id="usersLoading" class="loading">Loading users...</div>
                     <table id="usersTable" style="display: none;">
                         <thead>
@@ -1284,8 +1343,6 @@
         document.getElementById('resetBillingBtn').addEventListener('click', function () {
             resetBillingStats();
         });
-        document.getElementById('resendEmailBtn').addEventListener('click', resendAccessCodeEmail);
-        document.getElementById('reconcilePaymentsBtn').addEventListener('click', reconcilePendingPayments);
         document.getElementById('appstoreFilter').addEventListener('change', function () {
             renderAppStoreEntitlements();
             filterTable('appstoreTable', 'appstoreSearch');
@@ -1924,10 +1981,10 @@
         }
 
         async function resetBillingStats() {
-            const msg = 'Permanently delete ALL orders and access codes?\n\nAll billing stats will reset to 0. Active server dashboard access will be revoked until users purchase again.\n\nThis cannot be undone.';
+            const msg = 'Permanently delete ALL orders and entitlement records?\n\nAll subscription stats will reset to 0. Active server dashboard access will be revoked until users purchase or restore again.\n\nThis cannot be undone.';
             if (!confirm(msg)) return;
             if (!confirm('Are you absolutely sure? Type OK in the next step is not required — this is your last chance to cancel.')) return;
-            const typed = prompt('Type RESET to confirm wiping all billing data:');
+            const typed = prompt('Type RESET to confirm wiping all billing & entitlement data:');
             if (typed !== 'RESET') {
                 alert('Reset cancelled.');
                 return;
@@ -1939,7 +1996,7 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Billing reset complete.\n\nRemoved ${data.deletedOrders} order(s) and ${data.deletedCodes} access code(s).`);
+                    alert(`✅ Billing reset complete.\n\nRemoved ${data.deletedOrders} order(s) and ${data.deletedCodes} entitlement record(s).`);
                     loadStatistics();
                     loadOrders();
                     loadAccessCodes();
@@ -2041,54 +2098,8 @@
                     document.getElementById('codesTable').style.display = 'table';
                 }
             } catch (error) {
-                console.error('Error loading access codes:', error);
-                document.getElementById('codesLoading').textContent = 'Error loading access codes: ' + error.message;
-            }
-        }
-
-        // ==================== BILLING TOOLS ====================
-
-        async function resendAccessCodeEmail() {
-            const email = (document.getElementById('resendEmailInput')?.value || '').trim();
-            if (!email) {
-                alert('Enter an email address.');
-                return;
-            }
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/resend-email`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Admin-Password': adminPassword,
-                    },
-                    body: JSON.stringify({ email }),
-                });
-                const data = await response.json();
-                alert(data.success ? ('✅ ' + (data.message || 'Email sent')) : (data.message || data.error || 'Failed'));
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function reconcilePendingPayments() {
-            if (!confirm('Reconcile pending/suspicious gateway orders now?')) return;
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/reconcile-payments`, {
-                    method: 'POST',
-                    headers: { 'X-Admin-Password': adminPassword },
-                });
-                const data = await response.json();
-                if (data.success && data.report) {
-                    const r = data.report;
-                    alert(`Reconcile complete.\nScanned: ${r.scanned || 0}\nRecovered: ${r.recovered || 0}\nUnchanged: ${r.unchanged || 0}\nFailed: ${r.failed || 0}`);
-                    loadOrders();
-                    loadAccessCodes();
-                    loadStatistics();
-                } else {
-                    alert(data.message || data.error || 'Reconcile failed');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error loading entitlements:', error);
+                document.getElementById('codesLoading').textContent = 'Error loading entitlements: ' + error.message;
             }
         }
 
@@ -2430,7 +2441,7 @@
             if (label) label.textContent = `${codes.length} shown`;
 
             if (codes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">🔑</div><p>No access codes match this filter</p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">🔑</div><p>No entitlements match this filter</p></td></tr>';
                 syncBulkSelectAllState('codes');
                 updateBulkBar('codes');
                 return;
@@ -2684,7 +2695,7 @@
         async function bulkDeleteOrders() {
             const ids = [..._bulkSel.orders];
             if (!ids.length) return;
-            if (!confirm(`Delete ${ids.length} selected order(s) and their access codes?\n\nThis cannot be undone.`)) return;
+            if (!confirm(`Delete ${ids.length} selected legacy order(s) and their entitlement records?\n\nThis cannot be undone.`)) return;
             let ok = 0, fail = 0;
             for (const id of ids) {
                 if (await deleteOrder(id, { skipConfirm: true, skipReload: true })) ok++;
@@ -2701,7 +2712,7 @@
         async function bulkDeleteCodes() {
             const ids = [..._bulkSel.codes];
             if (!ids.length) return;
-            if (!confirm(`Delete ${ids.length} selected access code(s)?\n\nThis cannot be undone.`)) return;
+            if (!confirm(`Delete ${ids.length} selected entitlement record(s)?\n\nThis cannot be undone.`)) return;
             let ok = 0, fail = 0;
             for (const id of ids) {
                 if (await deleteCode(id, { skipConfirm: true, skipReload: true })) ok++;
@@ -2819,7 +2830,7 @@
         async function deleteCode(code, opts = {}) {
             const skipConfirm = opts.skipConfirm === true;
             const skipReload = opts.skipReload === true;
-            if (!skipConfirm && !confirm(`Are you sure you want to delete access code "${code}"?\n\nThis action cannot be undone.`)) return false;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete entitlement record "${code}"?\n\nThis action cannot be undone.`)) return false;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/access-codes/${encodeURIComponent(code)}`, {
                     method: 'DELETE',
@@ -2828,7 +2839,7 @@
                 const data = await response.json();
                 if (data.success) {
                     _bulkSel.codes.delete(code);
-                    if (!skipConfirm) alert('✅ Access code deleted successfully');
+                    if (!skipConfirm) alert('✅ Entitlement record deleted successfully');
                     if (!skipReload) {
                         loadAccessCodes();
                         loadStatistics();
@@ -2846,7 +2857,7 @@
         async function deleteOrder(orderId, opts = {}) {
             const skipConfirm = opts.skipConfirm === true;
             const skipReload = opts.skipReload === true;
-            if (!skipConfirm && !confirm(`Are you sure you want to delete order "${orderId}"?\n\nThis will also delete all associated access codes.\n\nThis action cannot be undone.`)) return false;
+            if (!skipConfirm && !confirm(`Are you sure you want to delete legacy order "${orderId}"?\n\nThis will also delete all associated entitlement records.\n\nThis action cannot be undone.`)) return false;
             try {
                 const response = await fetch(`${BACKEND_URL}/api/admin/orders/${encodeURIComponent(orderId)}`, {
                     method: 'DELETE',
@@ -2855,7 +2866,7 @@
                 const data = await response.json();
                 if (data.success) {
                     _bulkSel.orders.delete(orderId);
-                    if (!skipConfirm) alert('✅ Order and associated access codes deleted successfully');
+                    if (!skipConfirm) alert('✅ Order and associated entitlement records deleted successfully');
                     if (!skipReload) {
                         loadOrders();
                         loadAccessCodes();
@@ -2872,7 +2883,7 @@
         }
 
         async function deleteUser(email) {
-            if (!confirm(`⚠️ WARNING: Are you sure you want to delete ALL data for user "${email}"?\n\nThis will delete:\n- All orders\n- All access codes\n- All user information\n\nThis action CANNOT be undone!`)) return;
+            if (!confirm(`⚠️ WARNING: Are you sure you want to delete ALL data for user "${email}"?\n\nThis will delete:\n- All orders\n- All entitlement records\n- All user information\n\nThis action CANNOT be undone!`)) return;
             const confirmText = prompt(`Type "DELETE" to confirm deletion of all data for ${email}:`);
             if (confirmText !== 'DELETE') { alert('Deletion cancelled'); return; }
             try {
@@ -2882,7 +2893,7 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ User data deleted successfully\n\nDeleted:\n- ${data.deletedOrders} orders\n- ${data.deletedCodes} access codes`);
+                    alert(`✅ User data deleted successfully\n\nDeleted:\n- ${data.deletedOrders} orders\n- ${data.deletedCodes} entitlement records`);
                     loadUsers();
                     loadOrders();
                     loadAccessCodes();
