@@ -239,34 +239,42 @@ const deletionRequestLimiter = rateLimit({
 
 app.use('/api/', generalLimiter);
 
-// Force versioned public pages so stale browser caches pick up latest HTML/CSS.
-const INDEX_PAGE_VERSION = process.env.INDEX_PAGE_VERSION || '20260608a';
-app.get('/', (req, res) => {
-  if (req.query.v !== INDEX_PAGE_VERSION) {
-    return res.redirect(302, `/?v=${encodeURIComponent(INDEX_PAGE_VERSION)}`);
-  }
+// Public HTML — always serve fresh at clean URLs (no ?v= required).
+function sendPublicHtml(res, filename) {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  return res.sendFile(path.join(__dirname, 'public', filename));
+}
+
+/** Legacy ?v= links → canonical path so bookmarks stay valid. */
+function redirectStripVersion(req, res, canonicalPath) {
+  if (!req.query.v) return false;
+  const qs = new URLSearchParams(req.query);
+  qs.delete('v');
+  const rest = qs.toString();
+  const dest = rest ? `${canonicalPath}?${rest}` : canonicalPath;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.redirect(301, dest);
+  return true;
+}
+
+app.get('/', (req, res) => {
+  if (redirectStripVersion(req, res, '/')) return;
+  return sendPublicHtml(res, 'index.html');
 });
-app.get('/index.html', (req, res, next) => {
-  if (req.query.v === INDEX_PAGE_VERSION) {
-    return next();
-  }
-  return res.redirect(302, `/index.html?v=${encodeURIComponent(INDEX_PAGE_VERSION)}`);
+app.get('/index.html', (req, res) => {
+  if (redirectStripVersion(req, res, '/')) return;
+  return sendPublicHtml(res, 'index.html');
 });
 
-// Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
-const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260608a';
 app.get(['/payment', '/pay', '/payr'], (req, res) => {
-  return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
+  return sendPublicHtml(res, 'payment.html');
 });
-app.get('/payment.html', (req, res, next) => {
-  if (req.query.v === PAYMENT_PAGE_VERSION) {
-    return next();
-  }
-  return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
+app.get('/payment.html', (req, res) => {
+  if (redirectStripVersion(req, res, '/payment.html')) return;
+  return sendPublicHtml(res, 'payment.html');
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
@@ -291,6 +299,7 @@ const noCachePublicFiles = new Set([
   'index.html',
   'pricing-shared.js',
   'styles.css',
+  'app-icon.png',
 ]);
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: IS_PROD ? '1d' : 0,
