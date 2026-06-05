@@ -1524,28 +1524,50 @@ section {
 }
 
 .price--hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 0.65rem;
     margin-bottom: 0.5rem;
+}
+
+.price--hero-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
 }
 
 .price--hero .amount {
     font-size: 4rem;
 }
 
+.price--hero-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    padding-bottom: 0.45rem;
+}
+
 .price-suffix {
     font-size: 1.1rem;
     color: var(--text-light);
-    margin-left: 4px;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .price-bundle-save {
     display: inline-block;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
 }
 
 .price--hero .price-bundle-save[hidden] {
     display: none;
+}
+
+.save-tag--inline {
+    font-size: 0.62rem;
+    vertical-align: middle;
 }
 
 .pricing-hint--card {
@@ -1557,16 +1579,6 @@ section {
 .pricing-features-interactive {
     text-align: left;
     margin-bottom: 0.5rem;
-}
-
-.pricing-selection-save {
-    text-align: center;
-    margin: 0 0 1rem;
-    min-height: 1.5rem;
-}
-
-.pricing-selection-save[hidden] {
-    display: none;
 }
 
 .pricing-service-pick {

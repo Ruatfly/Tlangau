@@ -78,6 +78,10 @@ window.TlangauPricing = {
     const tier = this.tier(platform);
     return tier.yearlySaveBundle?.[count] || null;
   },
+  yearlySavePerServiceLabel(platform, period) {
+    if (period !== 'yearly' || platform !== 'android') return null;
+    return this.yearlySaveForBundle(platform, 1);
+  },
 };
 
 function formatPeriodLabel(period) {
@@ -111,10 +115,14 @@ function renderInteractiveServices(container, selected, period, platform, onUpda
     row.type = 'button';
     row.className = `pricing-service-pick${checked ? ' is-selected' : ''}`;
     row.setAttribute('aria-pressed', checked ? 'true' : 'false');
+    const serviceSave = p.yearlySavePerServiceLabel(platform, period)
+      ? `<span class="save-tag save-tag--inline">${p.yearlySavePerServiceLabel(platform, period)}</span>`
+      : '';
     row.innerHTML = `
       <span class="pricing-service-pick__icon" style="color:${svc.color}">${svc.icon}</span>
       <span class="pricing-service-pick__text">
         <strong>${svc.subtitle}</strong>
+        ${serviceSave}
       </span>
       <span class="pricing-service-pick__price">${p.formatInrDisplay(p.perService(platform, period))}</span>
     `;
@@ -150,6 +158,10 @@ function updateHeroPrice(root, platform, period, selectedCount) {
 
   const total = p.checkoutTotal(platform, period, selectedCount);
   const displayAmount = selectedCount === 0 ? p.perService(platform, period) : total;
+  const bundleSave =
+    period === 'yearly' && selectedCount > 0
+      ? p.yearlySaveForBundle(platform, Math.min(selectedCount, 3))
+      : null;
   if (amountEl) amountEl.textContent = p.formatInr(displayAmount);
   if (suffixEl) {
     suffixEl.textContent =
@@ -160,8 +172,13 @@ function updateHeroPrice(root, platform, period, selectedCount) {
           : `/ ${formatPeriodLabel(period)} (${selectedCount} services)`;
   }
   if (saveEl) {
-    saveEl.textContent = '';
-    saveEl.hidden = true;
+    if (bundleSave) {
+      saveEl.textContent = bundleSave;
+      saveEl.hidden = false;
+    } else {
+      saveEl.textContent = '';
+      saveEl.hidden = true;
+    }
   }
   if (hintEl) {
     hintEl.textContent =
@@ -171,25 +188,6 @@ function updateHeroPrice(root, platform, period, selectedCount) {
   }
   if (storeLabel) storeLabel.textContent = storeName;
   if (getBtn) getBtn.href = p.stores[platform];
-}
-
-function updateSelectionSave(root, platform, period, selectedCount) {
-  const el = root.querySelector('[data-selection-save]');
-  if (!el) return;
-  const save =
-    period === 'yearly' && selectedCount > 0
-      ? window.TlangauPricing.yearlySaveForBundle(
-          platform,
-          Math.min(selectedCount, 3),
-        )
-      : null;
-  if (save) {
-    el.innerHTML = `<span class="save-tag">${save}</span>`;
-    el.hidden = false;
-  } else {
-    el.innerHTML = '';
-    el.hidden = true;
-  }
 }
 
 function initPricingExplorer(rootId) {
@@ -204,7 +202,6 @@ function initPricingExplorer(rootId) {
   function refresh() {
     renderInteractiveServices(servicesEl, selected, period, platform, refresh);
     updateHeroPrice(root, platform, period, selected.size);
-    updateSelectionSave(root, platform, period, selected.size);
   }
 
   platform =
@@ -255,10 +252,13 @@ function renderStoreCard(container, platform) {
       <h3>Yearly</h3>
       <ul class="store-price-list">
         ${p.paidServices
-          .map(
-            (s) =>
-              `<li><span>${s.subtitle}</span><span>${p.formatInrDisplay(tier.yearlyPerService)}</span></li>`
-          )
+          .map((s) => {
+            const save =
+              platform === 'android'
+                ? ` <span class="save-tag">${p.yearlySaveForBundle(platform, 1)}</span>`
+                : '';
+            return `<li><span>${s.subtitle}${save}</span><span>${p.formatInrDisplay(tier.yearlyPerService)}</span></li>`;
+          })
           .join('')}
         <li class="bundle-line"><span>1 service${bundleSaveTagHtml(platform, 1)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[1])}</span></li>
         <li class="bundle-line"><span>2 services${bundleSaveTagHtml(platform, 2)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[2])}</span></li>
