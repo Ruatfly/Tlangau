@@ -456,6 +456,24 @@ section {
     font-size: 0.95rem;
 }
 
+/* From Developer */
+.from-developer {
+    background: var(--bg-light);
+}
+
+.from-developer__content {
+    max-width: 820px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.from-developer__content p {
+    color: var(--text-light);
+    font-size: 1.05rem;
+    line-height: 1.85;
+    margin: 0;
+}
+
 /* Payment Section */
 .payment-section {
     padding: 3rem 0;
