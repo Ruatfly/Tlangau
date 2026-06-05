@@ -240,7 +240,7 @@ const deletionRequestLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 
 // Force versioned public pages so stale browser caches pick up latest HTML/CSS.
-const INDEX_PAGE_VERSION = process.env.INDEX_PAGE_VERSION || '20260607b';
+const INDEX_PAGE_VERSION = process.env.INDEX_PAGE_VERSION || '20260608a';
 app.get('/', (req, res) => {
   if (req.query.v !== INDEX_PAGE_VERSION) {
     return res.redirect(302, `/?v=${encodeURIComponent(INDEX_PAGE_VERSION)}`);
@@ -258,7 +258,7 @@ app.get('/index.html', (req, res, next) => {
 });
 
 // Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
-const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260607b';
+const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260608a';
 app.get(['/payment', '/pay', '/payr'], (req, res) => {
   return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
 });

@@ -8,23 +8,13 @@ window.TlangauPricing = {
       yearlyPerService: 100,
       monthlyCheckout: { 1: 10, 2: 20, 3: 30 },
       yearlyCheckout: { 1: 100, 2: 200, 3: 300 },
-      yearlySavePerService: {
-        ring: 'Save 17%',
-        message: 'Save 17%',
-        broadcast: 'Save 17%',
-      },
-      yearlySaveBundle: { 1: 'Save 17%', 2: null, 3: null },
+      yearlySaveBundle: { 1: 'Save 17%', 2: 'Save 17%', 3: 'Save 17%' },
     },
     ios: {
       monthlyPerService: 29,
       yearlyPerService: 199,
       monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
       yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
-      yearlySavePerService: {
-        ring: 'Save 43%',
-        message: 'Save 33%',
-        broadcast: 'Save 50%',
-      },
       yearlySaveBundle: { 1: 'Save 43%', 2: 'Save 33%', 3: 'Save 50%' },
     },
   },
@@ -83,10 +73,6 @@ window.TlangauPricing = {
     const tier = this.tier(platform);
     return period === 'yearly' ? tier.yearlyPerService : tier.monthlyPerService;
   },
-  yearlySaveForService(platform, serviceId) {
-    const tier = this.tier(platform);
-    return tier.yearlySavePerService?.[serviceId] || null;
-  },
   yearlySaveForBundle(platform, count) {
     if (count < 1 || count > 3) return null;
     const tier = this.tier(platform);
@@ -125,15 +111,10 @@ function renderInteractiveServices(container, selected, period, platform, onUpda
     row.type = 'button';
     row.className = `pricing-service-pick${checked ? ' is-selected' : ''}`;
     row.setAttribute('aria-pressed', checked ? 'true' : 'false');
-    const saveTag =
-      period === 'yearly' && p.yearlySaveForService(platform, svc.id)
-        ? `<span class="save-tag">${p.yearlySaveForService(platform, svc.id)}</span>`
-        : '';
     row.innerHTML = `
       <span class="pricing-service-pick__icon" style="color:${svc.color}">${svc.icon}</span>
       <span class="pricing-service-pick__text">
         <strong>${svc.subtitle}</strong>
-        ${saveTag}
       </span>
       <span class="pricing-service-pick__price">${p.formatInrDisplay(p.perService(platform, period))}</span>
     `;
@@ -169,11 +150,6 @@ function updateHeroPrice(root, platform, period, selectedCount) {
 
   const total = p.checkoutTotal(platform, period, selectedCount);
   const displayAmount = selectedCount === 0 ? p.perService(platform, period) : total;
-  const bundleSave =
-    period === 'yearly' && selectedCount > 0
-      ? p.yearlySaveForBundle(platform, Math.min(selectedCount, 3))
-      : null;
-
   if (amountEl) amountEl.textContent = p.formatInr(displayAmount);
   if (suffixEl) {
     suffixEl.textContent =
@@ -184,13 +160,8 @@ function updateHeroPrice(root, platform, period, selectedCount) {
           : `/ ${formatPeriodLabel(period)} (${selectedCount} services)`;
   }
   if (saveEl) {
-    if (bundleSave) {
-      saveEl.textContent = bundleSave;
-      saveEl.hidden = false;
-    } else {
-      saveEl.textContent = '';
-      saveEl.hidden = true;
-    }
+    saveEl.textContent = '';
+    saveEl.hidden = true;
   }
   if (hintEl) {
     hintEl.textContent =
@@ -200,6 +171,25 @@ function updateHeroPrice(root, platform, period, selectedCount) {
   }
   if (storeLabel) storeLabel.textContent = storeName;
   if (getBtn) getBtn.href = p.stores[platform];
+}
+
+function updateSelectionSave(root, platform, period, selectedCount) {
+  const el = root.querySelector('[data-selection-save]');
+  if (!el) return;
+  const save =
+    period === 'yearly' && selectedCount > 0
+      ? window.TlangauPricing.yearlySaveForBundle(
+          platform,
+          Math.min(selectedCount, 3),
+        )
+      : null;
+  if (save) {
+    el.innerHTML = `<span class="save-tag">${save}</span>`;
+    el.hidden = false;
+  } else {
+    el.innerHTML = '';
+    el.hidden = true;
+  }
 }
 
 function initPricingExplorer(rootId) {
@@ -214,6 +204,7 @@ function initPricingExplorer(rootId) {
   function refresh() {
     renderInteractiveServices(servicesEl, selected, period, platform, refresh);
     updateHeroPrice(root, platform, period, selected.size);
+    updateSelectionSave(root, platform, period, selected.size);
   }
 
   platform =
@@ -231,11 +222,6 @@ function initPricingExplorer(rootId) {
 
 function bundleSaveTagHtml(platform, count) {
   const tag = window.TlangauPricing.yearlySaveForBundle(platform, count);
-  return tag ? ` <span class="save-tag">${tag}</span>` : '';
-}
-
-function serviceSaveTagHtml(platform, serviceId) {
-  const tag = window.TlangauPricing.yearlySaveForService(platform, serviceId);
   return tag ? ` <span class="save-tag">${tag}</span>` : '';
 }
 
@@ -271,7 +257,7 @@ function renderStoreCard(container, platform) {
         ${p.paidServices
           .map(
             (s) =>
-              `<li><span>${s.subtitle}${serviceSaveTagHtml(platform, s.id)}</span><span>${p.formatInrDisplay(tier.yearlyPerService)}</span></li>`
+              `<li><span>${s.subtitle}</span><span>${p.formatInrDisplay(tier.yearlyPerService)}</span></li>`
           )
           .join('')}
         <li class="bundle-line"><span>1 service${bundleSaveTagHtml(platform, 1)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[1])}</span></li>

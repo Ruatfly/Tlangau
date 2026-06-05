@@ -1549,7 +1549,17 @@ section {
 
 .pricing-features-interactive {
     text-align: left;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.pricing-selection-save {
+    text-align: center;
+    margin: 0 0 1rem;
+    min-height: 1.5rem;
+}
+
+.pricing-selection-save[hidden] {
+    display: none;
 }
 
 .pricing-service-pick {
