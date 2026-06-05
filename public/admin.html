@@ -552,7 +552,7 @@
                     <div class="monitor-row">
                         <button class="btn-secondary btn-toolbar" id="overviewRefreshBtn" type="button">Refresh</button>
                         <button class="btn-danger btn-toolbar" id="overviewClearBtn" type="button">Clear all sends</button>
-                        <span style="font-size:12px;color:#666;">Auto-refreshes every 15s while logged in</span>
+                        <span style="font-size:12px;color:#666;">Sends log live-updates every 5s while logged in</span>
                     </div>
                     <div class="overview-split">
                         <div>
@@ -575,6 +575,7 @@
                     <div class="monitor-row">
                         <button class="btn-secondary btn-toolbar" id="activityRefreshBtn" type="button">Refresh</button>
                         <button class="btn-danger btn-toolbar" id="activityClearBtn" type="button">Clear all</button>
+                        <span id="activityLiveLabel" style="font-size:12px;color:#666;">Live — updates every 5s</span>
                     </div>
                     <input type="text" class="search-box" id="activitySearch" placeholder="Search sends by bundle, subpoint, sender, type…">
                     <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
@@ -867,7 +868,7 @@
         const BACKEND_URL = window.BACKEND_URL || 'http://localhost:3001';
         let adminPassword = '';
         let refreshTimer = null;
-        const AUTO_REFRESH_MS = 15000;
+        const AUTO_REFRESH_MS = 5000;
         let _allAccessCodes = [];
         let _activityItems = [];
         let _complaintsItems = [];
@@ -902,16 +903,15 @@
                 loadMonitorSummary();
                 loadAccessCodes();
                 filterTable('codesTable', 'codesSearch');
+                // Sends log always syncs in the background (even on other tabs).
+                loadActivity({ silent: true });
+                refreshOverviewActivityPreview({ silent: true });
                 if (_activeTab === 'overview') {
-                    loadOverviewPanels();
-                } else if (_activeTab === 'activity') {
-                    loadActivity();
+                    loadOverviewComplaintsPreview({ silent: true });
                 } else if (_activeTab === 'complaints') {
                     loadComplaints();
                 } else if (_activeTab === 'donations') {
                     loadDonationSetups();
-                } else if (_activeTab === 'bundles') {
-                    loadBundles();
                 }
             }, AUTO_REFRESH_MS);
         }
@@ -1247,35 +1247,98 @@
             return 0;
         }
 
-        async function loadActivity() {
-            const loading = document.getElementById('activityLoading');
-            const list = document.getElementById('activityList');
-            const sort = document.getElementById('activitySort')?.value || 'newest';
-            const range = document.getElementById('activityRange')?.value || 'all';
+        async function fetchActivityItems({ sort = 'newest', range = 'all', limit = 500 } = {}) {
             const since = getActivitySinceMs(range);
             const params = new URLSearchParams({ sort });
             if (since > 0) {
                 params.set('since', String(since));
             } else {
-                params.set('limit', '500');
+                params.set('limit', String(limit));
             }
+            const response = await fetch(`${BACKEND_URL}/api/admin/activity?${params}`, {
+                headers: { 'X-Admin-Password': adminPassword },
+            });
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || data.message || 'Failed to load activity');
+            }
+            return data.items || [];
+        }
+
+        async function loadActivity({ silent = false } = {}) {
+            const loading = document.getElementById('activityLoading');
+            const list = document.getElementById('activityList');
+            const sort = document.getElementById('activitySort')?.value || 'newest';
+            const range = document.getElementById('activityRange')?.value || 'all';
+            const showUi = !silent || _activeTab === 'activity';
             try {
-                loading.style.display = 'block';
-                loading.textContent = 'Loading send log…';
-                const response = await fetch(`${BACKEND_URL}/api/admin/activity?${params}`, {
+                if (showUi && loading) {
+                    loading.style.display = 'block';
+                    loading.textContent = 'Loading send log…';
+                }
+                _activityItems = await fetchActivityItems({ sort, range, limit: 500 });
+                if (showUi) {
+                    if (loading) loading.style.display = 'none';
+                    if (list) list.style.display = 'block';
+                    renderActivityList(_activityItems);
+                }
+            } catch (error) {
+                if (showUi && loading) {
+                    loading.textContent = 'Error loading activity: ' + error.message;
+                } else {
+                    console.error('Background activity refresh failed:', error);
+                }
+            }
+        }
+
+        async function refreshOverviewActivityPreview({ silent = true } = {}) {
+            const actLoading = document.getElementById('overviewActivityLoading');
+            try {
+                const items = await fetchActivityItems({ sort: 'newest', range: 'all', limit: 30 });
+                if (actLoading) actLoading.style.display = 'none';
+                renderActivityCards(items, 'overviewActivityList', 8);
+            } catch (error) {
+                if (!silent && actLoading) {
+                    actLoading.textContent = 'Could not load sends';
+                } else {
+                    console.error('Background overview activity refresh failed:', error);
+                }
+            }
+        }
+
+        async function loadOverviewComplaintsPreview({ silent = true } = {}) {
+            const compLoading = document.getElementById('overviewComplaintsLoading');
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/complaints`, {
                     headers: { 'X-Admin-Password': adminPassword },
                 });
-                const data = await response.json();
-                if (!data.success) {
-                    loading.textContent = 'Error: ' + (data.error || data.message || 'Failed');
-                    return;
+                const compData = await response.json();
+                if (!compData.success) {
+                    throw new Error(compData.error || 'Failed to load complaints');
                 }
-                _activityItems = data.items || [];
-                loading.style.display = 'none';
-                list.style.display = 'block';
-                renderActivityList(_activityItems);
+                if (compLoading) compLoading.style.display = 'none';
+                const complaints = compData.complaints || [];
+                const container = document.getElementById('overviewComplaintsList');
+                if (!container) return;
+                if (!complaints.length) {
+                    container.innerHTML = '<div class="empty-state" style="padding:24px;"><p>No complaints</p></div>';
+                } else {
+                    container.innerHTML = complaints.slice(0, 6).map(c => `
+                        <div class="activity-card">
+                            <div class="activity-card__title">${esc(c.title)}</div>
+                            <div class="activity-card__meta">
+                                ${esc(c.district)} · ${esc((c.bundleNames || []).join(', '))}<br>
+                                ${esc(formatTs(c.createdAtMs))} · ${esc(c.createdByEmail || 'guest')}
+                            </div>
+                        </div>
+                    `).join('');
+                }
             } catch (error) {
-                loading.textContent = 'Error loading activity: ' + error.message;
+                if (!silent && compLoading) {
+                    compLoading.textContent = 'Could not load complaints';
+                } else {
+                    console.error('Background overview complaints refresh failed:', error);
+                }
             }
         }
 
@@ -1300,43 +1363,18 @@
         async function loadOverviewPanels() {
             const actLoading = document.getElementById('overviewActivityLoading');
             const compLoading = document.getElementById('overviewComplaintsLoading');
-            try {
-                const [actRes, compRes] = await Promise.all([
-                    fetch(`${BACKEND_URL}/api/admin/activity?limit=30`, { headers: { 'X-Admin-Password': adminPassword } }),
-                    fetch(`${BACKEND_URL}/api/admin/complaints`, { headers: { 'X-Admin-Password': adminPassword } }),
-                ]);
-                const actData = await actRes.json();
-                const compData = await compRes.json();
-                if (actData.success) {
-                    actLoading.style.display = 'none';
-                    renderActivityCards(actData.items || [], 'overviewActivityList', 8);
-                } else {
-                    actLoading.textContent = 'Could not load sends';
-                }
-                if (compData.success) {
-                    compLoading.style.display = 'none';
-                    const complaints = compData.complaints || [];
-                    const container = document.getElementById('overviewComplaintsList');
-                    if (!complaints.length) {
-                        container.innerHTML = '<div class="empty-state" style="padding:24px;"><p>No complaints</p></div>';
-                    } else {
-                        container.innerHTML = complaints.slice(0, 6).map(c => `
-                            <div class="activity-card">
-                                <div class="activity-card__title">${esc(c.title)}</div>
-                                <div class="activity-card__meta">
-                                    ${esc(c.district)} · ${esc((c.bundleNames || []).join(', '))}<br>
-                                    ${esc(formatTs(c.createdAtMs))} · ${esc(c.createdByEmail || 'guest')}
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                } else {
-                    compLoading.textContent = 'Could not load complaints';
-                }
-            } catch (error) {
-                actLoading.textContent = 'Error: ' + error.message;
-                compLoading.textContent = 'Error: ' + error.message;
+            if (actLoading) {
+                actLoading.style.display = 'block';
+                actLoading.textContent = 'Loading activity…';
             }
+            if (compLoading) {
+                compLoading.style.display = 'block';
+                compLoading.textContent = 'Loading complaints…';
+            }
+            await Promise.all([
+                refreshOverviewActivityPreview({ silent: false }),
+                loadOverviewComplaintsPreview({ silent: false }),
+            ]);
         }
 
         async function loadComplaints() {
