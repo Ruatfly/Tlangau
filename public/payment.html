@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Tlangau premium is purchased in the mobile app via App Store or Google Play.">
+    <meta name="description" content="Download Tlangau on the App Store or Google Play. Premium pricing for iOS and Android.">
     <meta name="robots" content="noindex, follow">
-    <title>Premium — Tlangau App</title>
+    <title>Get the App — Tlangau</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -16,46 +16,29 @@
             </div>
             <ul class="nav-links">
                 <li><a href="index.html">Home</a></li>
-                <li><a href="index.html#get-app" class="btn-primary">Get the App</a></li>
+                <li><a href="index.html#pricing">Premium</a></li>
+                <li><a href="contact.html">Contact</a></li>
             </ul>
         </div>
     </nav>
 
     <section class="payment-section">
         <div class="container">
-            <div class="payment-container">
+            <div class="payment-container payment-container--wide">
                 <div class="payment-header">
-                    <h1>Premium is in the app</h1>
-                    <p>Web access-code checkout is no longer available. Subscribe from the Tlangau app on your phone.</p>
+                    <h1>Get the App</h1>
+                    <p>Download Tlangau and subscribe to Tlangau Premium inside the app. Prices below match the mobile app (India reference).</p>
                 </div>
 
-                <div class="payment-content" style="grid-template-columns: 1fr; max-width: 640px; margin: 0 auto;">
-                    <div class="payment-form-container">
-                        <div class="info-box">
-                            <h4>&#128241; How to subscribe</h4>
-                            <ul>
-                                <li>Install <strong>Tlangau</strong> from the App Store or Google Play</li>
-                                <li>Open <strong>More → Tlangau Premium</strong></li>
-                                <li>Choose your services and complete payment in the store</li>
-                                <li>Sign in with Apple (iOS) or Google (Android) to unlock the server dashboard</li>
-                            </ul>
-                        </div>
-                        <div class="info-box" style="margin-top: 1rem;">
-                            <h4>Already have an access code?</h4>
-                            <p style="margin: 0; color: var(--text-light);">Legacy codes can still be entered in the app admin sign-in if they are valid. New codes are not sold on this website.</p>
-                        </div>
-                        <a href="index.html#get-app" class="btn btn-large btn-primary" style="width: 100%; margin-top: 1.5rem; text-align: center;">Back to Get the App</a>
-                    </div>
+                <div id="store-pricing-grid" class="store-pricing-grid">
+                    <div data-store-card="ios"></div>
+                    <div data-store-card="android"></div>
                 </div>
+
+                <p class="store-pricing-footnote">After installing, open <strong>More → Tlangau Premium</strong>, choose services, and complete payment in the App Store or Google Play.</p>
             </div>
         </div>
     </section>
-
-    <!--
-      Legacy Cashfree access-code checkout (disabled June 2026).
-      Premium is sold via App Store / Google Play in the Flutter app.
-      Server: POST /api/create-payment returns 410 unless WEB_ACCESS_CODE_SALES_ENABLED=true.
-    -->
 
     <footer class="footer">
         <div class="container">
@@ -85,5 +68,7 @@
             </div>
         </div>
     </footer>
+
+    <script src="pricing-shared.js?v=20260605b"></script>
 </body>
 </html>

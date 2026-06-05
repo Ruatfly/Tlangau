@@ -26,7 +26,7 @@
                 <li><a href="#features">Features</a></li>
                 <li><a href="#pricing">Premium</a></li>
                 <li><a href="#how-it-works">How It Works</a></li>
-                <li><a href="#get-app" class="btn-primary">Get the App</a></li>
+                <li><a href="payment.html">Get the App</a></li>
             </ul>
         </div>
     </nav>
@@ -37,7 +37,7 @@
                 <h1 class="hero-title">Community notifications, made simple</h1>
                 <p class="hero-subtitle">Tlangau helps communities send ring alerts, information notices, and broadcast messages. Server dashboard access is unlocked through secure in-app subscriptions on iPhone and Android.</p>
                 <div class="hero-buttons">
-                    <a href="#get-app" class="btn btn-large btn-primary">Get the App</a>
+                    <a href="payment.html" class="btn btn-large btn-primary">Get the App</a>
                     <a href="#features" class="btn btn-large btn-secondary">Learn More</a>
                 </div>
                 <div class="hero-stats">
@@ -126,28 +126,31 @@
 
     <section id="pricing" class="pricing">
         <div class="container">
-            <h2 class="section-title">Premium plans (in the app)</h2>
-            <p style="text-align: center; color: var(--text-light); margin-top: -1.5rem; margin-bottom: 2.5rem; font-size: 1.1rem;">Prices are shown in the app for your App Store or Play region. India reference pricing:</p>
-            <div class="pricing-card">
-                <div class="pricing-header">
-                    <h3>Tlangau Premium</h3>
-                    <div class="price">
-                        <span class="currency">&#8377;</span>
-                        <span class="amount">29</span>
-                        <span style="font-size: 1.2rem; color: var(--text-light); margin-left: 4px;">/service / month</span>
+            <h2 class="section-title">Tlangau Premium</h2>
+            <p class="pricing-lead">Select your platform and services — totals match the in-app checkout (India reference pricing).</p>
+
+            <div id="pricing-explorer" class="pricing-explorer">
+                <div class="premium-toggles">
+                    <div class="toggle-group" data-platform-toggle>
+                        <button type="button" class="toggle-btn is-active" data-platform="ios">iOS</button>
+                        <button type="button" class="toggle-btn" data-platform="android">Android</button>
+                    </div>
+                    <div class="toggle-group" data-period-toggle>
+                        <button type="button" class="toggle-btn is-active" data-period="monthly">Monthly</button>
+                        <button type="button" class="toggle-btn" data-period="yearly">Yearly</button>
                     </div>
                 </div>
-                <ul class="pricing-features">
-                    <li>&#128260; Ring notification</li>
-                    <li>&#128172; Message notification</li>
-                    <li>&#128226; Broadcast message</li>
-                    <li>&#128202; Statistics &amp; Insights — <strong style="color: #48bb78;">FREE</strong></li>
-                    <li style="border-top: 2px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">&#9989; Bundle pricing in app (e.g. &#8377;49 / &#8377;99 monthly)</li>
-                    <li>&#9989; Yearly plans from &#8377;199 per service</li>
-                    <li>&#9989; Billed through Apple or Google</li>
-                    <li>&#9989; Manage subscriptions in your device account settings</li>
-                </ul>
-                <a href="#get-app" class="btn btn-large btn-primary">Subscribe in the App</a>
+
+                <div class="pricing-explorer-grid">
+                    <div class="pricing-explorer-services" data-services></div>
+                    <div class="pricing-explorer-summary">
+                        <h3>Checkout total</h3>
+                        <p class="pricing-total" data-total>—</p>
+                        <p class="pricing-hint" data-hint>Select at least one paid service to see your bundle total.</p>
+                        <p class="pricing-save-note" data-save-tags>Yearly plans show save badges on each service (same as the app).</p>
+                        <a class="btn btn-large btn-primary" data-get-store href="https://apps.apple.com/app/id6769981685" target="_blank" rel="noopener noreferrer">GET</a>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -233,6 +236,7 @@
         </div>
     </footer>
 
+    <script src="pricing-shared.js?v=20260605b"></script>
     <script src="script.js"></script>
 </body>
 </html>
