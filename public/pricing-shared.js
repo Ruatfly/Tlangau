@@ -1,25 +1,31 @@
 /**
- * Mirrors lib/config/play_billing_config.dart — per-platform India INR tiers.
- * Update ios/android blocks if App Store Connect tiers differ from Play.
+ * Website premium pricing — Android (Play) vs iOS (App Store) India tiers.
  */
 window.TlangauPricing = {
-  yearlySave: {
-    ring: 'Save 43%',
-    message: 'Save 33%',
-    broadcast: 'Save 50%',
-  },
   platformPricing: {
     android: {
-      monthlyPerService: 29,
-      yearlyPerService: 199,
-      monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
-      yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
+      monthlyPerService: 10,
+      yearlyPerService: 100,
+      monthlyCheckout: { 1: 10, 2: 20, 3: 30 },
+      yearlyCheckout: { 1: 100, 2: 200, 3: 300 },
+      yearlySavePerService: {
+        ring: 'Save 17%',
+        message: 'Save 17%',
+        broadcast: 'Save 17%',
+      },
+      yearlySaveBundle: { 1: 'Save 17%', 2: null, 3: null },
     },
     ios: {
       monthlyPerService: 29,
       yearlyPerService: 199,
       monthlyCheckout: { 1: 29, 2: 49, 3: 99 },
       yearlyCheckout: { 1: 199, 2: 399, 3: 599 },
+      yearlySavePerService: {
+        ring: 'Save 43%',
+        message: 'Save 33%',
+        broadcast: 'Save 50%',
+      },
+      yearlySaveBundle: { 1: 'Save 43%', 2: 'Save 33%', 3: 'Save 50%' },
     },
   },
   paidServices: [
@@ -58,19 +64,33 @@ window.TlangauPricing = {
     return this.platformPricing[platform] || this.platformPricing.android;
   },
   formatInr(amount) {
-    return amount.toFixed(0);
+    return Number(amount).toFixed(0);
+  },
+  formatInrDisplay(amount) {
+    return `&#8377;${this.formatInr(amount)}.00`;
   },
   checkoutTotal(platform, period, count) {
     const tier = this.tier(platform);
     const map =
       period === 'yearly' ? tier.yearlyCheckout : tier.monthlyCheckout;
-    if (count <= 0) return tier[period === 'yearly' ? 'yearlyPerService' : 'monthlyPerService'];
+    if (count <= 0) {
+      return period === 'yearly' ? tier.yearlyPerService : tier.monthlyPerService;
+    }
     if (count >= 3) return map[3];
     return map[count];
   },
   perService(platform, period) {
     const tier = this.tier(platform);
     return period === 'yearly' ? tier.yearlyPerService : tier.monthlyPerService;
+  },
+  yearlySaveForService(platform, serviceId) {
+    const tier = this.tier(platform);
+    return tier.yearlySavePerService?.[serviceId] || null;
+  },
+  yearlySaveForBundle(platform, count) {
+    if (count < 1 || count > 3) return null;
+    const tier = this.tier(platform);
+    return tier.yearlySaveBundle?.[count] || null;
   },
 };
 
@@ -106,8 +126,8 @@ function renderInteractiveServices(container, selected, period, platform, onUpda
     row.className = `pricing-service-pick${checked ? ' is-selected' : ''}`;
     row.setAttribute('aria-pressed', checked ? 'true' : 'false');
     const saveTag =
-      period === 'yearly' && p.yearlySave[svc.id]
-        ? `<span class="save-tag">${p.yearlySave[svc.id]}</span>`
+      period === 'yearly' && p.yearlySaveForService(platform, svc.id)
+        ? `<span class="save-tag">${p.yearlySaveForService(platform, svc.id)}</span>`
         : '';
     row.innerHTML = `
       <span class="pricing-service-pick__icon" style="color:${svc.color}">${svc.icon}</span>
@@ -115,7 +135,7 @@ function renderInteractiveServices(container, selected, period, platform, onUpda
         <strong>${svc.subtitle}</strong>
         ${saveTag}
       </span>
-      <span class="pricing-service-pick__price">&#8377;${p.formatInr(p.perService(platform, period))}.00</span>
+      <span class="pricing-service-pick__price">${p.formatInrDisplay(p.perService(platform, period))}</span>
     `;
     row.addEventListener('click', () => {
       if (selected.has(svc.id)) selected.delete(svc.id);
@@ -141,6 +161,7 @@ function updateHeroPrice(root, platform, period, selectedCount) {
   const p = window.TlangauPricing;
   const amountEl = root.querySelector('[data-total-amount]');
   const suffixEl = root.querySelector('[data-price-suffix]');
+  const saveEl = root.querySelector('[data-bundle-save]');
   const hintEl = root.querySelector('[data-hint]');
   const storeLabel = root.querySelector('[data-store-label]');
   const getBtn = root.querySelector('[data-get-store]');
@@ -148,6 +169,10 @@ function updateHeroPrice(root, platform, period, selectedCount) {
 
   const total = p.checkoutTotal(platform, period, selectedCount);
   const displayAmount = selectedCount === 0 ? p.perService(platform, period) : total;
+  const bundleSave =
+    period === 'yearly' && selectedCount > 0
+      ? p.yearlySaveForBundle(platform, Math.min(selectedCount, 3))
+      : null;
 
   if (amountEl) amountEl.textContent = p.formatInr(displayAmount);
   if (suffixEl) {
@@ -158,11 +183,20 @@ function updateHeroPrice(root, platform, period, selectedCount) {
           ? `/service / ${formatPeriodLabel(period)}`
           : `/ ${formatPeriodLabel(period)} (${selectedCount} services)`;
   }
+  if (saveEl) {
+    if (bundleSave) {
+      saveEl.textContent = bundleSave;
+      saveEl.hidden = false;
+    } else {
+      saveEl.textContent = '';
+      saveEl.hidden = true;
+    }
+  }
   if (hintEl) {
     hintEl.textContent =
       selectedCount === 0
-        ? `Tap Ring, Message, or Broadcast — prices shown for ${storeName} (India).`
-        : `${selectedCount} service${selectedCount > 1 ? 's' : ''} selected · checkout total for ${storeName}.`;
+        ? `Tap Ring, Message, or Broadcast — ${storeName} pricing (India).`
+        : `${selectedCount} service${selectedCount > 1 ? 's' : ''} · checkout total for ${storeName}.`;
   }
   if (storeLabel) storeLabel.textContent = storeName;
   if (getBtn) getBtn.href = p.stores[platform];
@@ -195,6 +229,16 @@ function initPricingExplorer(rootId) {
   refresh();
 }
 
+function bundleSaveTagHtml(platform, count) {
+  const tag = window.TlangauPricing.yearlySaveForBundle(platform, count);
+  return tag ? ` <span class="save-tag">${tag}</span>` : '';
+}
+
+function serviceSaveTagHtml(platform, serviceId) {
+  const tag = window.TlangauPricing.yearlySaveForService(platform, serviceId);
+  return tag ? ` <span class="save-tag">${tag}</span>` : '';
+}
+
 function renderStoreCard(container, platform) {
   const p = window.TlangauPricing;
   const tier = p.tier(platform);
@@ -213,28 +257,26 @@ function renderStoreCard(container, platform) {
         ${p.paidServices
           .map(
             (s) =>
-              `<li><span>${s.subtitle}</span><span>&#8377;${p.formatInr(tier.monthlyPerService)}.00</span></li>`
+              `<li><span>${s.subtitle}</span><span>${p.formatInrDisplay(tier.monthlyPerService)}</span></li>`
           )
           .join('')}
-        <li class="bundle-line"><span>1 service</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[1])}.00</span></li>
-        <li class="bundle-line"><span>2 services</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[2])}.00</span></li>
-        <li class="bundle-line"><span>3 services</span><span>&#8377;${p.formatInr(tier.monthlyCheckout[3])}.00</span></li>
+        <li class="bundle-line"><span>1 service</span><span>${p.formatInrDisplay(tier.monthlyCheckout[1])}</span></li>
+        <li class="bundle-line"><span>2 services</span><span>${p.formatInrDisplay(tier.monthlyCheckout[2])}</span></li>
+        <li class="bundle-line"><span>3 services</span><span>${p.formatInrDisplay(tier.monthlyCheckout[3])}</span></li>
       </ul>
     </div>
     <div class="store-pricing-card__period">
       <h3>Yearly</h3>
       <ul class="store-price-list">
         ${p.paidServices
-          .map((s) => {
-            const tag = p.yearlySave[s.id]
-              ? `<span class="save-tag">${p.yearlySave[s.id]}</span>`
-              : '';
-            return `<li><span>${s.subtitle} ${tag}</span><span>&#8377;${p.formatInr(tier.yearlyPerService)}.00</span></li>`;
-          })
+          .map(
+            (s) =>
+              `<li><span>${s.subtitle}${serviceSaveTagHtml(platform, s.id)}</span><span>${p.formatInrDisplay(tier.yearlyPerService)}</span></li>`
+          )
           .join('')}
-        <li class="bundle-line"><span>1 service</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[1])}.00</span></li>
-        <li class="bundle-line"><span>2 services</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[2])}.00</span></li>
-        <li class="bundle-line"><span>3 services</span><span>&#8377;${p.formatInr(tier.yearlyCheckout[3])}.00</span></li>
+        <li class="bundle-line"><span>1 service${bundleSaveTagHtml(platform, 1)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[1])}</span></li>
+        <li class="bundle-line"><span>2 services${bundleSaveTagHtml(platform, 2)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[2])}</span></li>
+        <li class="bundle-line"><span>3 services${bundleSaveTagHtml(platform, 3)}</span><span>${p.formatInrDisplay(tier.yearlyCheckout[3])}</span></li>
       </ul>
     </div>
     <div class="store-pricing-card__free">

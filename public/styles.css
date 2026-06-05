@@ -1522,6 +1522,17 @@ section {
     margin-left: 4px;
 }
 
+.price-bundle-save {
+    display: inline-block;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    font-size: 0.75rem;
+}
+
+.price--hero .price-bundle-save[hidden] {
+    display: none;
+}
+
 .pricing-hint--card {
     font-size: 0.9rem;
     color: var(--text-light);
