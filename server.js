@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605c';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605e';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -1858,6 +1858,33 @@ async function sendPlayAdminWelcomeEmail(email, services, validityDays = 30) {
   }
 }
 
+/** If store purchase was fulfilled but access_codes row is missing (e.g. after billing reset), return null so verify re-grants. */
+async function tryReturnExistingStoreActivation(existing, emailLower, userAccountId) {
+  if (!existing || existing.fulfilled !== true || !existing.code) {
+    return null;
+  }
+  const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+  const mergedPaid = mergeActivePaidServices(usedEntitlements);
+  const codeRecord = await db.getCodeByCode(existing.code);
+  if (mergedPaid.length > 0 && codeRecord) {
+    const stackedRawExpiry =
+      getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
+    return {
+      success: true,
+      valid: true,
+      message: 'Purchase already activated for this account.',
+      code: existing.code,
+      expiresAt: getGraceWindowEnd(stackedRawExpiry),
+      accessExpiryAt: stackedRawExpiry,
+      services: mergeActiveServicesWithFree(usedEntitlements),
+    };
+  }
+  console.warn(
+    `Store purchase ${existing.code} for ${emailLower} missing active entitlement — re-granting`
+  );
+  return null;
+}
+
 async function grantPlayEntitlementForIdentity(emailLower, userAccountId, options = {}) {
   const services =
     Array.isArray(options.services) && options.services.length > 0
@@ -1978,19 +2005,13 @@ app.post(
       const tokenHash = hashPlayPurchaseToken(purchaseToken);
 
       const existing = await db.getPlayPurchaseByTokenHash(tokenHash);
-      if (existing && existing.fulfilled === true && existing.code) {
-        const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
-        const stackedRawExpiry =
-          getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
-        return res.json({
-          success: true,
-          valid: true,
-          message: 'Purchase already activated for this account.',
-          code: existing.code,
-          expiresAt: getGraceWindowEnd(stackedRawExpiry),
-          accessExpiryAt: stackedRawExpiry,
-          services: mergeActiveServicesWithFree(usedEntitlements),
-        });
+      const existingPlayResponse = await tryReturnExistingStoreActivation(
+        existing,
+        emailLower,
+        userAccountId
+      );
+      if (existingPlayResponse) {
+        return res.json(existingPlayResponse);
       }
 
       const verified = await verifyGooglePlayPurchaseToken({
@@ -2152,22 +2173,13 @@ app.post(
           existing = null;
         }
       }
-      if (existing && existing.fulfilled === true && existing.code) {
-        const usedEntitlements = await db.getUsedCodesForIdentity(
-          emailLower,
-          userAccountId
-        );
-        const stackedRawExpiry =
-          getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
-        return res.json({
-          success: true,
-          valid: true,
-          message: 'Purchase already activated for this account.',
-          code: existing.code,
-          expiresAt: getGraceWindowEnd(stackedRawExpiry),
-          accessExpiryAt: stackedRawExpiry,
-          services: mergeActiveServicesWithFree(usedEntitlements),
-        });
+      const existingAppleResponse = await tryReturnExistingStoreActivation(
+        existing,
+        emailLower,
+        userAccountId
+      );
+      if (existingAppleResponse) {
+        return res.json(existingAppleResponse);
       }
 
       await verifyAppleTransaction({ transactionId, productId, bundleId });
@@ -3913,11 +3925,11 @@ async function requireServerAuth(req, res, next) {
     });
   }
 
-  const email = await verifyGoogleAuth(req);
+  const email = await verifyAnyAuthEmail(req);
   if (!email) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required. Please sign in with Google.',
+      message: 'Authentication required. Please sign in with Google or Apple.',
     });
   }
 
