@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605f';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605g';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -1927,22 +1927,30 @@ async function regrantEntitlementFromStoreRecord(existing, emailLower, userAccou
 }
 
 async function repairEntitlementsForIdentity(emailLower, userAccountId) {
-  const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
-  if (mergeActivePaidServices(usedEntitlements).length > 0) {
-    return null;
-  }
-
   const purchases = await db.getPlayPurchasesByEmail(emailLower);
+  if (!purchases.length) return null;
+
+  let lastRepaired = null;
   for (const purchase of purchases) {
     if (purchase?.fulfilled !== true) continue;
+
+    const productId = String(purchase.product_id || '').trim();
+    const neededServices = servicesForPlayProductId(productId);
+    if (neededServices.length === 0) continue;
+
+    const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+    const mergedPaid = mergeActivePaidServices(usedEntitlements);
+    const missingServices = neededServices.filter((s) => !mergedPaid.includes(s));
+    if (missingServices.length === 0) continue;
+
     const repaired = await regrantEntitlementFromStoreRecord(
       purchase,
       emailLower,
       userAccountId
     );
-    if (repaired) return repaired;
+    if (repaired) lastRepaired = repaired;
   }
-  return null;
+  return lastRepaired;
 }
 
 /** Return existing activation or re-grant when access_codes row was wiped but store purchase remains. */
