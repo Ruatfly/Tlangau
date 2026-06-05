@@ -463,6 +463,9 @@ section {
 
 .from-developer .section-title {
     text-align: left;
+    font-size: 2rem;
+    margin: 0 auto 1.25rem;
+    max-width: 820px;
 }
 
 .from-developer__content {
