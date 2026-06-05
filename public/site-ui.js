@@ -36,6 +36,8 @@
       'how.step3.body': 'Use Sign in with Apple (iOS) or Google (Android) with the same account used for purchase.',
       'how.step4.title': 'Use the server dashboard',
       'how.step4.body': 'Your entitlement activates automatically after payment verification.',
+      'developer.body':
+        'Thank you for using <strong>Tlangau</strong>. We built this app to help communities stay connected and informed with clear, reliable notifications. We hope Tlangau makes your daily coordination easier—please enjoy using it, and we would be happy if you find it useful for your community.',
     },
     mizo: {
       'about.title': 'Tlangau chu eng nge ni?',
@@ -73,6 +75,8 @@
       'how.step3.body': 'Purchase hmanga account tho angin sign-in rawh—iPhone-ah Sign in with Apple, Android-ah Google.',
       'how.step4.title': 'Server dashboard hmang rawh',
       'how.step4.body': 'Payment verify a nih hnuah entitlement a active a, dashboard hman theih a ni ang.',
+      'developer.body':
+        '<strong>Tlangau</strong> hman theuh chungah lawmthu kan sawi e. He app hi community te inkawm leh hriattirna tha, rinawm takin a thleng theih nan kan siam a. Tlangau hian nangma nirtir coordination a awlsam zawk turin kan beisei a—lawm takin hmang rawh; i community tan mawhphurtlak a nih chuan kan lawm tawk ang.',
     },
   };
 

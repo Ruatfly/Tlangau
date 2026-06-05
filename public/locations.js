@@ -39,17 +39,27 @@
 
     const grouped = groupByDistrict(bundles);
     const html = grouped.map(([district, districtBundles]) => {
-      const bundleHtml = districtBundles.map((bundle) => {
+      const bundleHtml = districtBundles.map((bundle, index) => {
         const subpoints = bundle.subpoints || [];
         const subpointItems = subpoints.length
           ? subpoints.map((sp) => `<li>${escapeHtml(sp.name)}</li>`).join('')
           : '<li class="locations-muted">No subpoints listed yet</li>';
+        const bodyId = `bundle-body-${sanitizeDomId(bundle.id || `${district}-${index}`)}`;
 
         return `
           <article class="locations-bundle">
-            <h3 class="locations-bundle__title">${escapeHtml(bundle.name)}</h3>
-            <p class="locations-bundle__meta">Bundle · ${subpoints.length} subpoint${subpoints.length === 1 ? '' : 's'}</p>
-            <ul class="locations-subpoints">${subpointItems}</ul>
+            <button type="button" class="locations-bundle__toggle" aria-expanded="false" aria-controls="${bodyId}">
+              <span class="locations-bundle__heading">
+                <span class="locations-bundle__title">${escapeHtml(bundle.name)}</span>
+                <span class="locations-bundle__meta">Bundle · ${subpoints.length} subpoint${subpoints.length === 1 ? '' : 's'}</span>
+              </span>
+              <span class="locations-bundle__chevron" aria-hidden="true"></span>
+            </button>
+            <div class="locations-bundle__body" id="${bodyId}">
+              <div class="locations-bundle__body-inner">
+                <ul class="locations-subpoints">${subpointItems}</ul>
+              </div>
+            </div>
           </article>
         `;
       }).join('');
@@ -64,6 +74,21 @@
 
     listEl.innerHTML = html;
     listEl.hidden = false;
+    bindBundleAccordions();
+  }
+
+  function bindBundleAccordions() {
+    if (!listEl) return;
+
+    listEl.querySelectorAll('.locations-bundle__toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const bundle = button.closest('.locations-bundle');
+        if (!bundle) return;
+
+        const isOpen = bundle.classList.toggle('is-open');
+        button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    });
   }
 
   function escapeHtml(value) {
@@ -72,6 +97,10 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function sanitizeDomId(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
   }
 
   function formatUpdatedAt(iso) {
