@@ -297,7 +297,10 @@ const noCachePublicFiles = new Set([
   'script.js',
   'config.js',
   'index.html',
+  'locations.html',
+  'locations.js',
   'pricing-shared.js',
+  'site-ui.js',
   'styles.css',
   'app-icon.png',
 ]);
@@ -2848,6 +2851,86 @@ app.post('/api/admin/reconcile-payments', checkAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('ï¿½R Reconcile payments error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to reconcile payments.' });
+  }
+});
+
+// ==================== PUBLIC LOCATIONS (published bundles) ====================
+
+function buildPublicLocationsFromBundles(bundlesData) {
+  const bundles = [];
+  if (!bundlesData || typeof bundlesData !== 'object') {
+    return bundles;
+  }
+
+  for (const [bundleId, bundleData] of Object.entries(bundlesData)) {
+    if (!bundleData || typeof bundleData !== 'object') continue;
+    if (bundleData.isDraft === true) continue;
+
+    const subpoints = [];
+    if (bundleData.topics && typeof bundleData.topics === 'object') {
+      for (const [topicId, topicData] of Object.entries(bundleData.topics)) {
+        if (!topicData || typeof topicData !== 'object') continue;
+        subpoints.push({
+          id: topicId,
+          name: topicData.name || 'Unknown',
+        });
+      }
+    }
+    subpoints.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    bundles.push({
+      id: bundleId,
+      name: bundleData.name || 'Unknown',
+      district: (bundleData.district || '').trim(),
+      subpoints,
+    });
+  }
+
+  bundles.sort((a, b) => {
+    const districtCmp = (a.district || 'zzz').localeCompare(b.district || 'zzz', undefined, { sensitivity: 'base' });
+    if (districtCmp !== 0) return districtCmp;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  return bundles;
+}
+
+app.get('/api/public/locations', async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Service temporarily unavailable' });
+    }
+
+    const snapshot = await admin.database().ref('bundles').once('value');
+    if (!snapshot.exists()) {
+      return res.json({
+        success: true,
+        bundles: [],
+        count: { bundles: 0, subpoints: 0, districts: 0 },
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const bundles = buildPublicLocationsFromBundles(snapshot.val());
+    const districts = new Set(
+      bundles.map((b) => b.district).filter((d) => d && d.length > 0)
+    );
+    const subpointCount = bundles.reduce((sum, b) => sum + b.subpoints.length, 0);
+
+    res.json({
+      success: true,
+      bundles,
+      count: {
+        bundles: bundles.length,
+        subpoints: subpointCount,
+        districts: districts.size,
+      },
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Public locations error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to load locations' });
   }
 });
 

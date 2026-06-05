@@ -58,6 +58,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
 }
 
 .nav-brand {
@@ -116,6 +117,107 @@ body {
     margin: 0;
 }
 
+.nav-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 44px;
+    height: 44px;
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    z-index: 1002;
+}
+
+.nav-toggle__bar {
+    display: block;
+    width: 22px;
+    height: 2px;
+    margin: 3px 0;
+    border-radius: 2px;
+    background: var(--text-dark);
+    transition:
+        transform 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.28s ease,
+        width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.navbar.is-nav-open .nav-toggle__bar:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+}
+
+.navbar.is-nav-open .nav-toggle__bar:nth-child(2) {
+    opacity: 0;
+    width: 0;
+}
+
+.navbar.is-nav-open .nav-toggle__bar:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+}
+
+.nav-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    left: auto;
+    width: min(320px, calc(100vw - 2rem));
+    max-height: 0;
+    opacity: 0;
+    visibility: hidden;
+    overflow: hidden;
+    background: var(--bg-white);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    transition:
+        max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.32s ease,
+        visibility 0.32s ease,
+        transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateY(-8px) scale(0.98);
+    transform-origin: top right;
+}
+
+.navbar.is-nav-open .nav-menu {
+    max-height: 520px;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+.nav-menu__links {
+    list-style: none;
+    margin: 0;
+    padding: 0.65rem 0;
+}
+
+.nav-menu__links li {
+    margin: 0;
+}
+
+.nav-menu__links a {
+    display: block;
+    padding: 0.85rem 1.25rem;
+    text-decoration: none;
+    color: var(--text-dark);
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-menu__links a:hover,
+.nav-menu__links a:focus-visible {
+    background: rgba(173, 19, 29, 0.06);
+    color: var(--brand-red);
+}
+
+.nav-menu__links a[aria-current="page"] {
+    color: var(--brand-red);
+    font-weight: 600;
+}
+
+/* Legacy pages still using .nav-links */
 .nav-links {
     display: flex;
     list-style: none;
@@ -210,8 +312,111 @@ body {
 
 .hero-subtitle {
     font-size: 1.25rem;
-    margin-bottom: 2rem;
+    margin-bottom: 2.5rem;
     opacity: 0.95;
+}
+
+/* Locations page */
+.locations-page {
+    padding: 3.5rem 0 4rem;
+    background: var(--bg-white);
+}
+
+.locations-header {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto 2.5rem;
+}
+
+.locations-header h1 {
+    font-size: clamp(1.75rem, 4vw, 2.35rem);
+    margin-bottom: 0.75rem;
+    color: var(--text-dark);
+}
+
+.locations-header p {
+    color: var(--text-light);
+    line-height: 1.6;
+}
+
+.locations-status {
+    text-align: center;
+    color: var(--text-light);
+    padding: 2rem 0;
+}
+
+.locations-status--error {
+    color: #b42318;
+}
+
+.locations-list {
+    display: grid;
+    gap: 2rem;
+}
+
+.locations-district {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    padding: 1.5rem;
+    background: #fafafa;
+}
+
+.locations-district__title {
+    margin: 0 0 1rem;
+    font-size: 1.35rem;
+    color: var(--brand-red);
+}
+
+.locations-district__bundles {
+    display: grid;
+    gap: 1rem;
+}
+
+.locations-bundle {
+    background: var(--bg-white);
+    border-radius: 12px;
+    padding: 1.1rem 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.locations-bundle__title {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+}
+
+.locations-bundle__meta {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
+.locations-subpoints {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: var(--text-dark);
+}
+
+.locations-subpoints li {
+    margin: 0.35rem 0;
+}
+
+.locations-muted {
+    color: var(--text-light);
+    list-style: none;
+    margin-left: -1.2rem;
+}
+
+.locations-empty {
+    text-align: center;
+    color: var(--text-light);
+    padding: 2rem 0;
+}
+
+.locations-updated {
+    text-align: center;
+    margin-top: 2rem;
+    font-size: 0.9rem;
+    color: var(--text-light);
 }
 
 .hero-buttons {
@@ -366,7 +571,7 @@ section {
     background: var(--bg-white);
 }
 
-.how-it-works__lang {
+.section__lang-toggle {
     display: flex;
     justify-content: center;
     margin: -1.5rem 0 1.75rem;
@@ -507,13 +712,6 @@ section {
     height: auto;
     display: block;
     border-radius: 14px;
-}
-
-.screenshots-footnote {
-    text-align: center;
-    color: var(--text-light);
-    margin-top: 0.75rem;
-    font-size: 0.95rem;
 }
 
 /* Sticky CTA (mobile) */

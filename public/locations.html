@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browse districts, bundles, and subpoints currently available to subscribe in the Tlangau app.">
+    <title>Available locations to Subscribe — Tlangau</title>
+    <link rel="stylesheet" href="styles.css?v=20260609f">
+    <link rel="icon" href="app-icon.png" type="image/png">
+    <link rel="canonical" href="https://tlangau.onrender.com/locations.html">
+</head>
+<body>
+    <nav class="navbar" data-site-nav>
+        <div class="container">
+            <div class="nav-brand">
+                <a href="index.html" aria-label="Tlangau home">
+                    <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
+                    <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
+                </a>
+            </div>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav-menu" aria-label="Open menu">
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+            </button>
+            <div class="nav-menu" id="site-nav-menu">
+                <ul class="nav-menu__links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Premium</a></li>
+                    <li><a href="index.html#how-it-works">How It Works</a></li>
+                    <li><a href="payment.html">Get the App</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="locations.html" aria-current="page">Available locations to Subscribe</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="locations-page">
+        <div class="container">
+            <header class="locations-header">
+                <h1>Available locations to Subscribe</h1>
+                <p>Live list from the Tlangau app — districts, bundles (localities), and subpoints you can subscribe to.</p>
+            </header>
+
+            <div id="locationsStatus" class="locations-status" role="status" aria-live="polite">
+                Loading locations…
+            </div>
+
+            <div id="locationsList" class="locations-list" hidden></div>
+
+            <p id="locationsUpdated" class="locations-updated" hidden></p>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>&copy; 2026 Tlangau. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="site-ui.js?v=20260609f"></script>
+    <script src="locations.js?v=20260609f"></script>
+</body>
+</html>

@@ -16,23 +16,34 @@
     <meta property="og:description" content="Official website for the Tlangau mobile app. Privacy policy, support, and premium via in-app purchase.">
 
     <title>Tlangau App : Waste Management</title>
-    <link rel="stylesheet" href="styles.css?v=20260609c">
+    <link rel="stylesheet" href="styles.css?v=20260609f">
     <link rel="icon" href="app-icon.png" type="image/png">
     <link rel="canonical" href="https://tlangau.onrender.com/">
 </head>
 <body>
-    <nav class="navbar">
+    <nav class="navbar" data-site-nav>
         <div class="container">
             <div class="nav-brand">
-                <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
-                <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
+                <a href="index.html" aria-label="Tlangau home">
+                    <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
+                    <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
+                </a>
             </div>
-            <ul class="nav-links">
-                <li><a href="#features">Features</a></li>
-                <li><a href="#pricing">Premium</a></li>
-                <li><a href="#how-it-works">How It Works</a></li>
-                <li><a href="payment.html">Get the App</a></li>
-            </ul>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav-menu" aria-label="Open menu">
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+            </button>
+            <div class="nav-menu" id="site-nav-menu">
+                <ul class="nav-menu__links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Premium</a></li>
+                    <li><a href="index.html#how-it-works">How It Works</a></li>
+                    <li><a href="payment.html">Get the App</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="locations.html">Available locations to Subscribe</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -47,10 +58,6 @@
                     <a href="https://apps.apple.com/app/id6769981685" target="_blank" rel="noopener noreferrer">App Store</a>
                 </p>
                 <p class="hero-subtitle">Tlangau helps communities send ring alerts, information notices, and broadcast messages. Server dashboard access is unlocked through secure in-app subscriptions on iPhone and Android.</p>
-                <div class="hero-buttons">
-                    <a href="payment.html" class="btn btn-large btn-primary">Get the App</a>
-                    <a href="#features" class="btn btn-large btn-secondary">Learn More</a>
-                </div>
                 <div class="store-badges" aria-label="Download on stores">
                     <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.ruatfela.tlangau.tlangau" target="_blank" rel="noopener noreferrer" aria-label="Get it on Google Play">
                         <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" loading="lazy">
@@ -103,17 +110,23 @@
 
     <section id="about" class="about-tlangau">
         <div class="container">
-            <h2 class="section-title">What is Tlangau</h2>
+            <h2 class="section-title" data-i18n="about.title">What is Tlangau</h2>
+            <div class="section__lang-toggle">
+                <div class="toggle-group toggle-group--compact" data-lang-toggle>
+                    <button type="button" class="toggle-btn" data-lang="en">English</button>
+                    <button type="button" class="toggle-btn is-active" data-lang="mizo">Mizo</button>
+                </div>
+            </div>
             <div class="about-tlangau__content">
-                <p>
+                <p data-i18n-html="about.intro">
                     <strong>Tlangau</strong> is a community waste-management and notification app for neighbourhoods,
                     villages, and local groups. Work is organised around <em>bundles</em>—groups tied to a place,
                     ward, or community—so alerts and updates reach the right people on their phones instead of through
                     scattered calls, chats, or paper notices.
                 </p>
 
-                <h3 class="about-tlangau__heading">Admin role</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.admin.heading">Admin role</h3>
+                <p data-i18n-html="about.admin.body">
                     The <strong>Admin</strong> (server user) runs the community side of Tlangau. Admins create and
                     manage bundles, send ring alerts and notices, view statistics, run polls, and use the
                     <strong>server dashboard</strong> to coordinate waste-collection rounds and local announcements.
@@ -121,8 +134,8 @@
                     admin account is verified and dashboard access activates automatically.
                 </p>
 
-                <h3 class="about-tlangau__heading">Client (Receiver) role</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.client.heading">Client (Receiver) role</h3>
+                <p data-i18n-html="about.client.body">
                     The <strong>Client</strong> (receiver) is a community member who joins a bundle to receive
                     notifications on their device. Clients do not need a premium subscription to receive messages sent
                     by an admin—they get ring alerts, information notices, and broadcasts that apply to their bundle,
@@ -130,39 +143,39 @@
                     sign in when the app asks them to; their role is to stay informed, not to send server notifications.
                 </p>
 
-                <h3 class="about-tlangau__heading">Ring notifications</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.ring.heading">Ring notifications</h3>
+                <p data-i18n-html="about.ring.body">
                     <strong>Ring notifications</strong> (<em>Bawlhhlawh paih tur hriattirna</em>) are urgent,
                     ring-style alerts for time-sensitive situations—a same-day collection change, a sudden service
                     interruption, or any notice that should interrupt and be seen immediately. Admins compose a ring
                     from the server dashboard; clients in the target bundle receive it as a high-priority notification.
                 </p>
 
-                <h3 class="about-tlangau__heading">Information notices</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.message.heading">Information notices</h3>
+                <p data-i18n-html="about.message.body">
                     <strong>Information notices</strong> are structured message notifications for planned updates:
                     weekly collection timetables, holiday schedules, contact details, or general community information.
                     They are meant to be read and kept for reference rather than treated as an emergency ring, and they
                     appear in the client’s notification records inside the app.
                 </p>
 
-                <h3 class="about-tlangau__heading">Broadcast messages</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.broadcast.heading">Broadcast messages</h3>
+                <p data-i18n-html="about.broadcast.body">
                     <strong>Broadcast messages</strong> let an admin send one coordinated message to
                     <strong>multiple bundles at once</strong>—for example when the same instruction must reach several
                     wards or villages on the same day. Broadcast is a premium tool for admins who oversee more than one
                     bundle and need a single send instead of repeating the same notice bundle by bundle.
                 </p>
 
-                <h3 class="about-tlangau__heading">Statistics &amp; polls (free)</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.stats.heading">Statistics &amp; polls (free)</h3>
+                <p data-i18n-html="about.stats.body">
                     <strong>Statistics &amp; insights</strong> and <strong>community polls</strong> are included at no
                     extra charge. Admins can review engagement and run polls; clients can vote in active polls and see
                     published results. These features do not require Ring, Message, or Broadcast subscriptions.
                 </p>
 
-                <h3 class="about-tlangau__heading">Premium pricing &amp; validity (India)</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.pricing.heading">Premium pricing &amp; validity (India)</h3>
+                <p data-i18n-html="about.pricing.body">
                     Prices differ by store. On <strong>Android (Google Play)</strong>, each paid service is
                     <strong>₹10/month</strong> or <strong>₹100/year</strong> (yearly saves 17%); bundle checkout is
                     <strong>₹20/month</strong> or <strong>₹200/year</strong> for two services, and
@@ -175,8 +188,8 @@
                     time already remaining on your account.
                 </p>
 
-                <h3 class="about-tlangau__heading">How to purchase (Admin)</h3>
-                <p>
+                <h3 class="about-tlangau__heading" data-i18n="about.purchase.heading">How to purchase (Admin)</h3>
+                <p data-i18n-html="about.purchase.body">
                     Premium is bought <strong>inside the app</strong>, not on this website. (1) Install Tlangau from
                     <strong>Google Play</strong> (Android) or the <strong>App Store</strong> (iPhone).
                     (2) Open <strong>More → Tlangau Premium</strong>. (3) Choose <strong>monthly or yearly</strong>,
@@ -194,12 +207,6 @@
     <section id="how-it-works" class="how-it-works">
         <div class="container">
             <h2 class="section-title">How premium works</h2>
-            <div class="how-it-works__lang">
-                <div class="toggle-group toggle-group--compact" data-lang-toggle>
-                    <button type="button" class="toggle-btn" data-lang="en">English</button>
-                    <button type="button" class="toggle-btn is-active" data-lang="mizo">Mizo</button>
-                </div>
-            </div>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
@@ -285,7 +292,6 @@
                     <img src="screenshots/9.png" alt="Tlangau screenshot 9" loading="lazy">
                 </figure>
             </div>
-            <p class="screenshots-footnote">Tip: drag horizontally, or use Shift + mouse wheel on desktop.</p>
         </div>
     </section>
 
@@ -431,7 +437,7 @@
     </footer>
 
     <script src="pricing-shared.js?v=20260609a"></script>
-    <script src="site-ui.js?v=20260609d"></script>
+    <script src="site-ui.js?v=20260609f"></script>
     <script src="script.js"></script>
 
     <a class="sticky-get-app" href="payment.html" aria-label="Get the App">

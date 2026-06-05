@@ -8,24 +8,34 @@
     <meta name="author" content="Tlangau">
     
     <title>Contact Us - Tlangau</title>
-    <link rel="stylesheet" href="styles.css?v=20260608b">
+    <link rel="stylesheet" href="styles.css?v=20260609f">
     <link rel="canonical" href="https://tlangau.com/contact.html">
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar" data-site-nav>
         <div class="container">
             <div class="nav-brand">
-                <a href="index.html">
+                <a href="index.html" aria-label="Tlangau home">
                     <img src="app-icon.png" alt="" class="brand-icon" width="36" height="36">
                     <img src="tlangau-logo.png" alt="Tlangau" class="brand-logo" width="158" height="30">
                 </a>
             </div>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="contact.html">Contact</a></li>
-                <li><a href="payment.html">Get the App</a></li>
-            </ul>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav-menu" aria-label="Open menu">
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+                <span class="nav-toggle__bar"></span>
+            </button>
+            <div class="nav-menu" id="site-nav-menu">
+                <ul class="nav-menu__links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Premium</a></li>
+                    <li><a href="index.html#how-it-works">How It Works</a></li>
+                    <li><a href="payment.html">Get the App</a></li>
+                    <li><a href="contact.html" aria-current="page">Contact Us</a></li>
+                    <li><a href="locations.html">Available locations to Subscribe</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -156,6 +166,7 @@
         </div>
     </footer>
 
+    <script src="site-ui.js?v=20260609f"></script>
     <script src="script.js"></script>
 </body>
 </html>
