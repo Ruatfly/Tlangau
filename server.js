@@ -3232,6 +3232,8 @@ app.get('/api/admin/monitor/summary', checkAdminAuth, async (req, res) => {
     const fbDb = admin.database();
     const since24h = Date.now() - 24 * 60 * 60 * 1000;
 
+    await purgeExpiredComplaints();
+
     const [bundlesSnap, complaintsSnap, donationsSnap, activitySnap] = await Promise.all([
       fbDb.ref('bundles').once('value'),
       fbDb.ref('complaints').once('value'),
@@ -3254,7 +3256,12 @@ app.get('/api/admin/monitor/summary', checkAdminAuth, async (req, res) => {
     }
 
     const complaints = complaintsSnap.val() || {};
-    const complaintCount = Object.keys(complaints).length;
+    const now = Date.now();
+    const complaintCount = Object.values(complaints).filter((raw) => {
+      if (!raw || typeof raw !== 'object') return false;
+      const createdAtMs = typeof raw.createdAtMs === 'number' ? raw.createdAtMs : 0;
+      return !isComplaintExpired(createdAtMs, now);
+    }).length;
 
     const donations = donationsSnap.val() || {};
     let donationSetupCount = 0;
@@ -3374,6 +3381,58 @@ app.get('/api/admin/activity', checkAdminAuth, async (req, res) => {
   }
 });
 
+const COMPLAINT_RETENTION_DAYS = parseInt(process.env.COMPLAINT_RETENTION_DAYS || '30', 10);
+const COMPLAINT_RETENTION_MS = Math.max(1, COMPLAINT_RETENTION_DAYS) * 24 * 60 * 60 * 1000;
+
+function isComplaintExpired(createdAtMs, nowMs = Date.now()) {
+  return typeof createdAtMs === 'number' && createdAtMs > 0 && nowMs - createdAtMs >= COMPLAINT_RETENTION_MS;
+}
+
+async function deleteComplaintImage(deleteHash) {
+  const key = process.env.IMGBB_API_KEY;
+  if (!key || !deleteHash) return false;
+  try {
+    const params = new URLSearchParams();
+    params.append('key', key);
+    params.append('delete', deleteHash);
+    const response = await axios.post('https://api.imgbb.com/1/delete', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15000,
+    });
+    return response.status === 200 && response.data?.success === true;
+  } catch (error) {
+    console.warn('Complaint image delete failed:', error.message);
+    return false;
+  }
+}
+
+async function purgeExpiredComplaints() {
+  if (!firebaseInitialized || !admin) return { removed: 0 };
+  const snap = await admin.database().ref('complaints').once('value');
+  if (!snap.exists()) return { removed: 0 };
+
+  const now = Date.now();
+  const removals = [];
+  for (const [id, raw] of Object.entries(snap.val())) {
+    if (!raw || typeof raw !== 'object') continue;
+    const createdAtMs = typeof raw.createdAtMs === 'number' ? raw.createdAtMs : 0;
+    if (!isComplaintExpired(createdAtMs, now)) continue;
+    removals.push(
+      (async () => {
+        if (raw.imageDeleteHash) {
+          await deleteComplaintImage(raw.imageDeleteHash);
+        }
+        await admin.database().ref(`complaints/${id}`).remove();
+      })()
+    );
+  }
+  await Promise.all(removals);
+  if (removals.length > 0) {
+    console.log(`Purged ${removals.length} complaint(s) older than ${COMPLAINT_RETENTION_DAYS} days`);
+  }
+  return { removed: removals.length };
+}
+
 app.get('/api/admin/complaints', checkAdminAuth, async (req, res) => {
   try {
     checkFirebaseReady();
@@ -3381,11 +3440,16 @@ app.get('/api/admin/complaints', checkAdminAuth, async (req, res) => {
       return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
     }
 
+    await purgeExpiredComplaints();
+
     const snap = await admin.database().ref('complaints').once('value');
     const complaints = [];
+    const now = Date.now();
     if (snap.exists()) {
       for (const [id, raw] of Object.entries(snap.val())) {
         if (!raw || typeof raw !== 'object') continue;
+        const createdAtMs = typeof raw.createdAtMs === 'number' ? raw.createdAtMs : 0;
+        if (isComplaintExpired(createdAtMs, now)) continue;
         complaints.push({
           id,
           district: raw.district || '',
@@ -3395,12 +3459,17 @@ app.get('/api/admin/complaints', checkAdminAuth, async (req, res) => {
           body: raw.body || '',
           imageUrl: raw.imageUrl || null,
           createdByEmail: raw.createdByEmail || '',
-          createdAtMs: typeof raw.createdAtMs === 'number' ? raw.createdAtMs : 0,
+          createdAtMs,
         });
       }
     }
     complaints.sort((a, b) => b.createdAtMs - a.createdAtMs);
-    res.json({ success: true, complaints, count: complaints.length });
+    res.json({
+      success: true,
+      complaints,
+      count: complaints.length,
+      retentionDays: COMPLAINT_RETENTION_DAYS,
+    });
   } catch (error) {
     console.error('Admin complaints error:', error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -3412,7 +3481,13 @@ app.delete('/api/admin/complaints/:complaintId', checkAdminAuth, async (req, res
     if (!firebaseInitialized || !admin) {
       return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
     }
-    await admin.database().ref(`complaints/${req.params.complaintId}`).remove();
+    const ref = admin.database().ref(`complaints/${req.params.complaintId}`);
+    const snap = await ref.once('value');
+    const raw = snap.val();
+    if (raw?.imageDeleteHash) {
+      await deleteComplaintImage(raw.imageDeleteHash);
+    }
+    await ref.remove();
     res.json({ success: true, message: 'Complaint deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -4374,6 +4449,15 @@ app.post('/api/send-message', fcmLimiter, requireServerAuth, requireMessageRoute
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// ==================== COMPLAINT RETENTION CLEANUP ====================
+setInterval(async () => {
+  try {
+    await purgeExpiredComplaints();
+  } catch (err) {
+    // Silent fail — cleanup is best-effort
+  }
+}, 6 * 60 * 60 * 1000);
 
 // ==================== STALE ORDER CLEANUP ====================
 setInterval(async () => {
