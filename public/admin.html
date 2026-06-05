@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #D94F5C 0%, #AD131D 52%, #6E1018 100%);
+            background: #ffffff;
             min-height: 100vh;
             padding: 20px;
         }
@@ -375,6 +375,12 @@
 
         .btn-secondary:hover { background: #5a6268; }
 
+        .btn-toolbar {
+            width: auto;
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+
         .bundle-acc {
             background: #f9f9f9;
             border: 1px solid #e0e0e0;
@@ -544,7 +550,8 @@
             <div id="overviewTab" class="tab-content active">
                 <div class="table-container">
                     <div class="monitor-row">
-                        <button class="btn-secondary" id="refreshMonitorBtn" type="button">Refresh all monitor data</button>
+                        <button class="btn-secondary btn-toolbar" id="overviewRefreshBtn" type="button">Refresh</button>
+                        <button class="btn-danger btn-toolbar" id="overviewClearBtn" type="button">Clear all sends</button>
                         <span style="font-size:12px;color:#666;">Auto-refreshes every 15s while logged in</span>
                     </div>
                     <div class="overview-split">
@@ -565,6 +572,10 @@
             <!-- Activity Tab -->
             <div id="activityTab" class="tab-content">
                 <div class="table-container">
+                    <div class="monitor-row">
+                        <button class="btn-secondary btn-toolbar" id="activityRefreshBtn" type="button">Refresh</button>
+                        <button class="btn-danger btn-toolbar" id="activityClearBtn" type="button">Clear all</button>
+                    </div>
                     <input type="text" class="search-box" id="activitySearch" placeholder="Search sends by bundle, subpoint, sender, type…">
                     <div id="activityLoading" class="loading">Loading send log…</div>
                     <div id="activityList" style="display:none;"></div>
@@ -583,6 +594,10 @@
             <!-- Donations Tab -->
             <div id="donationsTab" class="tab-content">
                 <div class="table-container">
+                    <div class="monitor-row">
+                        <button class="btn-secondary btn-toolbar" id="donationsRefreshBtn" type="button">Refresh</button>
+                        <button class="btn-danger btn-toolbar" id="donationsClearBtn" type="button">Clear all</button>
+                    </div>
                     <input type="text" class="search-box" id="donationsSearch" placeholder="Search donation setups by server, bundle, subpoint…">
                     <div id="donationsLoading" class="loading">Loading donation setups…</div>
                     <div id="donationsList" style="display:none;"></div>
@@ -984,13 +999,26 @@
         document.getElementById('donationsSearch').addEventListener('keyup', function () {
             renderDonationSetupsList(_donationItems);
         });
-        document.getElementById('refreshMonitorBtn').addEventListener('click', function () {
+        document.getElementById('overviewRefreshBtn').addEventListener('click', function () {
             loadMonitorSummary();
             loadOverviewPanels();
+        });
+        document.getElementById('overviewClearBtn').addEventListener('click', function () {
+            clearActivityLog('overview');
+        });
+        document.getElementById('activityRefreshBtn').addEventListener('click', function () {
+            loadMonitorSummary();
             loadActivity();
-            loadComplaints();
+        });
+        document.getElementById('activityClearBtn').addEventListener('click', function () {
+            clearActivityLog('activity');
+        });
+        document.getElementById('donationsRefreshBtn').addEventListener('click', function () {
+            loadMonitorSummary();
             loadDonationSetups();
-            loadBundles();
+        });
+        document.getElementById('donationsClearBtn').addEventListener('click', function () {
+            clearAllDonationSetups();
         });
         document.getElementById('pollDurationType').addEventListener('change', function () {
             const customInput = document.getElementById('pollCustomExpiry');
@@ -1382,6 +1410,70 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function clearActivityLog(source) {
+            const msg = 'Permanently delete ALL send log records (rings & messages)?\n\nThis cannot be undone.';
+            if (!confirm(msg)) return;
+            if (!confirm('Are you absolutely sure? Every entry in the sends log will be removed.')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/activity`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    _activityItems = [];
+                    loadMonitorSummary();
+                    loadOverviewPanels();
+                    if (source === 'activity' || _activeTab === 'activity') {
+                        const list = document.getElementById('activityList');
+                        const loading = document.getElementById('activityLoading');
+                        if (list) {
+                            list.style.display = 'block';
+                            list.innerHTML = '<div class="empty-state" style="padding:24px;"><p>Send log cleared</p></div>';
+                        }
+                        if (loading) loading.style.display = 'none';
+                    }
+                    if (source === 'overview' || _activeTab === 'overview') {
+                        loadOverviewPanels();
+                    } else {
+                        loadActivity();
+                    }
+                } else {
+                    alert(data.error || data.message || 'Clear failed');
+                }
+            } catch (error) {
+                alert('Clear failed: ' + error.message);
+            }
+        }
+
+        async function clearAllDonationSetups() {
+            const msg = 'Permanently delete ALL donation setups?\n\nThis cannot be undone.';
+            if (!confirm(msg)) return;
+            if (!confirm('Are you absolutely sure? Every donation setup will be removed.')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/donation-setups/all`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    _donationItems = [];
+                    loadMonitorSummary();
+                    const list = document.getElementById('donationsList');
+                    const loading = document.getElementById('donationsLoading');
+                    if (list) {
+                        list.style.display = 'block';
+                        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💰</div><p>All donation setups cleared</p></div>';
+                    }
+                    if (loading) loading.style.display = 'none';
+                } else {
+                    alert(data.error || data.message || 'Clear failed');
+                }
+            } catch (error) {
+                alert('Clear failed: ' + error.message);
+            }
         }
 
         async function deleteDonationSetup(id, label) {

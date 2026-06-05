@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260610a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260611a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -3206,6 +3206,34 @@ app.get('/api/admin/donation-setups', checkAdminAuth, async (req, res) => {
     res.json({ success: true, setups, count: setups.length });
   } catch (error) {
     console.error('Admin donation setups error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/admin/activity', checkAdminAuth, async (req, res) => {
+  try {
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    await admin.database().ref('global_notification_records').remove();
+    console.log('Admin cleared send log (global_notification_records)');
+    res.json({ success: true, message: 'Send log cleared' });
+  } catch (error) {
+    console.error('Admin clear activity error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/admin/donation-setups/all', checkAdminAuth, async (req, res) => {
+  try {
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    await admin.database().ref('donation_setups').remove();
+    console.log('Admin cleared all donation setups');
+    res.json({ success: true, message: 'All donation setups cleared' });
+  } catch (error) {
+    console.error('Admin clear donation setups error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
