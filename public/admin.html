@@ -253,7 +253,7 @@
         }
 
         .bulk-bar {
-            display: none;
+            display: flex;
             flex-wrap: wrap;
             gap: 10px;
             align-items: center;
@@ -778,6 +778,8 @@
             <div id="complaintsTab" class="tab-content">
                 <div class="table-container">
                     <div id="bulkBar-complaints" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="complaints">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="complaints">Clear</button>
                         <span id="bulkCount-complaints" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-complaints" disabled>Delete selected</button>
                     </div>
@@ -795,6 +797,8 @@
                         <button class="btn-danger btn-toolbar" id="donationsClearBtn" type="button">Clear all</button>
                     </div>
                     <div id="bulkBar-donations" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="donations">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="donations">Clear</button>
                         <span id="bulkCount-donations" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-donations" disabled>Delete selected</button>
                     </div>
@@ -809,6 +813,8 @@
                 <div class="table-container">
                     <div class="legacy-banner"><strong>Legacy Cashfree orders</strong> — from when premium was sold on this website. New subscriptions are via App Store / Google Play only.</div>
                     <div id="bulkBar-orders" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="orders">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="orders">Clear</button>
                         <span id="bulkCount-orders" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-orders" disabled>Delete selected</button>
                     </div>
@@ -817,7 +823,7 @@
                     <table id="ordersTable" style="display: none;">
                         <thead>
                             <tr>
-                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="orders" title="Select all visible"></th>
+                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="orders" title="Select all"></th>
                                 <th>Order ID</th>
                                 <th>Email</th>
                                 <th>Amount</th>
@@ -857,6 +863,8 @@
                         <span style="margin-left:auto; font-size: 12px; color:#666;" id="codesCountLabel"></span>
                     </div>
                     <div id="bulkBar-codes" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="codes">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="codes">Clear</button>
                         <span id="bulkCount-codes" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-codes" disabled>Delete selected</button>
                     </div>
@@ -864,7 +872,7 @@
                     <table id="codesTable" style="display: none;">
                         <thead>
                             <tr>
-                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="codes" title="Select all visible"></th>
+                                <th class="bulk-check-wrap" style="width:40px;"><input type="checkbox" class="bulk-check" data-bulk-select-all="codes" title="Select all"></th>
                                 <th>Record ID</th>
                                 <th>Email</th>
                                 <th>Order ID</th>
@@ -996,6 +1004,8 @@
             <div id="bundlesTab" class="tab-content">
                 <div class="table-container">
                     <div id="bulkBar-bundles" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="bundles-tab">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="bundles-tab">Clear</button>
                         <span id="bulkCount-bundles" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-bundles" disabled>Delete bundles</button>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-topics" disabled>Delete subpoints</button>
@@ -1064,6 +1074,8 @@
                     </div>
 
                     <div id="bulkBar-polls" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="polls">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="polls">Clear</button>
                         <span id="bulkCount-polls" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-polls" disabled>Delete selected</button>
                     </div>
@@ -1105,6 +1117,8 @@
                     </div>
 
                     <div id="bulkBar-mails" class="bulk-bar">
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-select-all-btn="mails">Select all</button>
+                        <button type="button" class="btn-secondary btn-toolbar" data-bulk-clear-btn="mails">Clear</button>
                         <span id="bulkCount-mails" style="font-size:12px;color:#666;"></span>
                         <button type="button" class="btn-danger btn-toolbar" id="bulkDelete-mails" disabled>Delete selected</button>
                     </div>
@@ -1175,13 +1189,11 @@
                 return;
             }
             const n = _bulkSel[group].size;
-            const bar = document.getElementById('bulkBar-' + group);
             const btn = document.getElementById('bulkDelete-' + group);
             const count = document.getElementById('bulkCount-' + group);
-            if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
             if (btn) {
                 btn.disabled = n === 0;
-                btn.textContent = `Delete selected (${n})`;
+                btn.textContent = n > 0 ? `Delete selected (${n})` : 'Delete selected';
             }
             if (count) count.textContent = n > 0 ? `${n} selected` : '';
         }
@@ -1189,11 +1201,9 @@
         function updateBundlesBulkBar() {
             const nb = _bulkSel.bundles.size;
             const nt = _bulkSel.topics.size;
-            const bar = document.getElementById('bulkBar-bundles');
             const btnB = document.getElementById('bulkDelete-bundles');
             const btnT = document.getElementById('bulkDelete-topics');
             const count = document.getElementById('bulkCount-bundles');
-            if (bar) bar.style.display = (nb + nt) > 0 ? 'flex' : 'none';
             if (btnB) {
                 btnB.disabled = nb === 0;
                 btnB.textContent = `Delete bundles (${nb})`;
@@ -1210,14 +1220,33 @@
             }
         }
 
+        function isBulkCheckboxVisible(cb) {
+            const row = cb.closest('tr');
+            if (row) return row.style.display !== 'none';
+            const card = cb.closest('[data-bulk-row]');
+            if (card) return card.style.display !== 'none';
+            const acc = cb.closest('.bundle-acc');
+            if (acc) return acc.style.display !== 'none';
+            return true;
+        }
+
+        function getBulkContainer(group) {
+            const container = document.querySelector(`[data-bulk-container="${group}"]`);
+            if (container) return container;
+            if (group === 'topics') return document.getElementById('bundlesList');
+            return null;
+        }
+
+        function getVisibleBulkCheckboxes(group) {
+            const container = getBulkContainer(group);
+            if (!container) return [];
+            return [...container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`)].filter(isBulkCheckboxVisible);
+        }
+
         function syncBulkSelectAllState(group) {
             const master = document.querySelector(`[data-bulk-select-all="${group}"]`);
-            const container = document.querySelector(`[data-bulk-container="${group}"]`);
-            if (!master || !container) return;
-            const visible = [...container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`)].filter(cb => {
-                const row = cb.closest('tr');
-                return row && row.style.display !== 'none';
-            });
+            if (!master) return;
+            const visible = getVisibleBulkCheckboxes(group);
             if (!visible.length) {
                 master.checked = false;
                 master.indeterminate = false;
@@ -1228,13 +1257,29 @@
             master.indeterminate = checked > 0 && checked < visible.length;
         }
 
-        function setupBulkSelectAll(master, group) {
-            const container = document.querySelector(`[data-bulk-container="${group}"]`);
-            if (!container) return;
-            const visible = [...container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`)].filter(cb => {
-                const row = cb.closest('tr');
-                return row && row.style.display !== 'none';
+        function bulkSelectAllVisible(group) {
+            getVisibleBulkCheckboxes(group).forEach(cb => {
+                cb.checked = true;
+                _bulkSel[group].add(cb.dataset.bulkId);
             });
+            updateBulkBar(group);
+            syncBulkSelectAllState(group);
+        }
+
+        function bulkClearSelection(group) {
+            _bulkSel[group].clear();
+            const container = getBulkContainer(group);
+            if (container) {
+                container.querySelectorAll(`.bulk-check[data-bulk-group="${group}"]`).forEach(cb => {
+                    cb.checked = false;
+                });
+            }
+            updateBulkBar(group);
+            syncBulkSelectAllState(group);
+        }
+
+        function setupBulkSelectAll(master, group) {
+            const visible = getVisibleBulkCheckboxes(group);
             const selectAll = master.checked;
             visible.forEach(cb => {
                 cb.checked = selectAll;
@@ -1432,6 +1477,31 @@
         document.getElementById('supportList').addEventListener('click', function (e) {
             const btn = e.target.closest('[data-save-ticket]');
             if (btn) saveSupportTicket(btn.dataset.saveTicket);
+        });
+
+        document.addEventListener('click', function (e) {
+            const selBtn = e.target.closest('[data-bulk-select-all-btn]');
+            if (selBtn) {
+                const target = selBtn.dataset.bulkSelectAllBtn;
+                if (target === 'bundles-tab') {
+                    bulkSelectAllVisible('bundles');
+                    bulkSelectAllVisible('topics');
+                } else {
+                    bulkSelectAllVisible(target);
+                }
+                return;
+            }
+            const clearBtn = e.target.closest('[data-bulk-clear-btn]');
+            if (clearBtn) {
+                const target = clearBtn.dataset.bulkClearBtn;
+                if (target === 'bundles-tab') {
+                    bulkClearSelection('bundles');
+                    bulkClearSelection('topics');
+                } else {
+                    bulkClearSelection(target);
+                }
+                return;
+            }
         });
 
         document.addEventListener('change', function (e) {
@@ -1856,6 +1926,7 @@
                 </div>
             `).join('');
             updateBulkBar('complaints');
+            syncBulkSelectAllState('complaints');
         }
 
         async function deleteComplaint(id, title, opts = {}) {
@@ -1939,6 +2010,7 @@
                 </div>
             `).join('');
             updateBulkBar('donations');
+            syncBulkSelectAllState('donations');
         }
 
         async function clearActivityLog(source) {
@@ -3154,6 +3226,7 @@
                     loading.style.display = 'none';
                     container.style.display = 'block';
                     updateBulkBar('polls');
+                    syncBulkSelectAllState('polls');
                 } else {
                     loading.textContent = 'Error loading polls: ' + (data.message || 'Unknown error');
                 }
@@ -3357,6 +3430,7 @@
                     document.getElementById('mailsLoading').style.display = 'none';
                     container.style.display = 'block';
                     updateBulkBar('mails');
+                    syncBulkSelectAllState('mails');
                 }
             } catch (error) {
                 console.error('Error loading dev mails:', error);
@@ -3505,6 +3579,7 @@
                 }
                 tr[i].style.display = found ? '' : 'none';
             }
+            if (tableId === 'ordersTable') syncBulkSelectAllState('orders');
         }
 
         function filterBundlesTable() {
