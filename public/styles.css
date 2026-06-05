@@ -95,6 +95,17 @@ body {
     border-radius: 6px;
 }
 
+.brand-logo {
+    height: 22px;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+.brand-logo--sm {
+    height: 18px;
+}
+
 .footer-brand {
     display: flex;
     align-items: center;
