@@ -222,6 +222,26 @@ body {
     flex-wrap: wrap;
 }
 
+.store-badges {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: -1.25rem;
+}
+
+.store-badge img {
+    height: 44px;
+    width: auto;
+    display: block;
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.25));
+    transition: transform 0.15s ease;
+}
+
+.store-badge:hover img {
+    transform: translateY(-1px);
+}
+
 .hero-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -346,6 +366,12 @@ section {
     background: var(--bg-white);
 }
 
+.how-it-works__lang {
+    display: flex;
+    justify-content: center;
+    margin: -1.5rem 0 1.75rem;
+}
+
 .steps {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -384,6 +410,137 @@ section {
 /* Pricing Section */
 .pricing {
     background: var(--bg-light);
+}
+
+/* Admin vs Client */
+.roles-visual {
+    background: var(--bg-light);
+}
+
+.roles-lead {
+    text-align: center;
+    color: var(--text-light);
+    margin: -1rem auto 2rem;
+    max-width: 780px;
+    font-size: 1.05rem;
+}
+
+.roles-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.role-card {
+    background: var(--bg-white);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    padding: 1.75rem;
+    border: 1px solid var(--border-color);
+}
+
+.role-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    color: var(--text-dark);
+}
+
+.role-card ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--text-light);
+    line-height: 1.75;
+}
+
+.role-card li {
+    margin: 0.35rem 0;
+}
+
+.role-card--admin {
+    border-top: 4px solid var(--brand-red);
+}
+
+.role-card--client {
+    border-top: 4px solid var(--primary-color);
+}
+
+/* Screenshots */
+.screenshots {
+    background: var(--bg-white);
+}
+
+.screenshots-lead {
+    text-align: center;
+    color: var(--text-light);
+    margin: -1rem auto 2rem;
+    max-width: 780px;
+    font-size: 1.05rem;
+}
+
+.screenshots-scroller {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding: 0.5rem 0.25rem 1rem;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable both-edges;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.screenshot {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+    width: min(320px, 82vw);
+    background: var(--bg-light);
+    border-radius: 18px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    padding: 0.75rem;
+}
+
+.screenshot img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 14px;
+}
+
+.screenshots-footnote {
+    text-align: center;
+    color: var(--text-light);
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+}
+
+/* Sticky CTA (mobile) */
+.sticky-get-app {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1100;
+    text-align: center;
+    padding: 0.95rem 1rem;
+    border-radius: 14px;
+    background: var(--gradient-brand);
+    color: #fff;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+
+.sticky-get-app[hidden] {
+    display: none;
+}
+
+@media (min-width: 769px) {
+    .sticky-get-app {
+        display: none;
+    }
 }
 
 .pricing-card {
@@ -1955,6 +2112,12 @@ section {
 @media (max-width: 900px) {
     .pricing-explorer-grid,
     .store-pricing-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .roles-grid {
         grid-template-columns: 1fr;
     }
 }

@@ -51,6 +51,14 @@
                     <a href="payment.html" class="btn btn-large btn-primary">Get the App</a>
                     <a href="#features" class="btn btn-large btn-secondary">Learn More</a>
                 </div>
+                <div class="store-badges" aria-label="Download on stores">
+                    <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.ruatfela.tlangau.tlangau" target="_blank" rel="noopener noreferrer" aria-label="Get it on Google Play">
+                        <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" loading="lazy">
+                    </a>
+                    <a class="store-badge" href="https://apps.apple.com/app/id6769981685" target="_blank" rel="noopener noreferrer" aria-label="Download on the App Store">
+                        <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" loading="lazy">
+                    </a>
+                </div>
             </div>
         </div>
     </section>
@@ -186,28 +194,98 @@
     <section id="how-it-works" class="how-it-works">
         <div class="container">
             <h2 class="section-title">How premium works</h2>
+            <div class="how-it-works__lang">
+                <div class="toggle-group toggle-group--compact" data-lang-toggle>
+                    <button type="button" class="toggle-btn" data-lang="en">English</button>
+                    <button type="button" class="toggle-btn is-active" data-lang="mizo">Mizo</button>
+                </div>
+            </div>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
-                    <h3>Install Tlangau</h3>
-                    <p>Download from the App Store (iPhone) or Google Play (Android).</p>
+                    <h3 data-i18n="how.step1.title">Install Tlangau</h3>
+                    <p data-i18n="how.step1.body">Download from the App Store (iPhone) or Google Play (Android).</p>
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
-                    <h3>Open Tlangau Premium</h3>
-                    <p>In the app, choose the services you need (monthly or yearly) and subscribe securely.</p>
+                    <h3 data-i18n="how.step2.title">Open Tlangau Premium</h3>
+                    <p data-i18n="how.step2.body">In the app, choose the services you need (monthly or yearly) and subscribe securely.</p>
                 </div>
                 <div class="step">
                     <div class="step-number">3</div>
-                    <h3>Sign in</h3>
-                    <p>Use Sign in with Apple (iOS) or Google (Android) with the same account used for purchase.</p>
+                    <h3 data-i18n="how.step3.title">Sign in</h3>
+                    <p data-i18n="how.step3.body">Use Sign in with Apple (iOS) or Google (Android) with the same account used for purchase.</p>
                 </div>
                 <div class="step">
                     <div class="step-number">4</div>
-                    <h3>Use the server dashboard</h3>
-                    <p>Your entitlement activates automatically after payment verification.</p>
+                    <h3 data-i18n="how.step4.title">Use the server dashboard</h3>
+                    <p data-i18n="how.step4.body">Your entitlement activates automatically after payment verification.</p>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <section id="roles" class="roles-visual">
+        <div class="container">
+            <h2 class="section-title">Admin vs Client</h2>
+            <p class="roles-lead">Two roles in one app: admins manage bundles and send notifications; clients receive alerts and stay informed.</p>
+            <div class="roles-grid">
+                <div class="role-card role-card--admin">
+                    <h3>Admin (Server user)</h3>
+                    <ul>
+                        <li>Create and manage bundles (district / locality / point)</li>
+                        <li>Send Ring, Information Notice, and Broadcast (premium)</li>
+                        <li>View statistics, manage polls, and oversee activity</li>
+                        <li>Unlocks via in-app subscription + store verification</li>
+                    </ul>
+                </div>
+                <div class="role-card role-card--client">
+                    <h3>Client (Receiver)</h3>
+                    <ul>
+                        <li>Join a bundle and receive notifications on the phone</li>
+                        <li>Ring alerts, notices, and broadcasts from admins</li>
+                        <li>Use polls and view records/history (free)</li>
+                        <li>No subscription needed just to receive messages</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="screenshots" class="screenshots">
+        <div class="container">
+            <h2 class="section-title">Screenshots</h2>
+            <p class="screenshots-lead">Swipe to preview the Tlangau experience for admins and clients.</p>
+            <div class="screenshots-scroller" tabindex="0" aria-label="App screenshots (horizontal scroll)">
+                <figure class="screenshot">
+                    <img src="screenshots/1.png" alt="Tlangau screenshot 1" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/2.png" alt="Tlangau screenshot 2" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/3.png" alt="Tlangau screenshot 3" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/4.png" alt="Tlangau screenshot 4" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/5.png" alt="Tlangau screenshot 5" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/6.png" alt="Tlangau screenshot 6" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/7.png" alt="Tlangau screenshot 7" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/8.png" alt="Tlangau screenshot 8" loading="lazy">
+                </figure>
+                <figure class="screenshot">
+                    <img src="screenshots/9.png" alt="Tlangau screenshot 9" loading="lazy">
+                </figure>
+            </div>
+            <p class="screenshots-footnote">Tip: drag horizontally, or use Shift + mouse wheel on desktop.</p>
         </div>
     </section>
 
@@ -353,6 +431,11 @@
     </footer>
 
     <script src="pricing-shared.js?v=20260609a"></script>
+    <script src="site-ui.js?v=20260609d"></script>
     <script src="script.js"></script>
+
+    <a class="sticky-get-app" href="payment.html" aria-label="Get the App">
+        Get the App
+    </a>
 </body>
 </html>
