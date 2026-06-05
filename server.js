@@ -239,8 +239,26 @@ const deletionRequestLimiter = rateLimit({
 
 app.use('/api/', generalLimiter);
 
+// Force versioned public pages so stale browser caches pick up latest HTML/CSS.
+const INDEX_PAGE_VERSION = process.env.INDEX_PAGE_VERSION || '20260607b';
+app.get('/', (req, res) => {
+  if (req.query.v !== INDEX_PAGE_VERSION) {
+    return res.redirect(302, `/?v=${encodeURIComponent(INDEX_PAGE_VERSION)}`);
+  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.get('/index.html', (req, res, next) => {
+  if (req.query.v === INDEX_PAGE_VERSION) {
+    return next();
+  }
+  return res.redirect(302, `/index.html?v=${encodeURIComponent(INDEX_PAGE_VERSION)}`);
+});
+
 // Force a versioned payment page URL so stale in-app webviews cannot reuse old checkout UI.
-const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260605c';
+const PAYMENT_PAGE_VERSION = process.env.PAYMENT_PAGE_VERSION || '20260607b';
 app.get(['/payment', '/pay', '/payr'], (req, res) => {
   return res.redirect(302, `/payment.html?v=${encodeURIComponent(PAYMENT_PAGE_VERSION)}`);
 });
