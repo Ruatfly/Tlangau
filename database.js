@@ -859,6 +859,22 @@ class Database {
     return data;
   }
 
+  async getPlayPurchasesByEmail(email) {
+    const normalized = (email || '').toLowerCase().trim();
+    if (!normalized) return [];
+    const snapshot = await this.db.ref('play_purchases').once('value');
+    const data = snapshot.val();
+    if (!data) return [];
+    return Object.entries(data)
+      .map(([tokenHash, row]) => ({ ...(row || {}), _tokenHash: tokenHash }))
+      .filter((row) => String(row.email || '').toLowerCase() === normalized)
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at || b.created_at || 0) -
+          new Date(a.updated_at || a.created_at || 0)
+      );
+  }
+
   close() {
     return Promise.resolve();
   }

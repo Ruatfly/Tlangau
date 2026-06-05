@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605e';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260605f';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -1858,31 +1858,119 @@ async function sendPlayAdminWelcomeEmail(email, services, validityDays = 30) {
   }
 }
 
-/** If store purchase was fulfilled but access_codes row is missing (e.g. after billing reset), return null so verify re-grants. */
-async function tryReturnExistingStoreActivation(existing, emailLower, userAccountId) {
-  if (!existing || existing.fulfilled !== true || !existing.code) {
+async function buildStoreActivationResponse(emailLower, userAccountId, code, stackedRawExpiry) {
+  const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+  return {
+    success: true,
+    valid: true,
+    message: 'Purchase already activated for this account.',
+    code,
+    expiresAt: getGraceWindowEnd(stackedRawExpiry),
+    accessExpiryAt: stackedRawExpiry,
+    services: mergeActiveServicesWithFree(usedEntitlements),
+  };
+}
+
+/** Re-create access_codes from a stored play_purchases / app_store record (e.g. after billing reset). */
+async function regrantEntitlementFromStoreRecord(existing, emailLower, userAccountId, options = {}) {
+  const productId = String(existing?.product_id || options.productId || '').trim();
+  let purchasedServices =
+    Array.isArray(existing?.services) && existing.services.length
+      ? existing.services.filter((s) => VALID_SERVICE_IDS.includes(s))
+      : servicesForPlayProductId(productId);
+  if (purchasedServices.length === 0) return null;
+
+  const planDuration = planDurationForPlayProductId(productId);
+  const validityDays = validityDaysForPlayProductId(productId);
+  const platform = String(existing?.platform || options.platform || 'google_play').toLowerCase();
+  const tokenHash = options.tokenHash || existing?._tokenHash || null;
+
+  const entitlement = await grantPlayEntitlementForIdentity(emailLower, userAccountId, {
+    services: purchasedServices,
+    validityDays,
+    planDuration,
+    purchaseTokenHash: tokenHash,
+    productId,
+    orderId: existing?.order_id || `${platform.toUpperCase()}_REPAIR_${Date.now()}`,
+    platform,
+  });
+
+  if (tokenHash) {
+    await db.savePlayPurchase(tokenHash, {
+      ...(existing || {}),
+      email: emailLower,
+      account_id: userAccountId,
+      product_id: productId,
+      fulfilled: true,
+      code: entitlement.code,
+      expiresAt: entitlement.accessExpiryAt || entitlement.expiresAt,
+      services: purchasedServices,
+      order_id: entitlement.orderId,
+      platform,
+      repaired_at: new Date().toISOString(),
+    });
+  }
+
+  console.log(`Re-granted entitlement for ${emailLower} from store record (${platform})`);
+  return {
+    success: true,
+    valid: true,
+    message: 'Premium access restored on server.',
+    code: entitlement.code,
+    expiresAt: entitlement.expiresAt,
+    accessExpiryAt: entitlement.accessExpiryAt,
+    gracePeriodHours: entitlement.gracePeriodHours,
+    graceEndsAt: entitlement.graceEndsAt,
+    services: entitlement.services,
+    repaired: true,
+  };
+}
+
+async function repairEntitlementsForIdentity(emailLower, userAccountId) {
+  const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
+  if (mergeActivePaidServices(usedEntitlements).length > 0) {
     return null;
   }
+
+  const purchases = await db.getPlayPurchasesByEmail(emailLower);
+  for (const purchase of purchases) {
+    if (purchase?.fulfilled !== true) continue;
+    const repaired = await regrantEntitlementFromStoreRecord(
+      purchase,
+      emailLower,
+      userAccountId
+    );
+    if (repaired) return repaired;
+  }
+  return null;
+}
+
+/** Return existing activation or re-grant when access_codes row was wiped but store purchase remains. */
+async function tryReturnExistingStoreActivation(existing, emailLower, userAccountId, options = {}) {
+  if (!existing || existing.fulfilled !== true) {
+    return null;
+  }
+
   const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, userAccountId);
   const mergedPaid = mergeActivePaidServices(usedEntitlements);
-  const codeRecord = await db.getCodeByCode(existing.code);
-  if (mergedPaid.length > 0 && codeRecord) {
-    const stackedRawExpiry =
-      getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
-    return {
-      success: true,
-      valid: true,
-      message: 'Purchase already activated for this account.',
-      code: existing.code,
-      expiresAt: getGraceWindowEnd(stackedRawExpiry),
-      accessExpiryAt: stackedRawExpiry,
-      services: mergeActiveServicesWithFree(usedEntitlements),
-    };
+  if (existing.code) {
+    const codeRecord = await db.getCodeByCode(existing.code);
+    if (mergedPaid.length > 0 && codeRecord) {
+      const stackedRawExpiry =
+        getLatestEntitlementExpiry(usedEntitlements) || existing.expiresAt;
+      return buildStoreActivationResponse(
+        emailLower,
+        userAccountId,
+        existing.code,
+        stackedRawExpiry
+      );
+    }
   }
+
   console.warn(
-    `Store purchase ${existing.code} for ${emailLower} missing active entitlement — re-granting`
+    `Store purchase for ${emailLower} missing active entitlement — re-granting from store record`
   );
-  return null;
+  return regrantEntitlementFromStoreRecord(existing, emailLower, userAccountId, options);
 }
 
 async function grantPlayEntitlementForIdentity(emailLower, userAccountId, options = {}) {
@@ -2008,7 +2096,8 @@ app.post(
       const existingPlayResponse = await tryReturnExistingStoreActivation(
         existing,
         emailLower,
-        userAccountId
+        userAccountId,
+        { tokenHash }
       );
       if (existingPlayResponse) {
         return res.json(existingPlayResponse);
@@ -2176,7 +2265,8 @@ app.post(
       const existingAppleResponse = await tryReturnExistingStoreActivation(
         existing,
         emailLower,
-        userAccountId
+        userAccountId,
+        { tokenHash: txHash, platform: 'app_store' }
       );
       if (existingAppleResponse) {
         return res.json(existingAppleResponse);
@@ -2460,8 +2550,8 @@ app.post(
       }
 
       const emailLower = authenticatedEmail;
-      const usedEntitlements = await db.getUsedCodesForIdentity(emailLower, emailLower);
-      let accessCode = resolveEffectiveEntitlement(usedEntitlements);
+      let activeEntitlements = await db.getUsedCodesForIdentity(emailLower, emailLower);
+      let accessCode = resolveEffectiveEntitlement(activeEntitlements);
       if (!accessCode) {
         accessCode = await db.getLatestUsedCodeByEmail(emailLower);
       }
@@ -2469,14 +2559,27 @@ app.post(
         accessCode = await db.getCodeByEmail(emailLower);
       }
 
-      const mergedPaid = mergeActivePaidServices(usedEntitlements);
+      let mergedPaid = mergeActivePaidServices(activeEntitlements);
+      if (mergedPaid.length === 0 && !accessCode) {
+        await repairEntitlementsForIdentity(emailLower, emailLower);
+        activeEntitlements = await db.getUsedCodesForIdentity(emailLower, emailLower);
+        mergedPaid = mergeActivePaidServices(activeEntitlements);
+        accessCode = resolveEffectiveEntitlement(activeEntitlements);
+        if (!accessCode) {
+          accessCode = await db.getLatestUsedCodeByEmail(emailLower);
+        }
+        if (!accessCode) {
+          accessCode = await db.getCodeByEmail(emailLower);
+        }
+      }
+
       if (mergedPaid.length === 0 && !accessCode) {
         return res.json({ success: false, valid: false, message: 'No access code found for this email' });
       }
 
       const rawExpiry = accessCode?.expiresAt || accessCode?.expires_at;
-      const stackedRawExpiry = getLatestEntitlementExpiry(usedEntitlements) || rawExpiry;
-      const allServices = mergeActiveServicesWithFree(usedEntitlements);
+      const stackedRawExpiry = getLatestEntitlementExpiry(activeEntitlements) || rawExpiry;
+      const allServices = mergeActiveServicesWithFree(activeEntitlements);
       const accessStillValid =
         mergedPaid.length > 0 && isWithinAccessWindow(stackedRawExpiry);
       if (accessCode) {
@@ -2500,7 +2603,7 @@ app.post(
         services: allServices,
         // Extra detail for clients that want to show "Active" per billing period.
         // Only includes entitlements that are currently within the access window.
-        activeEntitlements: (Array.isArray(usedEntitlements) ? usedEntitlements : [])
+        activeEntitlements: (Array.isArray(activeEntitlements) ? activeEntitlements : [])
           .filter((c) => {
             const raw = c?.expiresAt || c?.expires_at;
             if (!isWithinAccessWindow(raw)) return false;
@@ -3947,6 +4050,17 @@ async function requireServerAuth(req, res, next) {
       }
       if (!accessCode) {
         accessCode = await db.getCodeByEmail(email);
+      }
+      if (!accessCode) {
+        await repairEntitlementsForIdentity(email, email);
+        const repairedEntitlements = await db.getUsedCodesForIdentity(email, email);
+        accessCode = resolveEffectiveEntitlement(repairedEntitlements);
+        if (!accessCode) {
+          accessCode = await db.getLatestUsedCodeByEmail(email);
+        }
+        if (!accessCode) {
+          accessCode = await db.getCodeByEmail(email);
+        }
       }
       if (accessCode) {
         accessCodeCache.set(email, { accessCode, cachedAt: Date.now() });
