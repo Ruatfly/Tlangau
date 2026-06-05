@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260611a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260612a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -3098,16 +3098,25 @@ app.get('/api/admin/activity', checkAdminAuth, async (req, res) => {
     }
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
-    const snap = await admin.database()
-      .ref('global_notification_records')
-      .orderByChild('t')
-      .limitToLast(limit)
-      .once('value');
+    const since = parseInt(req.query.since, 10);
+    const sort = req.query.sort === 'oldest' ? 'oldest' : 'newest';
+    const useSince = Number.isFinite(since) && since > 0;
+
+    let query = admin.database().ref('global_notification_records').orderByChild('t');
+    if (useSince) {
+      query = query.startAt(since);
+    } else {
+      query = query.limitToLast(limit);
+    }
+
+    const snap = await query.once('value');
 
     const items = [];
     if (snap.exists()) {
       for (const [id, raw] of Object.entries(snap.val())) {
         if (!raw || typeof raw !== 'object') continue;
+        const timestampMs = parseActivityTimestamp(raw);
+        if (useSince && timestampMs < since) continue;
         items.push({
           id: raw.id || id,
           type: raw.type || 'unknown',
@@ -3117,13 +3126,24 @@ app.get('/api/admin/activity', checkAdminAuth, async (req, res) => {
           ringType: raw.ringType || null,
           title: raw.title || null,
           messageText: raw.messageText || null,
-          timestampMs: parseActivityTimestamp(raw),
+          timestampMs,
         });
       }
     }
-    items.sort((a, b) => b.timestampMs - a.timestampMs);
 
-    res.json({ success: true, items, count: items.length });
+    if (sort === 'oldest') {
+      items.sort((a, b) => a.timestampMs - b.timestampMs);
+    } else {
+      items.sort((a, b) => b.timestampMs - a.timestampMs);
+    }
+
+    res.json({
+      success: true,
+      items,
+      count: items.length,
+      sort,
+      since: useSince ? since : null,
+    });
   } catch (error) {
     console.error('Admin activity error:', error.message);
     res.status(500).json({ success: false, error: error.message });

@@ -577,6 +577,21 @@
                         <button class="btn-danger btn-toolbar" id="activityClearBtn" type="button">Clear all</button>
                     </div>
                     <input type="text" class="search-box" id="activitySearch" placeholder="Search sends by bundle, subpoint, sender, type…">
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 8px 0 18px 0;">
+                        <label style="font-size: 12px; color:#666; font-weight:600;">Sort</label>
+                        <select id="activitySort" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                        </select>
+                        <label style="font-size: 12px; color:#666; font-weight:600; margin-left: 6px;">Time range</label>
+                        <select id="activityRange" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+                            <option value="all">All time</option>
+                            <option value="24h">Last 24 hours</option>
+                            <option value="week">Last 7 days</option>
+                            <option value="month">Last 30 days</option>
+                        </select>
+                        <span id="activityCountLabel" style="margin-left:auto; font-size: 12px; color:#666;"></span>
+                    </div>
                     <div id="activityLoading" class="loading">Loading send log…</div>
                     <div id="activityList" style="display:none;"></div>
                 </div>
@@ -993,6 +1008,12 @@
         document.getElementById('activitySearch').addEventListener('keyup', function () {
             renderActivityList(_activityItems);
         });
+        document.getElementById('activitySort').addEventListener('change', function () {
+            loadActivity();
+        });
+        document.getElementById('activityRange').addEventListener('change', function () {
+            loadActivity();
+        });
         document.getElementById('complaintsSearch').addEventListener('keyup', function () {
             renderComplaintsList(_complaintsItems);
         });
@@ -1218,11 +1239,30 @@
             }).join('');
         }
 
+        function getActivitySinceMs(range) {
+            const now = Date.now();
+            if (range === '24h') return now - 24 * 60 * 60 * 1000;
+            if (range === 'week') return now - 7 * 24 * 60 * 60 * 1000;
+            if (range === 'month') return now - 30 * 24 * 60 * 60 * 1000;
+            return 0;
+        }
+
         async function loadActivity() {
             const loading = document.getElementById('activityLoading');
             const list = document.getElementById('activityList');
+            const sort = document.getElementById('activitySort')?.value || 'newest';
+            const range = document.getElementById('activityRange')?.value || 'all';
+            const since = getActivitySinceMs(range);
+            const params = new URLSearchParams({ sort });
+            if (since > 0) {
+                params.set('since', String(since));
+            } else {
+                params.set('limit', '500');
+            }
             try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/activity?limit=200`, {
+                loading.style.display = 'block';
+                loading.textContent = 'Loading send log…';
+                const response = await fetch(`${BACKEND_URL}/api/admin/activity?${params}`, {
                     headers: { 'X-Admin-Password': adminPassword },
                 });
                 const data = await response.json();
@@ -1246,6 +1286,14 @@
                     .join(' ').toLowerCase();
                 return blob.includes(q);
             });
+            const countLabel = document.getElementById('activityCountLabel');
+            if (countLabel) {
+                const total = items.length;
+                const shown = filtered.length;
+                countLabel.textContent = q && shown !== total
+                    ? `Showing ${shown} of ${total} sends`
+                    : `${total} send${total === 1 ? '' : 's'}`;
+            }
             renderActivityCards(filtered, 'activityList', 0);
         }
 
