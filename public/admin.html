@@ -308,6 +308,154 @@
             font-size: 64px;
             margin-bottom: 20px;
         }
+
+        .section-label {
+            color: #666;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 8px 0 12px 4px;
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .activity-card {
+            background: #f9f9f9;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+
+        .activity-card--ring { border-left: 4px solid #AD131D; }
+        .activity-card--message { border-left: 4px solid #3949ab; }
+
+        .activity-card__top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .activity-card__title {
+            font-weight: 700;
+            color: #222;
+        }
+
+        .activity-card__meta {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .monitor-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-secondary:hover { background: #5a6268; }
+
+        .bundle-acc {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .bundle-acc__toggle {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .bundle-acc__toggle:hover { background: rgba(173, 19, 29, 0.04); }
+
+        .bundle-acc__body {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.32s ease;
+        }
+
+        .bundle-acc.is-open .bundle-acc__body { grid-template-rows: 1fr; }
+
+        .bundle-acc__inner { overflow: hidden; }
+
+        .bundle-acc__content {
+            padding: 0 16px 14px;
+            border-top: 1px solid #ececec;
+        }
+
+        .bundle-acc__chevron {
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid #AD131D;
+            border-bottom: 2px solid #AD131D;
+            transform: rotate(45deg);
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .bundle-acc.is-open .bundle-acc__chevron {
+            transform: rotate(-135deg);
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        .tag--draft { background: #eceff1; color: #546e7a; }
+        .tag--inactive { background: #ffebee; color: #c62828; }
+        .tag--district { background: #e3f2fd; color: #1565c0; }
+
+        .bundle-acc__head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-right: 12px;
+        }
+
+        .overview-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .overview-split { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -330,10 +478,21 @@
             <div class="header">
                 <button class="logout-btn" id="logoutBtn">Logout</button>
                 <h1>📊 Admin Dashboard</h1>
-                <p>Manage orders, access codes, users, and view statistics</p>
+                <p>Developer cockpit — monitor community activity, bundles, sends, complaints, and billing</p>
+                <p id="monitorUpdatedAt" style="font-size:12px;color:#888;margin-top:6px;"></p>
             </div>
 
-            <!-- Statistics -->
+            <div class="section-label">Community (live)</div>
+            <div class="monitor-grid" id="monitorStatsGrid">
+                <div class="stat-card"><h3>Bundles</h3><div class="value" id="monBundles">-</div></div>
+                <div class="stat-card"><h3>Subpoints</h3><div class="value" id="monTopics">-</div></div>
+                <div class="stat-card"><h3>Complaints</h3><div class="value" id="monComplaints">-</div></div>
+                <div class="stat-card"><h3>Donation setups</h3><div class="value" id="monDonations">-</div></div>
+                <div class="stat-card"><h3>Sends (24h)</h3><div class="value" id="monActivity24h">-</div></div>
+                <div class="stat-card"><h3>Polls</h3><div class="value" id="monPolls">-</div></div>
+            </div>
+
+            <div class="section-label">Billing &amp; access codes</div>
             <div class="stats-grid" id="statsGrid">
                 <div class="stat-card">
                     <h3>Total Orders</h3>
@@ -367,18 +526,71 @@
 
             <!-- Tabs -->
             <div class="tabs" id="tabsBar">
-                <button class="tab active" data-tab="orders">Orders</button>
+                <button class="tab active" data-tab="overview">Overview</button>
+                <button class="tab" data-tab="activity">🔔 Sends Log</button>
+                <button class="tab" data-tab="bundles">Bundles & Topics</button>
+                <button class="tab" data-tab="complaints">📮 Complaints</button>
+                <button class="tab" data-tab="donations">💰 Donations</button>
+                <button class="tab" data-tab="polls">📊 Polls</button>
+                <button class="tab" data-tab="orders">Orders</button>
                 <button class="tab" data-tab="codes">Access Codes</button>
                 <button class="tab" data-tab="play">Google Play</button>
                 <button class="tab" data-tab="users">Users</button>
-                <button class="tab" data-tab="bundles">Bundles & Topics</button>
                 <button class="tab" data-tab="deletionRequests">Deletion Requests</button>
-                <button class="tab" data-tab="polls">📊 Polls</button>
                 <button class="tab" data-tab="mails">📧 Dev Mails</button>
             </div>
 
+            <!-- Overview Tab -->
+            <div id="overviewTab" class="tab-content active">
+                <div class="table-container">
+                    <div class="monitor-row">
+                        <button class="btn-secondary" id="refreshMonitorBtn" type="button">Refresh all monitor data</button>
+                        <span style="font-size:12px;color:#666;">Auto-refreshes every 15s while logged in</span>
+                    </div>
+                    <div class="overview-split">
+                        <div>
+                            <h3 style="color:#AD131D;margin-bottom:12px;">Latest sends</h3>
+                            <div id="overviewActivityLoading" class="loading" style="padding:20px;">Loading activity…</div>
+                            <div id="overviewActivityList"></div>
+                        </div>
+                        <div>
+                            <h3 style="color:#AD131D;margin-bottom:12px;">Latest complaints</h3>
+                            <div id="overviewComplaintsLoading" class="loading" style="padding:20px;">Loading complaints…</div>
+                            <div id="overviewComplaintsList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Tab -->
+            <div id="activityTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="activitySearch" placeholder="Search sends by bundle, subpoint, sender, type…">
+                    <div id="activityLoading" class="loading">Loading send log…</div>
+                    <div id="activityList" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Complaints Tab -->
+            <div id="complaintsTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="complaintsSearch" placeholder="Search complaints by district, bundle, title, email…">
+                    <div id="complaintsLoading" class="loading">Loading complaints…</div>
+                    <div id="complaintsList" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Donations Tab -->
+            <div id="donationsTab" class="tab-content">
+                <div class="table-container">
+                    <input type="text" class="search-box" id="donationsSearch" placeholder="Search donation setups by server, bundle, subpoint…">
+                    <div id="donationsLoading" class="loading">Loading donation setups…</div>
+                    <div id="donationsList" style="display:none;"></div>
+                </div>
+            </div>
+
             <!-- Orders Tab -->
-            <div id="ordersTab" class="tab-content active">
+            <div id="ordersTab" class="tab-content">
                 <div class="table-container">
                     <input type="text" class="search-box" id="ordersSearch" placeholder="Search orders by email, order ID, or payment ID...">
                     <div id="ordersLoading" class="loading">Loading orders...</div>
@@ -627,6 +839,25 @@
         let refreshTimer = null;
         const AUTO_REFRESH_MS = 15000;
         let _allAccessCodes = [];
+        let _activityItems = [];
+        let _complaintsItems = [];
+        let _donationItems = [];
+        let _activeTab = 'overview';
+
+        const TAB_CONTENT_MAP = {
+            overview: 'overviewTab',
+            activity: 'activityTab',
+            bundles: 'bundlesTab',
+            complaints: 'complaintsTab',
+            donations: 'donationsTab',
+            polls: 'pollsTab',
+            orders: 'ordersTab',
+            codes: 'codesTab',
+            play: 'playTab',
+            users: 'usersTab',
+            deletionRequests: 'deletionRequestsTab',
+            mails: 'mailsTab',
+        };
 
         function stopAutoRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
@@ -637,11 +868,21 @@
             stopAutoRefresh();
             refreshTimer = setInterval(() => {
                 if (!adminPassword) return;
-                // Keep the codes table and top stats fresh (usage/expiry changes).
                 loadStatistics();
+                loadMonitorSummary();
                 loadAccessCodes();
-                // Preserve current filter after refresh.
                 filterTable('codesTable', 'codesSearch');
+                if (_activeTab === 'overview') {
+                    loadOverviewPanels();
+                } else if (_activeTab === 'activity') {
+                    loadActivity();
+                } else if (_activeTab === 'complaints') {
+                    loadComplaints();
+                } else if (_activeTab === 'donations') {
+                    loadDonationSetups();
+                } else if (_activeTab === 'bundles') {
+                    loadBundles();
+                }
             }, AUTO_REFRESH_MS);
         }
 
@@ -734,6 +975,23 @@
         document.getElementById('bundlesSearch').addEventListener('keyup', function () {
             filterBundlesTable();
         });
+        document.getElementById('activitySearch').addEventListener('keyup', function () {
+            renderActivityList(_activityItems);
+        });
+        document.getElementById('complaintsSearch').addEventListener('keyup', function () {
+            renderComplaintsList(_complaintsItems);
+        });
+        document.getElementById('donationsSearch').addEventListener('keyup', function () {
+            renderDonationSetupsList(_donationItems);
+        });
+        document.getElementById('refreshMonitorBtn').addEventListener('click', function () {
+            loadMonitorSummary();
+            loadOverviewPanels();
+            loadActivity();
+            loadComplaints();
+            loadDonationSetups();
+            loadBundles();
+        });
         document.getElementById('pollDurationType').addEventListener('change', function () {
             const customInput = document.getElementById('pollCustomExpiry');
             customInput.disabled = this.value !== 'custom';
@@ -754,6 +1012,12 @@
             if (btn) deleteUser(btn.dataset.deleteUser);
         });
         document.getElementById('bundlesList').addEventListener('click', function (e) {
+            const toggle = e.target.closest('[data-bundle-toggle]');
+            if (toggle) {
+                const acc = toggle.closest('.bundle-acc');
+                if (acc) acc.classList.toggle('is-open');
+                return;
+            }
             const delBundle = e.target.closest('[data-delete-bundle]');
             if (delBundle) {
                 deleteBundle(delBundle.dataset.deleteBundle, delBundle.dataset.bundleName);
@@ -763,6 +1027,14 @@
             if (delTopic) {
                 deleteTopic(delTopic.dataset.bundleId, delTopic.dataset.deleteTopic, delTopic.dataset.topicName);
             }
+        });
+        document.getElementById('complaintsList').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-delete-complaint]');
+            if (btn) deleteComplaint(btn.dataset.deleteComplaint, btn.dataset.complaintTitle);
+        });
+        document.getElementById('donationsList').addEventListener('click', function (e) {
+            const btn = e.target.closest('[data-delete-donation]');
+            if (btn) deleteDonationSetup(btn.dataset.deleteDonation, btn.dataset.donationLabel);
         });
         document.getElementById('deletionRequestsList').addEventListener('click', function (e) {
             const approveBtn = e.target.closest('[data-approve-delete-request]');
@@ -846,6 +1118,11 @@
         async function loadDashboard() {
             await Promise.all([
                 loadStatistics(),
+                loadMonitorSummary(),
+                loadOverviewPanels(),
+                loadActivity(),
+                loadComplaints(),
+                loadDonationSetups(),
                 loadOrders(),
                 loadAccessCodes(),
                 loadPlayEntitlements(),
@@ -855,6 +1132,275 @@
                 loadAdminPolls(),
                 loadDevMails(),
             ]);
+        }
+
+        function formatTs(ms) {
+            if (!ms) return '-';
+            try { return new Date(ms).toLocaleString(); } catch (_) { return '-'; }
+        }
+
+        async function loadMonitorSummary() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/monitor/summary`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (!data.success || !data.summary) return;
+                const s = data.summary;
+                document.getElementById('monBundles').textContent = s.bundleCount;
+                document.getElementById('monTopics').textContent = s.topicCount;
+                document.getElementById('monComplaints').textContent = s.complaintCount;
+                document.getElementById('monDonations').textContent = s.activeDonationSetups + '/' + s.donationSetupCount;
+                document.getElementById('monActivity24h').textContent = s.activity24h + ' (🔔' + s.rings24h + ' 💬' + s.messages24h + ')';
+                document.getElementById('monPolls').textContent = s.pollCount;
+                const el = document.getElementById('monitorUpdatedAt');
+                if (el) el.textContent = 'Monitor updated: ' + formatTs(Date.parse(s.updatedAt));
+            } catch (error) {
+                console.error('Error loading monitor summary:', error);
+            }
+        }
+
+        function renderActivityCards(items, containerId, limit) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const slice = limit ? items.slice(0, limit) : items;
+            if (!slice.length) {
+                container.innerHTML = '<div class="empty-state" style="padding:24px;"><p>No sends logged yet</p></div>';
+                return;
+            }
+            container.innerHTML = slice.map(item => {
+                const type = String(item.type || '').toLowerCase();
+                const cls = type === 'ring' ? 'activity-card--ring' : 'activity-card--message';
+                const icon = type === 'ring' ? '🔔' : '💬';
+                const preview = item.messageText || item.title || '';
+                const previewShort = preview ? String(preview).slice(0, 120) : '';
+                return `
+                    <div class="activity-card ${cls}">
+                        <div class="activity-card__top">
+                            <div class="activity-card__title">${icon} ${esc(type)} — ${esc(item.bundleName)} / ${esc(item.topicName)}</div>
+                            <div style="font-size:12px;color:#888;">${esc(formatTs(item.timestampMs))}</div>
+                        </div>
+                        <div class="activity-card__meta">
+                            Sender: ${esc(item.senderEmail || '-')}
+                            ${item.ringType ? '<br>Ring type: ' + esc(item.ringType) : ''}
+                            ${previewShort ? '<br>Preview: ' + esc(previewShort) + (preview.length > 120 ? '…' : '') : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadActivity() {
+            const loading = document.getElementById('activityLoading');
+            const list = document.getElementById('activityList');
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/activity?limit=200`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    loading.textContent = 'Error: ' + (data.error || data.message || 'Failed');
+                    return;
+                }
+                _activityItems = data.items || [];
+                loading.style.display = 'none';
+                list.style.display = 'block';
+                renderActivityList(_activityItems);
+            } catch (error) {
+                loading.textContent = 'Error loading activity: ' + error.message;
+            }
+        }
+
+        function renderActivityList(items) {
+            const q = (document.getElementById('activitySearch')?.value || '').toLowerCase();
+            const filtered = !q ? items : items.filter(item => {
+                const blob = [item.type, item.bundleName, item.topicName, item.senderEmail, item.messageText, item.title]
+                    .join(' ').toLowerCase();
+                return blob.includes(q);
+            });
+            renderActivityCards(filtered, 'activityList', 0);
+        }
+
+        async function loadOverviewPanels() {
+            const actLoading = document.getElementById('overviewActivityLoading');
+            const compLoading = document.getElementById('overviewComplaintsLoading');
+            try {
+                const [actRes, compRes] = await Promise.all([
+                    fetch(`${BACKEND_URL}/api/admin/activity?limit=30`, { headers: { 'X-Admin-Password': adminPassword } }),
+                    fetch(`${BACKEND_URL}/api/admin/complaints`, { headers: { 'X-Admin-Password': adminPassword } }),
+                ]);
+                const actData = await actRes.json();
+                const compData = await compRes.json();
+                if (actData.success) {
+                    actLoading.style.display = 'none';
+                    renderActivityCards(actData.items || [], 'overviewActivityList', 8);
+                } else {
+                    actLoading.textContent = 'Could not load sends';
+                }
+                if (compData.success) {
+                    compLoading.style.display = 'none';
+                    const complaints = compData.complaints || [];
+                    const container = document.getElementById('overviewComplaintsList');
+                    if (!complaints.length) {
+                        container.innerHTML = '<div class="empty-state" style="padding:24px;"><p>No complaints</p></div>';
+                    } else {
+                        container.innerHTML = complaints.slice(0, 6).map(c => `
+                            <div class="activity-card">
+                                <div class="activity-card__title">${esc(c.title)}</div>
+                                <div class="activity-card__meta">
+                                    ${esc(c.district)} · ${esc((c.bundleNames || []).join(', '))}<br>
+                                    ${esc(formatTs(c.createdAtMs))} · ${esc(c.createdByEmail || 'guest')}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    compLoading.textContent = 'Could not load complaints';
+                }
+            } catch (error) {
+                actLoading.textContent = 'Error: ' + error.message;
+                compLoading.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function loadComplaints() {
+            const loading = document.getElementById('complaintsLoading');
+            const list = document.getElementById('complaintsList');
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/complaints`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    loading.textContent = 'Error: ' + (data.error || 'Failed');
+                    return;
+                }
+                _complaintsItems = data.complaints || [];
+                loading.style.display = 'none';
+                list.style.display = 'block';
+                renderComplaintsList(_complaintsItems);
+            } catch (error) {
+                loading.textContent = 'Error loading complaints: ' + error.message;
+            }
+        }
+
+        function renderComplaintsList(items) {
+            const q = (document.getElementById('complaintsSearch')?.value || '').toLowerCase();
+            const filtered = !q ? items : items.filter(c => {
+                const blob = [c.district, c.title, c.body, c.createdByEmail, ...(c.bundleNames || [])].join(' ').toLowerCase();
+                return blob.includes(q);
+            });
+            const list = document.getElementById('complaintsList');
+            if (!filtered.length) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📮</div><p>No complaints</p></div>';
+                return;
+            }
+            list.innerHTML = filtered.map(c => `
+                <div class="activity-card" style="margin-bottom:12px;">
+                    <div class="activity-card__top">
+                        <div class="activity-card__title">${esc(c.title)}</div>
+                        <button class="btn-danger" data-delete-complaint="${esc(c.id)}" data-complaint-title="${esc(c.title)}">Delete</button>
+                    </div>
+                    <div class="activity-card__meta">
+                        ID: <code>${esc(c.id)}</code><br>
+                        District: ${esc(c.district)}<br>
+                        Bundles: ${esc((c.bundleNames || []).join(', ') || '-')}<br>
+                        By: ${esc(c.createdByEmail || 'guest')} · ${esc(formatTs(c.createdAtMs))}
+                        ${c.imageUrl ? '<br><a href="' + esc(c.imageUrl) + '" target="_blank" rel="noopener">View image</a>' : ''}
+                        <p style="margin-top:8px;white-space:pre-wrap;">${esc(c.body)}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteComplaint(id, title) {
+            if (!confirm('Delete complaint "' + title + '"?')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/complaints/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadComplaints();
+                    loadOverviewPanels();
+                    loadMonitorSummary();
+                } else {
+                    alert(data.error || data.message || 'Delete failed');
+                }
+            } catch (error) {
+                alert('Delete failed: ' + error.message);
+            }
+        }
+
+        async function loadDonationSetups() {
+            const loading = document.getElementById('donationsLoading');
+            const list = document.getElementById('donationsList');
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/donation-setups`, {
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    loading.textContent = 'Error: ' + (data.error || 'Failed');
+                    return;
+                }
+                _donationItems = data.setups || [];
+                loading.style.display = 'none';
+                list.style.display = 'block';
+                renderDonationSetupsList(_donationItems);
+            } catch (error) {
+                loading.textContent = 'Error loading donation setups: ' + error.message;
+            }
+        }
+
+        function renderDonationSetupsList(items) {
+            const q = (document.getElementById('donationsSearch')?.value || '').toLowerCase();
+            const filtered = !q ? items : items.filter(s => {
+                const blob = [s.serverName, s.serverEmail, s.bundleName, s.topicName, s.designation].join(' ').toLowerCase();
+                return blob.includes(q);
+            });
+            const list = document.getElementById('donationsList');
+            if (!filtered.length) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💰</div><p>No donation setups</p></div>';
+                return;
+            }
+            list.innerHTML = filtered.map(s => `
+                <div class="activity-card" style="margin-bottom:12px;">
+                    <div class="activity-card__top">
+                        <div class="activity-card__title">
+                            ${esc(s.serverName || s.serverEmail)}
+                            ${s.active ? '' : '<span class="tag tag--inactive">inactive</span>'}
+                        </div>
+                        <button class="btn-danger" data-delete-donation="${esc(s.id)}" data-donation-label="${esc(s.bundleName + ' / ' + s.topicName)}">Delete</button>
+                    </div>
+                    <div class="activity-card__meta">
+                        ID: <code>${esc(s.id)}</code><br>
+                        Bundle / subpoint: ${esc(s.bundleName)} / ${esc(s.topicName)}<br>
+                        Amount: ₹${esc(s.amount)} · ${esc(s.designation || '')}<br>
+                        Published: ${esc(formatTs(s.publishedAt))}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteDonationSetup(id, label) {
+            if (!confirm('Delete donation setup for "' + label + '"?')) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/admin/donation-setups/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Admin-Password': adminPassword },
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadDonationSetups();
+                    loadMonitorSummary();
+                } else {
+                    alert(data.error || data.message || 'Delete failed');
+                }
+            } catch (error) {
+                alert('Delete failed: ' + error.message);
+            }
         }
 
         async function loadStatistics() {
@@ -1204,14 +1750,11 @@
                         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><p>No bundles found</p></div>';
                     } else {
                         data.bundles.forEach(bundle => {
-                            const bundleCard = document.createElement('div');
-                            bundleCard.style.cssText = 'background: #f9f9f9; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #e0e0e0;';
-                            
                             let topicsHtml = '';
                             if (bundle.topics.length === 0) {
-                                topicsHtml = '<p style="color: #666; font-style: italic;">No topics in this bundle</p>';
+                                topicsHtml = '<p style="color: #666; font-style: italic;">No subpoints in this bundle</p>';
                             } else {
-                                topicsHtml = '<table style="width: 100%; margin-top: 10px;"><thead><tr><th>Topic Name</th><th>FCM Topic</th><th>Subscribers</th><th>Action</th></tr></thead><tbody>';
+                                topicsHtml = '<table style="width: 100%; margin-top: 10px;"><thead><tr><th>Subpoint</th><th>FCM Topic</th><th>Subscribers</th><th>Action</th></tr></thead><tbody>';
                                 bundle.topics.forEach(topic => {
                                     topicsHtml += `
                                         <tr>
@@ -1219,7 +1762,7 @@
                                             <td><code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(topic.fcmTopicName)}</code></td>
                                             <td>${topic.subscribers}</td>
                                             <td>
-                                                <button class="btn-danger" data-delete-topic="${esc(topic.id)}" data-bundle-id="${esc(bundle.id)}" data-topic-name="${esc(topic.name)}">Delete Topic</button>
+                                                <button class="btn-danger" data-delete-topic="${esc(topic.id)}" data-bundle-id="${esc(bundle.id)}" data-topic-name="${esc(topic.name)}">Delete</button>
                                             </td>
                                         </tr>
                                     `;
@@ -1227,27 +1770,45 @@
                                 topicsHtml += '</tbody></table>';
                             }
 
-                            bundleCard.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <div>
-                                        <h3 style="margin: 0; color: #AD131D; font-size: 20px;">${esc(bundle.name)}</h3>
-                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
-                                            Bundle ID: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${esc(bundle.id)}</code>
-                                            | ${bundle.topicsCount} topic${bundle.topicsCount !== 1 ? 's' : ''}
-                                        </p>
-                                    </div>
-                                    <button class="btn-danger" data-delete-bundle="${esc(bundle.id)}" data-bundle-name="${esc(bundle.name)}" style="padding: 10px 20px; font-size: 14px;">
-                                        Delete Bundle
+                            const districtTag = bundle.district
+                                ? `<span class="tag tag--district">${esc(bundle.district)}</span>`
+                                : '';
+                            const draftTag = bundle.isDraft
+                                ? '<span class="tag tag--draft">draft</span>'
+                                : '';
+
+                            const acc = document.createElement('div');
+                            acc.className = 'bundle-acc';
+                            acc.innerHTML = `
+                                <div class="bundle-acc__head">
+                                    <button type="button" class="bundle-acc__toggle" data-bundle-toggle>
+                                        <span class="bundle-acc__chevron" aria-hidden="true"></span>
+                                        <span style="flex:1;">
+                                            <strong style="color:#AD131D;font-size:16px;">${esc(bundle.name)}</strong>
+                                            ${districtTag}${draftTag}
+                                            <span style="color:#888;font-size:12px;margin-left:8px;">${bundle.topicsCount} subpoint${bundle.topicsCount !== 1 ? 's' : ''}</span>
+                                        </span>
                                     </button>
+                                    <button type="button" class="btn-danger" data-delete-bundle="${esc(bundle.id)}" data-bundle-name="${esc(bundle.name)}" style="padding:8px 14px;font-size:13px;flex-shrink:0;">Delete</button>
                                 </div>
-                                ${topicsHtml}
+                                <div class="bundle-acc__body">
+                                    <div class="bundle-acc__inner">
+                                        <div class="bundle-acc__content">
+                                            <p style="margin:10px 0;color:#666;font-size:13px;">
+                                                Bundle ID: <code style="background:#e9ecef;padding:2px 6px;border-radius:3px;font-size:11px;">${esc(bundle.id)}</code>
+                                            </p>
+                                            ${topicsHtml}
+                                        </div>
+                                    </div>
+                                </div>
                             `;
-                            container.appendChild(bundleCard);
+                            container.appendChild(acc);
                         });
                     }
 
                     document.getElementById('bundlesLoading').style.display = 'none';
                     document.getElementById('bundlesContainer').style.display = 'block';
+                    filterBundlesTable();
                 } else {
                     if (data.error && data.error.includes('Firebase Admin not initialized')) {
                         document.getElementById('bundlesLoading').innerHTML = `
@@ -1405,6 +1966,7 @@
                 if (data.success) {
                     alert('✅ Bundle deleted successfully');
                     loadBundles();
+                    loadMonitorSummary();
                 } else {
                     alert('❌ Error: ' + (data.message || 'Failed to delete bundle'));
                 }
@@ -1424,6 +1986,7 @@
                 if (data.success) {
                     alert('✅ Topic deleted successfully');
                     loadBundles();
+                    loadMonitorSummary();
                 } else {
                     alert('❌ Error: ' + (data.message || 'Failed to delete topic'));
                 }
@@ -1827,26 +2390,21 @@
         // ==================== HELPERS ====================
 
         function switchTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            _activeTab = tab;
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tab);
+            });
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
 
-            const tabMap = {
-                orders:  { index: 0, contentId: 'ordersTab' },
-                codes:   { index: 1, contentId: 'codesTab' },
-                play:    { index: 2, contentId: 'playTab' },
-                users:   { index: 3, contentId: 'usersTab' },
-                bundles: { index: 4, contentId: 'bundlesTab' },
-                deletionRequests: { index: 5, contentId: 'deletionRequestsTab' },
-                polls:   { index: 6, contentId: 'pollsTab' },
-                mails:   { index: 7, contentId: 'mailsTab' },
-            };
+            const contentId = TAB_CONTENT_MAP[tab];
+            if (!contentId) return;
+            const panel = document.getElementById(contentId);
+            if (panel) panel.classList.add('active');
 
-            const info = tabMap[tab];
-            if (!info) return;
-
-            const tabButtons = document.querySelectorAll('.tab');
-            if (tabButtons[info.index]) tabButtons[info.index].classList.add('active');
-            document.getElementById(info.contentId).classList.add('active');
+            if (tab === 'overview') loadOverviewPanels();
+            if (tab === 'activity') loadActivity();
+            if (tab === 'complaints') loadComplaints();
+            if (tab === 'donations') loadDonationSetups();
             if (tab === 'play') loadPlayEntitlements();
             if (tab === 'bundles') loadBundles();
             if (tab === 'deletionRequests') loadDeletionRequests();
@@ -1878,12 +2436,11 @@
 
         function filterBundlesTable() {
             const input = document.getElementById('bundlesSearch');
+            if (!input) return;
             const filter = input.value.toLowerCase();
-            const bundles = document.querySelectorAll('#bundlesList > div');
-
-            bundles.forEach(bundleCard => {
-                const text = bundleCard.textContent || bundleCard.innerText;
-                bundleCard.style.display = text.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+            document.querySelectorAll('#bundlesList .bundle-acc').forEach(acc => {
+                const text = (acc.textContent || acc.innerText || '').toLowerCase();
+                acc.style.display = !filter || text.includes(filter) ? '' : 'none';
             });
         }
     </script>

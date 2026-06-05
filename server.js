@@ -278,7 +278,7 @@ app.get('/payment.html', (req, res) => {
 });
 
 // Force a versioned admin page URL so stale browser caches pick up latest admin tabs/features.
-const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260602a';
+const ADMIN_PAGE_VERSION = process.env.ADMIN_PAGE_VERSION || '20260610a';
 app.get('/admin', (req, res) => {
   return res.redirect(302, `/admin.html?v=${encodeURIComponent(ADMIN_PAGE_VERSION)}`);
 });
@@ -2967,12 +2967,256 @@ app.get('/api/admin/bundles', checkAdminAuth, async (req, res) => {
       bundles.push({
         id: bundleId,
         name: bundleData.name || 'Unknown',
+        district: (bundleData.district || '').trim(),
+        isDraft: bundleData.isDraft === true,
         topics,
         topicsCount: topics.length,
       });
     }
 
+    bundles.sort((a, b) => {
+      const d = (a.district || 'zzz').localeCompare(b.district || 'zzz');
+      if (d !== 0) return d;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
     res.json({ success: true, bundles, count: bundles.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== ADMIN MONITOR (developer cockpit) ====================
+
+function parseActivityTimestamp(record) {
+  if (!record || typeof record !== 'object') return 0;
+  if (typeof record.t === 'number') return record.t;
+  if (record.timestamp) {
+    const ms = Date.parse(record.timestamp);
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+  return 0;
+}
+
+app.get('/api/admin/monitor/summary', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+
+    const fbDb = admin.database();
+    const since24h = Date.now() - 24 * 60 * 60 * 1000;
+
+    const [bundlesSnap, complaintsSnap, donationsSnap, activitySnap] = await Promise.all([
+      fbDb.ref('bundles').once('value'),
+      fbDb.ref('complaints').once('value'),
+      fbDb.ref('donation_setups').once('value'),
+      fbDb.ref('global_notification_records').orderByChild('t').limitToLast(200).once('value'),
+    ]);
+
+    let bundleCount = 0;
+    let topicCount = 0;
+    let draftBundleCount = 0;
+    if (bundlesSnap.exists()) {
+      for (const bundleData of Object.values(bundlesSnap.val())) {
+        if (!bundleData || typeof bundleData !== 'object') continue;
+        bundleCount += 1;
+        if (bundleData.isDraft === true) draftBundleCount += 1;
+        if (bundleData.topics && typeof bundleData.topics === 'object') {
+          topicCount += Object.keys(bundleData.topics).length;
+        }
+      }
+    }
+
+    const complaints = complaintsSnap.val() || {};
+    const complaintCount = Object.keys(complaints).length;
+
+    const donations = donationsSnap.val() || {};
+    let donationSetupCount = 0;
+    let activeDonationSetups = 0;
+    for (const setup of Object.values(donations)) {
+      if (!setup || typeof setup !== 'object') continue;
+      donationSetupCount += 1;
+      if (setup.active !== false) activeDonationSetups += 1;
+    }
+
+    let activityTotal = 0;
+    let activity24h = 0;
+    let rings24h = 0;
+    let messages24h = 0;
+    if (activitySnap.exists()) {
+      for (const row of Object.values(activitySnap.val())) {
+        if (!row || typeof row !== 'object') continue;
+        activityTotal += 1;
+        const ts = parseActivityTimestamp(row);
+        if (ts >= since24h) {
+          activity24h += 1;
+          const type = String(row.type || '').toLowerCase();
+          if (type === 'ring') rings24h += 1;
+          else if (type === 'message') messages24h += 1;
+        }
+      }
+    }
+
+    let pollCount = 0;
+    try {
+      const polls = await db.getAllPolls();
+      pollCount = Array.isArray(polls) ? polls.length : 0;
+    } catch (_) {
+      pollCount = 0;
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        bundleCount,
+        topicCount,
+        draftBundleCount,
+        complaintCount,
+        donationSetupCount,
+        activeDonationSetups,
+        pollCount,
+        activitySampleSize: activityTotal,
+        activity24h,
+        rings24h,
+        messages24h,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Admin monitor summary error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/admin/activity', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+    const snap = await admin.database()
+      .ref('global_notification_records')
+      .orderByChild('t')
+      .limitToLast(limit)
+      .once('value');
+
+    const items = [];
+    if (snap.exists()) {
+      for (const [id, raw] of Object.entries(snap.val())) {
+        if (!raw || typeof raw !== 'object') continue;
+        items.push({
+          id: raw.id || id,
+          type: raw.type || 'unknown',
+          bundleName: raw.bundleName || '',
+          topicName: raw.topicName || '',
+          senderEmail: raw.senderEmail || '',
+          ringType: raw.ringType || null,
+          title: raw.title || null,
+          messageText: raw.messageText || null,
+          timestampMs: parseActivityTimestamp(raw),
+        });
+      }
+    }
+    items.sort((a, b) => b.timestampMs - a.timestampMs);
+
+    res.json({ success: true, items, count: items.length });
+  } catch (error) {
+    console.error('Admin activity error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/admin/complaints', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+
+    const snap = await admin.database().ref('complaints').once('value');
+    const complaints = [];
+    if (snap.exists()) {
+      for (const [id, raw] of Object.entries(snap.val())) {
+        if (!raw || typeof raw !== 'object') continue;
+        complaints.push({
+          id,
+          district: raw.district || '',
+          bundleIds: Array.isArray(raw.bundleIds) ? raw.bundleIds : [],
+          bundleNames: Array.isArray(raw.bundleNames) ? raw.bundleNames : [],
+          title: raw.title || '',
+          body: raw.body || '',
+          imageUrl: raw.imageUrl || null,
+          createdByEmail: raw.createdByEmail || '',
+          createdAtMs: typeof raw.createdAtMs === 'number' ? raw.createdAtMs : 0,
+        });
+      }
+    }
+    complaints.sort((a, b) => b.createdAtMs - a.createdAtMs);
+    res.json({ success: true, complaints, count: complaints.length });
+  } catch (error) {
+    console.error('Admin complaints error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/admin/complaints/:complaintId', checkAdminAuth, async (req, res) => {
+  try {
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    await admin.database().ref(`complaints/${req.params.complaintId}`).remove();
+    res.json({ success: true, message: 'Complaint deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/admin/donation-setups', checkAdminAuth, async (req, res) => {
+  try {
+    checkFirebaseReady();
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+
+    const snap = await admin.database().ref('donation_setups').once('value');
+    const setups = [];
+    if (snap.exists()) {
+      for (const [id, raw] of Object.entries(snap.val())) {
+        if (!raw || typeof raw !== 'object') continue;
+        setups.push({
+          id,
+          serverEmail: raw.serverEmail || '',
+          serverName: raw.serverName || '',
+          designation: raw.designation || '',
+          bundleId: raw.bundleId || '',
+          bundleName: raw.bundleName || '',
+          topicId: raw.topicId || '',
+          topicName: raw.topicName || '',
+          amount: raw.amount || 0,
+          active: raw.active !== false,
+          publishedAt: typeof raw.publishedAt === 'number' ? raw.publishedAt : 0,
+        });
+      }
+    }
+    setups.sort((a, b) => b.publishedAt - a.publishedAt);
+    res.json({ success: true, setups, count: setups.length });
+  } catch (error) {
+    console.error('Admin donation setups error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/admin/donation-setups/:setupId', checkAdminAuth, async (req, res) => {
+  try {
+    if (!firebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase Admin not initialized' });
+    }
+    await admin.database().ref(`donation_setups/${req.params.setupId}`).remove();
+    res.json({ success: true, message: 'Donation setup deleted' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
